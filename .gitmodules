@@ -1,0 +1,3 @@
+[submodule "dockers/node.alpine.docker"]
+	path = dockers/node.alpine.docker
+	url = git@github.com:yansinan/node.alpine.docker.git
