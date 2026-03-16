@@ -4,7 +4,8 @@
   "version": "2.1.1",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "stop":"pkill -f node",
+    "dev": "NODE_OPTIONS='--inspect=0.0.0.0:9229' vite --host 0.0.0.0",
     "build:github": "vite build --base=/PrimarySchoolMathematics/",
     "preview:github": "vite preview --base=/PrimarySchoolMathematics/",
     "build": "vite build",

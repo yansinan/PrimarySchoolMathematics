@@ -58,3 +58,4 @@ lerna-debug.log*
 *.sln
 *.sw?
 .config/fish/*
+.yarnrc
