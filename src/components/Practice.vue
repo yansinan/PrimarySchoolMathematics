@@ -80,7 +80,7 @@ import { getCarryType, parseEquation } from '@/utils/equationParser'
 import { generateDiagnosticQuestions, analyzeAbility, generatePracticeConfig } from '@/utils/diagnostic'
 import { createFormulasGenerator } from '@/utils/paperGenerator'
 import { EquationSolver } from '@/utils/EquationSolver'
-import { createAdaptiveEngine, getGroupConfig, getGroupSize, evaluateGroup, getDifficultyLabel } from '@/utils/adaptiveEngine'
+import { createAdaptiveEngine, getGroupConfig, getGroupSize, evaluateGroup, getDifficultyLabel, prepareChoiceOptions, applyBlankToQuestions } from '@/utils/adaptiveEngine'
 
 import { usePracticeStore } from '@/stores/practice'
 import { useStatsStore } from '@/stores/stats'
@@ -198,10 +198,18 @@ const initPractice = () => {
   }
 
   const mode = tempDisplayStrategy.decide(currentQuestion.value.equation)
-  session.value.displayMode = mode
 
-  if (mode.input === 'options') {
-    generateOptions(currentQuestion.value.solution)
+  // 如果题目来自自适应引擎且预置了选项，使用 choice 模式
+  const isAdaptiveChoice = currentQuestion.value.options && currentQuestion.value.options.length > 0
+  if (isAdaptiveChoice) {
+    session.value.displayMode = { layout: 'horizontal', input: 'options' }
+    session.value.currentOptions = [...currentQuestion.value.options]
+  } else {
+    session.value.displayMode = mode
+
+    if (mode.input === 'options') {
+      generateOptions(currentQuestion.value.solution)
+    }
   }
 
   // Start the first question timer
@@ -336,10 +344,17 @@ const handleNext = () => {
     practiceStore.startQuestionTimer()
 
     const mode = tempDisplayStrategy.decide(currentQuestion.value.equation)
-    session.value.displayMode = mode
 
-    if (mode.input === 'options') {
-      generateOptions(currentQuestion.value.solution)
+    // 自适应引擎预置选项
+    const isAdaptiveChoice = currentQuestion.value.options && currentQuestion.value.options.length > 0
+    if (isAdaptiveChoice) {
+      session.value.displayMode = { layout: 'horizontal', input: 'options' }
+      session.value.currentOptions = [...currentQuestion.value.options]
+    } else {
+      session.value.displayMode = mode
+      if (mode.input === 'options') {
+        generateOptions(currentQuestion.value.solution)
+      }
     }
   } else {
     // ── Session complete — handle based on phase ──
@@ -366,10 +381,22 @@ function generateBatch(config, count) {
   }]
   const papers = createFormulasGenerator(config, paperList)
   const formulas = papers.reduce((p, c) => { p.push(...c.formulas); return p }, [])
-  return formulas.map(cur => ({
+  let questions = formulas.map(cur => ({
     equation: cur,
     solution: EquationSolver.solve(cur)
   })).filter(q => q.solution !== null && !isNaN(q.solution))
+
+  // 应用空白位置模式
+  if (config.blankMode && config.blankMode === 'mixed') {
+    questions = applyBlankToQuestions(questions, config)
+  }
+
+  // 应用选择题选项
+  if (config.inputMode && config.inputMode !== 'keypad') {
+    questions = prepareChoiceOptions(questions, config)
+  }
+
+  return questions
 }
 
 /** 诊断完成 → 分析能力 → 启动自适应练习 */
