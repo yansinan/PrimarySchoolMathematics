@@ -1,6 +1,7 @@
 
 *.docx
 __pycache__
+.npm
 .idea
 .idea/workspace.xml
 docx

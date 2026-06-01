@@ -107,13 +107,11 @@ const handleSubmit = () => {
   color: #bdc3c7;
   letter-spacing: 5px;
   border-bottom: 4px solid #bdc3c7;
-  line-height: 1;
-  display: inline-flex;
-  align-items: flex-end;
-  justify-content: center;
+  display: inline-block;
+  line-height: 0.72;
   min-width: 2em;
-  padding-bottom: 0.12em;
-  vertical-align: bottom;
+  padding: 0.1em 0.1em 0.62em 0.1em;
+  vertical-align: baseline;
   text-align: center;
   font-size: $math-font-size-medium;
 }

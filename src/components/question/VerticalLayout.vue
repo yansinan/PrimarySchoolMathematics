@@ -1,15 +1,10 @@
 <!-- components/question/VerticalLayout.vue -->
 <template>
   <div class="vertical-layout math-question-surface">
-    <div class="vertical-equation">
-      <!-- 第一行：被减数/被乘数/第一个加数 -->
-      <el-row class="v-row first-row" justify="center">
-        <!-- 
-        <el-col :span="10" class="operator-col">
-          <span class="operator-spacer"></span>
-        </el-col>        
-        -->
-        <el-col :span="width" class="value-col">
+    <div class="vertical-equation" :style="equationStyle">
+      <div class="eq-row first-row">
+        <div class="op-cell"></div>
+        <div class="digits-cell first-digits-cell">
           <QuestionValueCell
             :is-blank="parsedEquation.blankPosition === 'leftOperand'"
             :show-answer="showAnswer"
@@ -22,18 +17,14 @@
             @update:user-answer="$emit('update:userAnswer', $event)"
             @submit-answer="$emit('submitAnswer')"
           />
-        </el-col>
-      </el-row>
+        </div>
+      </div>
 
-      <!-- 第二行：运算符和第二行数字 -->
-      <el-row class="v-row second-row">
-        <el-col :span="4" class="operator-col">
-          <!-- <span class="operator-spacer"></span> -->
-        </el-col>  
-        <el-col :span="((24-width)/2)-4" class="operator-col">
+      <div class="eq-row second-row">
+        <div class="op-cell">
           <span class="math-operator">{{ parsedEquation.operator }}</span>
-        </el-col>
-        <el-col :span="width" class="value-col">
+        </div>
+        <div class="digits-cell">
           <QuestionValueCell
             :is-blank="parsedEquation.blankPosition === 'rightOperand'"
             :show-answer="showAnswer"
@@ -46,27 +37,16 @@
             @update:user-answer="$emit('update:userAnswer', $event)"
             @submit-answer="$emit('submitAnswer')"
           />
-        </el-col>
-        <el-col :span="(24-width)/2" class="operator-col">
-          <!-- <span class="operator-spacer"></span> -->
-        </el-col>
-      </el-row>
+        </div>
+      </div>
 
-      <!-- 横线 -->
-      <el-row class="line-row" justify="center">
-        <el-col :span="19" class="value-col">
-          <div class="math-line"></div>
-        </el-col>
-      </el-row>
+      <div class="line-row">
+        <div class="math-line"></div>
+      </div>
 
-      <!-- 结果行（答案区域） -->
-      <el-row class="v-row result-row" justify="center">
-        <!-- 
-        <el-col :span="10" class="operator-col">
-          <span class="result-label"></span>
-        </el-col>
-         -->
-        <el-col :span="width" class="value-col result-content">
+      <div class="eq-row result-row">
+        <div class="op-cell"></div>
+        <div class="digits-cell result-content">
           <QuestionValueCell
             :is-blank="parsedEquation.blankPosition === 'result'"
             :show-answer="showAnswer"
@@ -79,36 +59,38 @@
             @update:user-answer="$emit('update:userAnswer', $event)"
             @submit-answer="$emit('submitAnswer')"
           />
-        </el-col>
-      </el-row>
-      
-      <!-- 进位/退位小标记（如果需要） -->
-      <div v-if="carryMark" class="math-carry-mark">{{ carryMark }}</div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
-import { ElRow, ElCol } from 'element-plus'
 import QuestionValueCell from '@/components/question/QuestionValueCell.vue'
 import { useQuestionEquation, questionLayoutProps, questionLayoutEmits } from '@/components/question/questionLayoutShared'
-const width = 12;
-defineProps(questionLayoutProps)
+
+const props = defineProps(questionLayoutProps)
 
 defineEmits(questionLayoutEmits)
 
-const { parsedEquation, carryType } = useQuestionEquation()
+const { parsedEquation } = useQuestionEquation(props)
 
-const carryMark = computed(() => {
-  if (carryType.value === 'carry') {
-    return '①'
-  }
-  if (carryType.value === 'borrow') {
-    return '·'
-  }
-  return ''
+const maxDigits = computed(() => {
+  const answerValue = String(props.showAnswer ? (props.answer ?? '') : (props.userAnswer ?? ''))
+  const values = [
+    String(parsedEquation.value.leftOperand || ''),
+    String(parsedEquation.value.rightOperand || ''),
+    String(parsedEquation.value.resultValue || ''),
+    answerValue
+  ]
+  const lens = values.map((v) => v.replace('-', '').length).filter(Boolean)
+  return Math.max(...lens, 2)
 })
+
+const equationStyle = computed(() => ({
+  '--digits-count': maxDigits.value
+}))
 </script>
 
 <style lang="scss" scoped>
@@ -123,18 +105,25 @@ const carryMark = computed(() => {
 }
 
 .vertical-equation {
-  display:flex;
+  display: flex;
   flex-direction: column;
   position: relative;
-  width: min(100%, 420px);
+  width: fit-content;
+  max-width: 100%;
   margin: 0 auto;
   --vertical-digit-size: clamp(1.7rem, 4.6vw, 2.8rem);
   --vertical-operator-size: clamp(1.3rem, 3.8vw, 2.1rem);
+  --digit-cell-width: calc(var(--vertical-digit-size) * 0.92);
+  --digits-width: calc(var(--digits-count) * var(--digit-cell-width));
+  --op-width: calc(var(--vertical-digit-size) * 0.34);
+  --col-gap: 0;
 }
 
-.v-row {
-  width: 100%;
-  align-items: center;
+.eq-row {
+  display: grid;
+  grid-template-columns: var(--op-width) var(--digits-width);
+  column-gap: var(--col-gap);
+  align-items: end;
   margin-bottom: 8px;
 }
 
@@ -142,56 +131,92 @@ const carryMark = computed(() => {
   margin-bottom: 0;
 }
 
-.operator-col,
-.value-col {
+.op-cell,
+.digits-cell {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
 }
 
-.operator-col {
-  justify-content: flex-end;
-  padding-right: 6px;
+.op-cell {
+  justify-content: flex-start;
+  overflow: visible;
 }
-.second-row .operator-col {
-  justify-content: flex-end;
-  padding-right: 0px;
-}
-.value-col {
-  justify-content: flex-end;
+
+.first-digits-cell {
+  position: relative;
+  overflow: visible;
 }
 
 .math-operator {
-  width: 1.5em;
-  text-align: right;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: auto;
+  min-width: 0;
+  text-align: left;
   font-size: var(--vertical-operator-size);
   line-height: 1;
-}
-
-.operator-spacer,
-.result-label {
-  width: 1.5em;
-  display: inline-block;
+  color: #6d747a;
+  margin-left: calc(var(--vertical-digit-size) * 0.08);
 }
 
 :deep(.math-number-vertical) {
-  min-width: 2.6em;
+  width: var(--digits-width);
+  min-width: var(--digits-width);
+  max-width: var(--digits-width);
   text-align: right;
-  font-family: 'Courier New', monospace;
+  font-family: 'Courier New', 'SFMono-Regular', monospace;
   font-size: var(--vertical-digit-size);
   line-height: 1.05;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   display: inline-flex;
   align-items: flex-end;
+  justify-content: flex-end;
+  font-variant-numeric: tabular-nums;
+}
+
+.line-row {
+  width: calc(var(--op-width) + var(--digits-width) + var(--col-gap));
+  display: flex;
+  justify-content: flex-end;
 }
 
 .math-line {
   margin: 2px 0 10px 0;
-  width: 100%;
+  width: calc(var(--digits-width) + (var(--digit-cell-width) * 0.52));
+  max-width: calc(var(--op-width) + var(--digits-width));
   border-bottom-width: 3px;
 }
 
-.result-content {
+.result-content :deep(.math-answer-input),
+.result-content :deep(.math-answer-placeholder),
+.result-content :deep(.math-answer-display) {
+  width: var(--digits-width);
+  min-width: var(--digits-width);
+  max-width: var(--digits-width);
+  height: var(--vertical-digit-size);
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  display: inline-block;
+  vertical-align: bottom;
+  font-family: 'Courier New', 'SFMono-Regular', monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  line-height: 1;
   text-align: right;
+  justify-content: flex-end;
+}
+
+.result-content :deep(.math-answer-input) {
+  appearance: none;
+  -webkit-appearance: none;
+  width: min(100%, var(--digits-width));
+}
+
+.result-content :deep(.math-answer-placeholder) {
+  border-bottom-width: 3px;
 }
 
 :deep(.math-number-vertical),
@@ -200,28 +225,46 @@ const carryMark = computed(() => {
 :deep(.math-answer-placeholder) {
   text-align: right;
   font-size: var(--vertical-digit-size);
-  line-height: 1.02;
+  line-height: 1.04;
 }
 
-:deep(.math-answer-input) {
-  width: min(100%, 2.4em);
+.first-row :deep(.math-answer-display),
+.second-row :deep(.math-answer-display) {
+  width: var(--digits-width);
+  min-width: var(--digits-width);
+  max-width: var(--digits-width);
+  padding: 0;
+  border-bottom: 3px solid #27ae60;
+  color: #27ae60;
+  font-weight: 700;
+  font-family: 'Courier New', 'SFMono-Regular', monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  display: inline-flex;
+  align-items: flex-end;
+  justify-content: flex-end;
 }
 
-.math-carry-mark {
-  position: absolute;
-  top: 18px;
-  right: 24px;
-  font-weight: bold;
+.first-row :deep(.math-answer-input),
+.second-row :deep(.math-answer-input),
+.first-row :deep(.math-answer-placeholder),
+.second-row :deep(.math-answer-placeholder) {
+  width: var(--digits-width);
+  min-width: var(--digits-width);
+  max-width: var(--digits-width);
+  padding: 0;
+  font-family: 'Courier New', 'SFMono-Regular', monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
 }
 
 @media (max-width: 768px) {
   .vertical-equation {
-    width: min(100%, 360px);
+    --vertical-digit-size: clamp(1.55rem, 5vw, 2.1rem);
   }
 
-  .math-carry-mark {
-    top: 15px;
-    right: 18px;
+  .line-row {
+    width: calc(var(--op-width) + var(--digits-width) + var(--col-gap));
   }
 }
 
@@ -230,12 +273,13 @@ const carryMark = computed(() => {
     padding: 8px 4px;
   }
 
-  .v-row {
+  .eq-row {
     margin-bottom: 5px;
   }
 
   .math-line {
     margin: 2px 0 8px 0;
   }
+
 }
 </style>

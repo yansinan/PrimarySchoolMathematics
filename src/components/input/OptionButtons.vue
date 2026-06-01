@@ -123,6 +123,29 @@ const handleSelect = (option) => {
   }
 }
 
+/* ── Short viewport height ── */
+@media (max-height: 800px) {
+  .options-grid {
+    gap: 8px;
+    margin: 8px 0 10px;
+  }
+  .option-btn {
+    height: 56px !important;
+    font-size: 20px !important;
+  }
+}
+
+@media (max-height: 600px) {
+  .options-grid {
+    gap: 5px;
+    margin: 4px 0 6px;
+  }
+  .option-btn {
+    height: 44px !important;
+    font-size: 18px !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .option-btn,
   .correct-option,

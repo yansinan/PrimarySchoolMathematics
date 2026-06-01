@@ -77,11 +77,11 @@ import { ElRow, ElCol, ElText, ElAlert } from 'element-plus'
 import QuestionValueCell from '@/components/question/QuestionValueCell.vue'
 import { useQuestionEquation, questionLayoutProps, questionLayoutEmits } from '@/components/question/questionLayoutShared'
 
-defineProps(questionLayoutProps)
+const props = defineProps(questionLayoutProps)
 
 defineEmits(questionLayoutEmits)
 
-const { parsedEquation, carryType } = useQuestionEquation()
+const { parsedEquation, carryType } = useQuestionEquation(props)
 const carryHint = computed(() => {
   if (carryType.value === 'carry') {
     return '进位'
@@ -112,6 +112,12 @@ const carryHint = computed(() => {
 .answer-col {
   min-width: 0;
   padding-bottom: 2px;
+}
+
+.answer-col {
+  align-items: flex-end;
+  align-self: flex-end;
+  padding-bottom: 8px;
 }
 
 .operator-col,
@@ -150,7 +156,9 @@ const carryHint = computed(() => {
   }
 
   .answer-col {
-    padding-bottom: 0;
+    align-items: flex-end;
+    align-self: flex-end;
+    padding-bottom: 8px;
   }
 }
 
@@ -170,7 +178,9 @@ const carryHint = computed(() => {
   }
 
   .answer-col {
-    padding-bottom: 0;
+    align-items: flex-end;
+    align-self: flex-end;
+    padding-bottom: 8px;
   }
 }
 </style>

@@ -2,9 +2,9 @@
 <template>
   <el-container class="practice-view">
     <el-main class="practice-shell">
-      <el-card class="practice-card" shadow="never">
+      <el-card class="practice-card" shadow="never" v-if="currentQuestion !== null">
         <div class="practice-card__header">
-          <div class="stage-badge">{{ currentStage }}</div>
+          <div class="stage-badge" :class="{ 'stage-badge--assessment': isAssessment }">{{ currentStage }}</div>
           <div class="streak-badge" v-if="session.streak > 0">🔥 {{ session.streak }}</div>
         </div>
 
@@ -43,13 +43,33 @@
           />
         </div>
       </el-card>
+
+      <!-- 加载中：诊断题目生成中 -->
+      <el-card class="practice-card practice-card--loading" shadow="never" v-else>
+        <div class="loading-state">
+          <div class="loading-spinner"></div>
+          <p>正在生成能力评估题目…</p>
+        </div>
+      </el-card>
     </el-main>
   </el-container>
+
+  <!-- ── Floating stats button ── -->
+  <el-tooltip content="练习统计" placement="left">
+    <el-button
+      class="stats-fab"
+      :icon="TrendCharts"
+      size="large"
+      circle
+      @click="statsStore.toggleDrawer()"
+    />
+  </el-tooltip>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { TrendCharts } from '@element-plus/icons-vue'
 
 import ProgressSteps from '@/components/layout/ProgressSteps.vue'
 import HorizontalLayout from '@/components/question/HorizontalLayout.vue'
@@ -57,11 +77,17 @@ import VerticalLayout from '@/components/question/VerticalLayout.vue'
 import NumberKeypad from '@/components/input/NumberKeypad.vue'
 import OptionButtons from '@/components/input/OptionButtons.vue'
 import { getCarryType, parseEquation } from '@/utils/equationParser'
+import { generateDiagnosticQuestions, analyzeAbility, generatePracticeConfig } from '@/utils/diagnostic'
+import { createFormulasGenerator } from '@/utils/paperGenerator'
+import { EquationSolver } from '@/utils/EquationSolver'
+import { createAdaptiveEngine, getGroupConfig, getGroupSize, evaluateGroup, getDifficultyLabel } from '@/utils/adaptiveEngine'
 
 import { usePracticeStore } from '@/stores/practice'
+import { useStatsStore } from '@/stores/stats'
 import { storeToRefs } from 'pinia'
 
 const practiceStore = usePracticeStore()
+const statsStore = useStatsStore()
 const {
   listPractices,
   totalQuestions,
@@ -69,7 +95,12 @@ const {
   currentIndex,
   currentQuestion,
   isLastQuestion,
-  correctCount
+  correctCount,
+  isAssessment,
+  isPractice,
+  isIdle,
+  phase,
+  abilityProfile
 } = storeToRefs(practiceStore)
 
 const tempDisplayStrategy = {
@@ -100,7 +131,24 @@ const tempDisplayStrategy = {
   }
 }
 
-const currentStage = ref('一年级')
+/** 自适应引擎状态 */
+const adaptiveEngine = ref(null)
+const adaptiveGroupIndex = ref(0)
+
+const currentStage = computed(() => {
+  if (isAssessment.value) {
+    return `能力评估 ${session.value.answers.length}/${totalQuestions.value}`
+  }
+  if (adaptiveEngine.value) {
+    const label = getDifficultyLabel(adaptiveEngine.value)
+    const groupIdx = adaptiveGroupIndex.value
+    return `${label} · 第${groupIdx}组`
+  }
+  if (abilityProfile.value) {
+    return '智能练习'
+  }
+  return '一年级'
+})
 
 const layoutComponents = {
   horizontal: HorizontalLayout,
@@ -116,6 +164,8 @@ const currentLayout = computed(() => layoutComponents[session.value.displayMode.
 const currentInput = computed(() => inputComponents[session.value.displayMode.input])
 
 const inputProps = computed(() => {
+  if (!currentQuestion.value) return { disabled: true }
+
   const baseProps = {
     disabled: session.value.feedbackType !== null,
     showResult: session.value.feedbackType !== null
@@ -137,7 +187,10 @@ const inputProps = computed(() => {
 })
 
 const initPractice = () => {
+  if (!currentQuestion.value) return
+
   practiceStore.resetPracticeSession()
+  practiceStore.session.sessionStartTime = Date.now()
 
   tempDisplayStrategy.stats = {
     consecutiveWrong: 0,
@@ -150,6 +203,9 @@ const initPractice = () => {
   if (mode.input === 'options') {
     generateOptions(currentQuestion.value.solution)
   }
+
+  // Start the first question timer
+  practiceStore.startQuestionTimer()
 }
 
 const generateOptions = (correct) => {
@@ -187,16 +243,41 @@ const handleSubmit = (answer) => {
 
   const isCorrect = userAnswer === currentQuestion.value.solution
 
+  // ── Timing & metadata ──
+  const responseTime = practiceStore.endQuestionTimer()
+
+  // Extract metadata from the equation
+  const parsed = parseEquation(currentQuestion.value.equation)
+  const operator = parsed?.operator || ''
+  const isCarry = getCarryType(parsed) === 'carry'
+  const isBorrow = getCarryType(parsed) === 'borrow'
+  const leftVal = parseInt(parsed?.leftOperand) || 0
+  const rightVal = parseInt(parsed?.rightOperand) || 0
+  const operandMin = Math.min(leftVal, rightVal)
+  const operandMax = Math.max(leftVal, rightVal)
+  // Determine stepCount — check the current configSnapshot or use heuristics
+  const stepCount = currentQuestion.value.stepCount || 1
+
+  // ── / metadata ──
+
   session.value.answers.push({
     ...currentQuestion.value,
     userAnswer,
     isCorrect,
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    responseTime,
+    operator,
+    isCarry,
+    isBorrow,
+    stepCount,
+    operandMin,
+    operandMax
   })
 
   if (isCorrect) {
     session.value.streak++
     session.value.feedbackType = 'correct'
+    tempDisplayStrategy.updateStats(true)
     ElMessage.success({
       message: '✓ 正确！',
       duration: 800,
@@ -217,20 +298,42 @@ const handleSubmit = (answer) => {
       customClass: 'feedback-message'
     })
 
-    setTimeout(() => {
-      if (session.value.displayMode.input === 'keypad') {
+    // 评估模式下连续错 2 次 → 提前结束评估，直接进入练习
+    tempDisplayStrategy.updateStats(isCorrect)
+    const shouldAbortAssessment = isAssessment.value && tempDisplayStrategy.stats.consecutiveWrong >= 2
+
+    if (shouldAbortAssessment) {
+      const nextFn = () => {
         session.value.feedbackType = null
+        session.value.currentAnswer = ''
+        // 将剩余未答等级标记为弱项（保守处理）
+        handleAssessmentComplete()
       }
-    }, 1500)
+
+      if (session.value.displayMode.input === 'keypad') {
+        setTimeout(nextFn, 1500)
+      } else {
+        setTimeout(nextFn, 1500)
+      }
+    } else {
+      setTimeout(() => {
+        if (session.value.displayMode.input === 'keypad') {
+          session.value.feedbackType = null
+          session.value.currentAnswer = ''
+        }
+      }, 1500)
+    }
+    return // skip the extra tempDisplayStrategy.updateStats call below
   }
 
-  tempDisplayStrategy.updateStats(isCorrect)
+  // (isCorrect path also falls through — already handled above)
 }
 
 const handleNext = () => {
   if (!isLastQuestion.value) {
     practiceStore.nextQuestion()
     practiceStore.resetQuestionInputState()
+    practiceStore.startQuestionTimer()
 
     const mode = tempDisplayStrategy.decide(currentQuestion.value.equation)
     session.value.displayMode = mode
@@ -239,12 +342,121 @@ const handleNext = () => {
       generateOptions(currentQuestion.value.solution)
     }
   } else {
-    ElMessage.success('恭喜！完成所有题目！')
-    console.log('练习完成', {
-      total: totalQuestions.value,
-      correct: correctCount.value
-    })
+    // ── Session complete — handle based on phase ──
+    if (isAssessment.value) {
+      handleAssessmentComplete()
+    } else if (adaptiveEngine.value) {
+      completeAdaptiveGroup()
+    } else {
+      handlePracticeComplete()
+    }
   }
+}
+
+/** 生成一组题目 */
+function generateBatch(config, count) {
+  const paperList = [{
+    step: config.step,
+    numberOfFormulas: count,
+    whereIsResult: config.whereIsResult,
+    formulaList: config.formulaList,
+    resultMinValue: config.resultMinValue,
+    resultMaxValue: config.resultMaxValue,
+    customFormulaList: null
+  }]
+  const papers = createFormulasGenerator(config, paperList)
+  const formulas = papers.reduce((p, c) => { p.push(...c.formulas); return p }, [])
+  return formulas.map(cur => ({
+    equation: cur,
+    solution: EquationSolver.solve(cur)
+  })).filter(q => q.solution !== null && !isNaN(q.solution))
+}
+
+/** 诊断完成 → 分析能力 → 启动自适应练习 */
+const handleAssessmentComplete = async () => {
+  const answers = session.value.answers
+  const profile = analyzeAbility(answers)
+  const answeredCount = answers.length
+
+  ElMessage({
+    message: `📊 评估完成！共 ${answeredCount} 题，正确 ${correctCount.value} 题`,
+    duration: 3000,
+    offset: 100,
+    customClass: 'feedback-message'
+  })
+
+  // 创建自适应引擎，生成第 1 组
+  const engine = createAdaptiveEngine(profile)
+  adaptiveEngine.value = engine
+  adaptiveGroupIndex.value = 1
+
+  const config = getGroupConfig(engine)
+  const size = getGroupSize(engine)
+  const firstQuestions = generateBatch(config, size)
+
+  practiceStore.completeAssessment(profile)
+  practiceStore.setListPractices(firstQuestions)
+}
+
+/** 自适应一组完成 → 评估 → 生成下一组或结束 */
+const completeAdaptiveGroup = () => {
+  const allAnswers = [...session.value.answers]
+  const engine = adaptiveEngine.value
+  const size = getGroupSize(engine)
+  const groupAnswers = allAnswers.slice(-size)
+
+  const result = evaluateGroup(engine, groupAnswers)
+  adaptiveEngine.value = result.engine
+  adaptiveGroupIndex.value++
+
+  if (result.done) {
+    // 全部自适应完成 → 一次性保存
+    ElMessage({
+      message: `🎉 自适应练习完成！共 ${result.engine.totalAnswered} 题`,
+      duration: 3000,
+      offset: 100,
+      customClass: 'feedback-message'
+    })
+    session.value.answers = allAnswers
+    adaptiveEngine.value = null
+    adaptiveGroupIndex.value = 0
+    practiceStore.saveSessionToDB()
+    return
+  }
+
+  // 生成下一组
+  const nextQuestions = generateBatch(result.nextConfig, result.nextGroupSize)
+  practiceStore.setListPractices(nextQuestions)
+  // 恢复累计的答题记录（watch → initPractice 会重置）
+  session.value.answers = [...allAnswers]
+}
+
+/** 正常练习完成 → 保存到 DB */
+const handlePracticeComplete = async () => {
+  await practiceStore.saveSessionToDB()
+
+  ElMessage({
+    message: `🎉 完成！共 ${totalQuestions.value} 题，正确 ${correctCount.value} 题 (${Math.round((correctCount.value / totalQuestions.value) * 100)}%)`,
+    duration: 4000,
+    offset: 100,
+    customClass: 'feedback-message'
+  })
+
+  setTimeout(() => {
+    ElMessage({
+      message: '点击查看练习统计',
+      duration: 6000,
+      offset: 150,
+      icon: '🧮',
+      customClass: 'feedback-message',
+      onClose: () => {}
+    })
+  }, 1500)
+
+  console.log('练习完成', {
+    total: totalQuestions.value,
+    correct: correctCount.value
+  })
 }
 
 watch(currentQuestion, (newQ) => {
@@ -253,15 +465,33 @@ watch(currentQuestion, (newQ) => {
 
 watch(listPractices, (newPracticeList) => {
   if (newPracticeList.length > 0) {
+    // 自适应组切换时需保留累积的答案
+    const isAdaptiveTransition = adaptiveEngine.value && adaptiveGroupIndex.value > 1
+    const saved = isAdaptiveTransition ? [...session.value.answers] : []
+    // 先重置索引，确保 currentQuestion 能正确读取新列表
+    practiceStore.resetCurrentIndex()
     initPractice()
+    if (isAdaptiveTransition) {
+      session.value.answers = saved
+    }
   }
-}, { immediate: true })
+})
+
+/** 首次进入自动触发能力诊断 */
+onMounted(() => {
+  if (isIdle.value && listPractices.value.length === 0) {
+    const questions = generateDiagnosticQuestions()
+    if (questions.length > 0) {
+      practiceStore.startAssessment(questions)
+    }
+  }
+})
 </script>
 
 <style scoped>
 .practice-view {
   width: 100%;
-  min-height: calc(100dvh - 16px);
+  min-height: 100%;
 }
 
 .practice-shell {
@@ -273,6 +503,7 @@ watch(listPractices, (newPracticeList) => {
 
 .practice-card {
   width: min(100%, 980px);
+  --interaction-width: min(100%, 760px);
   border: 0;
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.86);
@@ -305,6 +536,44 @@ watch(listPractices, (newPracticeList) => {
   background: #e9f4ff;
 }
 
+.stage-badge--assessment {
+  color: #7c3aed;
+  background: #f3e8ff;
+  border-color: #c084fc;
+}
+
+/* ── Loading state ── */
+.practice-card--loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+}
+
+.loading-state {
+  text-align: center;
+  color: #909399;
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  margin: 0 auto 16px;
+  border: 3px solid #e8edf3;
+  border-top-color: #409eff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-state p {
+  font-size: 15px;
+  margin: 0;
+}
+
 .streak-badge {
   color: #d97706;
   background: #fff7ed;
@@ -312,10 +581,23 @@ watch(listPractices, (newPracticeList) => {
 
 .question-area {
   margin-top: 8px;
+  display: flex;
+  justify-content: center;
 }
 
 .input-area {
   margin-top: 14px;
+  display: flex;
+  justify-content: center;
+}
+
+.question-area :deep(.math-question-surface),
+.question-area :deep(.vertical-layout.math-question-surface),
+.input-area :deep(.keypad-shell) {
+  width: var(--interaction-width);
+  max-width: var(--interaction-width);
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .correct-flash {
@@ -361,6 +643,14 @@ watch(listPractices, (newPracticeList) => {
   .input-area {
     margin-top: 12px;
   }
+
+  .question-area {
+    --interaction-width: min(100%, 620px);
+  }
+
+  .practice-card {
+    --interaction-width: min(100%, 620px);
+  }
 }
 
 @media (max-width: 480px) {
@@ -373,6 +663,56 @@ watch(listPractices, (newPracticeList) => {
   .streak-badge {
     padding: 5px 10px;
     font-size: 14px;
+  }
+
+  .question-area {
+    --interaction-width: min(100%, 520px);
+  }
+
+  .practice-card {
+    --interaction-width: min(100%, 520px);
+  }
+}
+
+/* ── Floating stats button ── */
+.stats-fab {
+  position: fixed !important;
+  bottom: 32px;
+  left: 24px;
+  z-index: 100;
+  width: 44px !important;
+  height: 44px !important;
+  box-shadow: 0 4px 16px rgba(64, 158, 255, 0.3);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stats-fab:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 24px rgba(64, 158, 255, 0.45);
+}
+
+@media (max-width: 768px) {
+  .stats-fab {
+    bottom: 20px;
+    left: 16px;
+    width: 48px !important;
+    height: 48px !important;
+  }
+}
+
+/* ── Short viewport height tweaks ── */
+@media (max-height: 800px) {
+  .practice-card {
+    border-radius: 16px;
+  }
+  :deep(.el-card__body) {
+    padding: 12px 16px;
+  }
+}
+
+@media (max-height: 600px) {
+  :deep(.el-card__body) {
+    padding: 8px 12px;
   }
 }
 </style>

@@ -4,48 +4,72 @@
         class="box-item"
         content="生成测试"
         placement="top"    >
-      <el-button type="success" :icon="List" size="large" circle @click="practiceStore.setGenerateDrawerVisible(true)" class="coffee-me fixed left-5 inset-y-1/4 z-[9999] text-lg"/>
+      <el-button type="success" :icon="List" size="large" circle @click="practiceStore.setGenerateDrawerVisible(true)" class="coffee-me"/>
     </el-tooltip>
 
-    <el-drawer v-model="practiceStore.generateDrawerVisible" size="80%" direction="ltr" title="测试生成" :before-close="handleClose">
-      <ElRow :gutter="20">
-        <ElCol :xs="24" :sm="16" :md="16" :lg="12" :xl="8">
-          <ElForm ref="refForm" :model="formData" label-position="top">
-            <ElFormItem label="生成模式">
-              <el-radio-group v-model="formData.generateMode">
-                <el-radio-button label="1">自动生成</el-radio-button>
-                <el-radio-button label="2">手动添加</el-radio-button>
-              </el-radio-group>
-            </ElFormItem>
-            <!-- 自动生成 -->
-            <template v-if="formData.generateMode == '1'">
-              <AutoGenerateFormulas v-model:formulas-form-data="formData" v-model:papers="paperList" :ref-form="refForm"
-                :configurations="configurations" @add-configuration="addConfiguration" />
-            </template>
-            <!-- 手动输入 -->
-            <template v-if="formData.generateMode == '2'">
-              <CustomFormulas v-model:formulas-form-data="formData" v-model:papers="paperList" :ref-form="refForm" />
-            </template>
+    <el-drawer
+      v-model="practiceStore.generateDrawerVisible"
+      size="min(520px, calc(100vw - 32px))"
+      direction="ltr"
+      :before-close="handleClose"
+      wrapper-closable
+      class="generate-drawer"
+    >
+      <template #header>
+        <span class="drawer-header">
+          <el-icon :size="20" style="margin-right: 6px;"><List /></el-icon>
+          测试生成
+        </span>
+      </template>
 
-            <template v-if="paperDescriptionList && paperDescriptionList.length">
-              <ElFormItem label="当前口算题包含的内容">
-                <div v-for="p in paperDescriptionList">
-                  <ElTag style="margin-right: 8px;">{{ p }}</ElTag>
-                </div>
-              </ElFormItem>
-            </template>
-          </ElForm>
-
-          <el-button :disabled="!paperList.length" type="primary" size="large" :loading="buttonLoading"
-            @click="generate">点此生成口算题卷子</el-button>
-          <el-button :disabled="!paperList.length" type="primary" size="large" :loading="buttonLoading"
-            @click="generateFormulas">点此生成口算题数组</el-button>
-        </ElCol>
-        <ElCol :xs="24" :sm="8" :md="8" :lg="8" :xl="8">
+      <div class="drawer-scroll">
+        <!-- ── Configuration list (top, for quick reuse) ── -->
+        <div class="config-section">
           <ConfigurationList v-model:active-index="activeConfigurationId" :configurations="configurations"
-            @removed="refreshConfiguration" @selected="selectedConfiguration" @reset="refreshConfiguration" />
-        </ElCol>
-      </ElRow>
+            @removed="refreshConfiguration" @selected="selectedConfiguration" />
+        </div>
+
+        <el-divider />
+
+        <!-- ── Form ── -->
+        <ElForm ref="refForm" :model="formData" label-position="top" size="default">
+          <ElFormItem label="生成模式">
+            <el-radio-group v-model="formData.generateMode" class="mode-radio-group">
+              <el-radio-button label="1">自动生成</el-radio-button>
+              <el-radio-button label="2">手动添加</el-radio-button>
+            </el-radio-group>
+          </ElFormItem>
+
+          <!-- 自动生成 -->
+          <template v-if="formData.generateMode == '1'">
+            <AutoGenerateFormulas v-model:formulas-form-data="formData" v-model:papers="paperList" :ref-form="refForm"
+              :configurations="configurations" @add-configuration="addConfiguration" />
+          </template>
+          <!-- 手动输入 -->
+          <template v-if="formData.generateMode == '2'">
+            <CustomFormulas v-model:formulas-form-data="formData" v-model:papers="paperList" :ref-form="refForm" />
+          </template>
+
+          <template v-if="paperDescriptionList && paperDescriptionList.length">
+            <ElFormItem label="当前口算题包含的内容">
+              <div class="paper-tags">
+                <ElTag v-for="p in paperDescriptionList" :key="p" class="paper-tag">{{ p }}</ElTag>
+              </div>
+            </ElFormItem>
+          </template>
+        </ElForm>
+
+        <div class="drawer-actions">
+          <el-button :disabled="!paperList.length" size="large" :loading="buttonLoading"
+            @click="generate" class="action-btn">
+            <el-icon><Document /></el-icon> 生成卷子
+          </el-button>
+          <el-button :disabled="!paperList.length" type="primary" size="large" :loading="buttonLoading"
+            @click="generateFormulas" class="action-btn action-btn--primary">
+            <el-icon><CaretRight /></el-icon> 开始练习
+          </el-button>
+        </div>
+      </div>
     </el-drawer>
 </template>
 
@@ -67,6 +91,8 @@ const { proxy } = getCurrentInstance()
 // 界面操作参数
 import {
   List,
+  Document,
+  CaretRight
 } from '@element-plus/icons-vue'
 // 界面操作参数
 const practiceStore = usePracticeStore()
@@ -212,9 +238,120 @@ const generateFormulas = () => {
     })
     return prev;
   }, []);  
-  debugger
+
+  // Capture config snapshot for stats tracking
+  practiceStore.setConfigSnapshot(toRaw(unref(formData)))
+
+  // Manual generation → switch to practice mode, clear diagnostic state
+  practiceStore.setPhase('practice')
+  practiceStore.setAbilityProfile(null)
+
+  practiceStore.setGenerateDrawerVisible(false);
+  practiceStore.setListPractices(listResult);
+}
+
+/**
+ * Called when the drawer tries to close. Validates the form first.
+ * @param {Function} done 
+ */
+const handleClose = (done) => {
+  refForm?.value?.validate((valid) => {
+    if (!valid) return
+    done()
+  })
+  console.log("关闭生成菜单")
 }
 </script>
 
 <style lang="scss" scoped>
+.coffee-me {
+  position: fixed;
+  right: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 9999;
+}
+
+@media (max-width: 768px) {
+  .coffee-me {
+    width: 48px;
+    height: 48px;
+    font-size: 20px;
+  }
+}
+
+// ── Drawer ──
+:deep(.generate-drawer) {
+  .el-drawer {
+    max-width: calc(100vw - 32px);
+  }
+}
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  font-size: 18px;
+}
+
+.drawer-scroll {
+  height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+// ── Config section (top) ──
+.config-section {
+  // Minimal wrapper
+}
+
+// ── Mode selector ──
+.mode-radio-group {
+  display: flex;
+  width: 100%;
+
+  .el-radio-button {
+    flex: 1;
+  }
+
+  .el-radio-button__inner {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+// ── Action buttons ──
+.drawer-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+
+  .action-btn {
+    flex: 1;
+
+    &--primary {
+      font-weight: 600;
+    }
+  }
+}
+
+// ── Paper tags ──
+.paper-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.paper-tag {
+  margin: 0 !important;
+}
+
+// ── Responsive ──
+@media (max-width: 480px) {
+  .drawer-actions {
+    flex-direction: column;
+  }
+}
 </style>

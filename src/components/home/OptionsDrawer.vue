@@ -1,5 +1,8 @@
 <template>
-  <el-drawer v-model="currentVisible" size="50%" title="其他程序参数设置" :before-close="handleClose">
+  <el-drawer v-model="currentVisible" size="50%" :before-close="handleClose">
+  <template #header>
+    <span class="text-base font-semibold">其他程序参数设置</span>
+  </template>
     <ElForm ref="refForm" :model="formData" :rules="formRules">
       <ElFormItem label="题型设置">
         <el-radio-group v-model="formData.whereIsResult">

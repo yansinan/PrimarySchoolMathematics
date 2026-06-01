@@ -1,7 +1,7 @@
 <!-- components/input/NumberKeypad.vue -->
 <template>
-  <el-row justify="center">
-    <el-col :span="16" :md="16" :xs="20" class="keypad-shell">
+  <div class="keypad-wrap">
+    <div class="keypad-shell">
       <!-- 9宫格数字区 (1-9) -->
       <div class="grid-container">
         <el-button
@@ -54,8 +54,8 @@
           <span class="display-value">{{ currentValue || '___' }}</span>
         </el-card>
       </div>
-    </el-col>
-  </el-row>
+    </div>
+  </div>
 </template>
 
 <script setup>
@@ -92,8 +92,16 @@ const handleBackspace = () => {
 <style scoped lang="scss">
 @use '@/styles/input-ui.scss' as inputUi;
 
+.keypad-wrap {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
 .keypad-shell {
   @include inputUi.input-panel-surface;
+  width: min(100%, var(--interaction-width, 760px));
+  max-width: min(100%, var(--interaction-width, 760px));
   padding: clamp(12px, 2vw, 20px);
 }
 
@@ -212,6 +220,35 @@ const handleBackspace = () => {
   .grid-btn {
     height: 52px !important;
     font-size: 20px !important;
+  }
+}
+
+/* ── Short viewport height ── */
+@media (max-height: 800px) {
+  .grid-container {
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .grid-btn {
+    height: 52px !important;
+    font-size: 22px !important;
+  }
+  .keypad-shell {
+    padding: 12px;
+  }
+}
+
+@media (max-height: 600px) {
+  .grid-container {
+    gap: 5px;
+    margin-bottom: 4px;
+  }
+  .grid-btn {
+    height: 40px !important;
+    font-size: 18px !important;
+  }
+  .keypad-shell {
+    padding: 6px;
   }
 }
 

@@ -4,24 +4,27 @@
     <el-main class="practice-layout__main">
       <Practice />
     </el-main>
+    <StatsDrawer />
   </el-container>
 </template>
 
 <script setup>
 import { Generate, Practice } from '@/components'
+import StatsDrawer from '@/components/stats/StatsDrawer.vue'
 </script>
 
 <style lang="scss" scoped>
 .practice-layout {
-  min-height: 100dvh;
+  height: 100dvh;
   background: linear-gradient(180deg, #f7fbff 0%, #eef6ff 100%);
-  overflow: hidden;
 }
 
 .practice-layout__main {
   width: 100%;
+  height: 100%;
   padding: clamp(8px, 1.8vw, 18px);
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 :global(html),

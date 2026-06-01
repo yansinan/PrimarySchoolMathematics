@@ -1,9 +1,6 @@
 <template>
   <div>
-    <div class="flex justify-between">
-      <p class="text-base mb-5">已保存配置列表</p>
-      <ElButton type="danger" size="small" @click="reset">重置配置</ElButton>
-    </div>
+    <p class="config-heading">已保存的配置</p>
     <ElCard v-for="c in configurations" :class="{ active: c.id == activeConfigurationId }" class="mb-3" :shadow="'hover'"
       @click="select(c.id)">
       <div class="flex justify-between items-center cursor-pointer">
@@ -18,7 +15,7 @@
 </template>
 
 <script setup>
-import { getCurrentInstance, ref, computed, watch, nextTick } from 'vue';
+import { getCurrentInstance, computed, watch } from 'vue';
 import ConfigStorage from '@/utils/configStorage';
 import { cloneDeep } from 'lodash';
 
@@ -32,7 +29,7 @@ const props = defineProps({
   configurations: Array
 })
 
-const emits = defineEmits(['removed', 'selected', 'reset', 'update:activeIndex'])
+const emits = defineEmits(['removed', 'selected', 'update:activeIndex'])
 
 const activeConfigurationId = computed({
   get() {
@@ -58,30 +55,6 @@ const remove = async (id) => {
   }
 }
 
-const reset = async () => {
-  try {
-    await proxy.$messageBox.confirm('确定重置吗? ', '提示', { type: 'warning' })
-
-    const configStorage = new ConfigStorage()
-    configStorage.clear()
-
-    if (activeConfigurationId.value == '1') {
-      proxy.$message.success('重置成功')
-      emits('reset')
-    } else {
-      emits('reset')
-      nextTick(()=>{
-        const c = props.configurations.find(p => p.id == '1')
-        activeConfigurationId.value = '1'
-        emits('selected', cloneDeep(c))
-        proxy.$message.success('重置成功')
-      })
-    }
-  } catch (error) {
-
-  }
-}
-
 const select = async (id) => {
   try {
     await proxy.$messageBox.confirm('确定加载吗? 注意未保存的参数将会丢失!', '提示', { type: 'warning' })
@@ -98,11 +71,42 @@ watch(() => props.activeIndex, async (val) => {
 </script>
 
 <style lang="scss" scoped>
-.active {
-  @apply bg-sky-100;
+.config-heading {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e3c5c;
+  margin: 0 0 10px 0;
 }
 
-i{
-  @apply text-xl text-sky-600;
+.el-card {
+  margin-bottom: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid #e8edf3;
+
+  &:hover {
+    border-color: #409eff;
+  }
+}
+
+:deep(.el-card__body) {
+  padding: 10px 14px;
+}
+
+.el-card.active {
+  border-color: #409eff !important;
+  background: #ecf5ff;
+}
+
+i {
+  color: #c0ccda;
+  font-size: 16px;
+  transition: color 0.15s;
+  margin-left: auto;
+
+  &:hover {
+    color: #f56c6c;
+  }
 }
 </style>

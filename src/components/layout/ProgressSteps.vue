@@ -126,6 +126,41 @@ const getStepStatus = (index) => {
   }
 }
 
+/* ── Short viewport height ── */
+@media (max-height: 800px) {
+  .progress-steps {
+    margin-bottom: 6px;
+  }
+  .dot {
+    width: 10px;
+    height: 10px;
+  }
+  .dots-progress {
+    gap: 5px;
+  }
+  .stats-text {
+    margin-top: 4px;
+    font-size: 15px;
+  }
+}
+
+@media (max-height: 600px) {
+  .progress-steps {
+    margin-bottom: 3px;
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+  }
+  .dots-progress {
+    gap: 4px;
+  }
+  .stats-text {
+    margin-top: 2px;
+    font-size: 13px;
+  }
+}
+
 @media (max-width: 480px) {
   .progress-steps {
     margin-bottom: 10px;
