@@ -4,10 +4,10 @@
         class="box-item"
         content="生成测试"
         placement="top"    >
-      <el-button type="success" :icon="List" size="large" circle @click="drawerStore.setGenerateDrawerVisible(true)" class="coffee-me fixed left-5 inset-y-1/4 text-lg"/>
+      <el-button type="success" :icon="List" size="large" circle @click="practiceStore.setGenerateDrawerVisible(true)" class="coffee-me fixed left-5 inset-y-1/4 text-lg"/>
     </el-tooltip>
 
-    <el-drawer v-model="drawerStore.generateDrawerVisible" size="80%" direction="ltr" title="测试生成" :before-close="handleClose">
+    <el-drawer v-model="practiceStore.generateDrawerVisible" size="80%" direction="ltr" title="测试生成" :before-close="handleClose">
       <ElRow :gutter="20">
         <ElCol :xs="24" :sm="16" :md="16" :lg="12" :xl="8">
           <ElForm ref="refForm" :model="formData" label-position="top">
@@ -58,6 +58,7 @@ import { fileNameGeneratedRuleEnum, httpContentTypeExtensionsMappingEnum } from 
 import { download } from "@/utils/download";
 import { generatePaper } from '@/apis/paper';
 import { useAppStore } from '@/stores/app';
+import { usePracticeStore } from '@/stores/practice';
 import { createFormulasGenerator } from '@/utils/paperGenerator';
 // 解算式
 import { EquationSolver } from '@/utils/EquationSolver';
@@ -67,9 +68,8 @@ const { proxy } = getCurrentInstance()
 import {
   List,
 } from '@element-plus/icons-vue'
-import {useDrawerStore} from '@/stores/app';
 // 界面操作参数
-const drawerStore = useDrawerStore()
+const practiceStore = usePracticeStore()
 
 const refForm = ref(null)
 
@@ -208,8 +208,9 @@ const generateFormulas = () => {
     return prev;
   }, []);  
   // debugger
-  drawerStore.setGenerateDrawerVisible(false);
-  debugger;
+  practiceStore.setGenerateDrawerVisible(false);
+  practiceStore.setListPractices(listResult);
+  // debugger;
 }
 /**
  * 

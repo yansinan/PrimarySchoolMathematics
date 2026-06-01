@@ -1,0 +1,51 @@
+// 交互输入组件共享样式
+
+$panel-radius: 20px;
+$panel-border: #dbe7f4;
+$panel-bg-top: #f8fbff;
+$panel-bg-bottom: #eef5ff;
+
+@mixin input-panel-surface {
+  padding: clamp(12px, 2.4vw, 20px);
+  border: 1px solid $panel-border;
+  border-radius: $panel-radius;
+  background: linear-gradient(180deg, $panel-bg-top 0%, $panel-bg-bottom 100%);
+  box-shadow: 0 10px 24px rgba(28, 176, 246, 0.08);
+}
+
+@mixin input-grid($mobile-columns, $desktop-columns, $gap, $breakpoint: 768px) {
+  display: grid;
+  grid-template-columns: repeat($mobile-columns, 1fr);
+  gap: $gap;
+  width: 100%;
+
+  @if $mobile-columns != $desktop-columns {
+    @media (min-width: $breakpoint) {
+      grid-template-columns: repeat($desktop-columns, 1fr);
+    }
+  }
+}
+
+@mixin input-button-base {
+  width: 100% !important;
+  border-radius: 16px !important;
+  font-weight: 700 !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 4px 12px rgba(17, 24, 39, 0.08);
+}
+
+@mixin feedback-animations {
+  @keyframes psm-pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.08); }
+    100% { transform: scale(1); }
+  }
+
+  @keyframes psm-shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-10px); }
+    40% { transform: translateX(10px); }
+    60% { transform: translateX(-5px); }
+    80% { transform: translateX(5px); }
+  }
+}

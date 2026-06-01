@@ -1,0 +1,27 @@
+// styles/element-theme.scss
+@forward 'element-plus/theme-chalk/src/common/var.scss' with (
+  $colors: (
+    'primary': (
+      'base': #1cb0f6,    // 主色调-多邻国蓝
+    ),
+    'success': (
+      'base': #58cc71,    // 正确-绿色
+    ),
+    'danger': (
+      'base': #ff4b4b,    // 错误-红色
+    ),
+    'warning': (
+      'base': #ffb13c,    // 警告-橙色
+    ),
+  ),
+  $button-padding-horizontal: (
+    'large': 20px,        // 大按钮水平内边距
+  ),
+  $font-size: (
+    'large': 28px,        // 大字体
+    'medium': 24px,
+  ),
+);
+
+// 导入Element Plus样式
+@use 'element-plus/theme-chalk/src/index.scss' as *;

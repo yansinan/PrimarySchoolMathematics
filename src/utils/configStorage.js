@@ -36,7 +36,7 @@ export default class {
           abdication: '1',
           remainder: '2',
           solution: '0', // 解题方式
-          numberOfPapers: 3, // 试卷数量
+          numberOfPapers: 1, // 试卷数量
           numberOfPagerColumns: 3, // 试卷列数
           paperTitle: '小学生口算题', // 试卷标题
           paperSubTitle: '姓名：__________ 日期：____月____日 时间：________ 对题：____道', // 试卷副标题

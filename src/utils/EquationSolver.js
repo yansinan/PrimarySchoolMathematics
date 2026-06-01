@@ -1,7 +1,16 @@
+const toEvalSymbols = (expr = '') => {
+    return expr
+        .replace(/×/g, '*')
+        .replace(/÷/g, '/')
+        .replace(/＋/g, '+')
+        .replace(/－/g, '-')
+}
+
 /**
  * 方程求解器类 - 求解包含未知数的算式
  * 支持多步运算、多种运算符组合、括号
  */
+
 export class EquationSolver {
     constructor() {
         // 可以添加配置项
@@ -34,9 +43,7 @@ export class EquationSolver {
      */
     static solveByEval(equation) {
         // 标准化处理
-        let expr = equation
-            .replace(/×/g, '*')
-            .replace(/÷/g, '/')
+        let expr = toEvalSymbols(equation)
             .replace(/\\s+/g, '')
             .replace('__', 'x');
 
@@ -251,9 +258,7 @@ export class EquationSolver {
      * @returns {number|null} 未知数的解
      */
     static solveByBruteForce(equation) {
-        const expr = equation
-            .replace(/×/g, '*')
-            .replace(/÷/g, '/')
+        const expr = toEvalSymbols(equation)
             .replace(/\\s+/g, '')
             .replace('__', 'x');
 
@@ -309,9 +314,7 @@ export class EquationSolver {
      */
     static checkResult(equation, inResult) {
         // 标准化处理
-        let expr = equation
-            .replace(/×/g, '*')
-            .replace(/÷/g, '/')
+        let expr = toEvalSymbols(equation)
             .replace(/\\s+/g, '');
 
         let result = inResult;
