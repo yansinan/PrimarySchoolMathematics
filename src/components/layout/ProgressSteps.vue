@@ -64,7 +64,7 @@ const getStepStatus = (index) => {
 
 <style scoped lang="scss">
 .progress-steps {
-  margin-bottom: 20px;
+  margin-bottom: 14px;
 }
 
 .dots-progress {
@@ -96,9 +96,14 @@ const getStepStatus = (index) => {
 }
 
 .stats-text {
-  text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: 2px;
   margin-top: 8px;
   font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
   
   .correct-count {
     color: #58cc71;
@@ -107,6 +112,36 @@ const getStepStatus = (index) => {
   
   .total-count {
     color: #999;
+  }
+}
+
+@media (max-width: 768px) {
+  .progress-steps {
+    margin-bottom: 12px;
+  }
+
+  .stats-text {
+    margin-top: 6px;
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .progress-steps {
+    margin-bottom: 10px;
+  }
+
+  .dots-progress {
+    gap: 6px;
+  }
+
+  .dot {
+    width: 10px;
+    height: 10px;
+  }
+
+  .stats-text {
+    font-size: 15px;
   }
 }
 </style>

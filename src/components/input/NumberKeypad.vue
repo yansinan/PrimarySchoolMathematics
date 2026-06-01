@@ -94,23 +94,20 @@ const handleBackspace = () => {
 
 .keypad-shell {
   @include inputUi.input-panel-surface;
+  padding: clamp(12px, 2vw, 20px);
 }
 
-
-/* 9宫格：3列等宽，间隙12px */
 .grid-container {
   @include inputUi.input-grid(3, 3, 12px);
   margin-bottom: 12px;
 }
 
-/* 数字按钮样式 - 关键修复 */
 .grid-btn {
   @include inputUi.input-button-base;
-  height: clamp(64px, 11vw, 84px) !important;
-  font-size: clamp(24px, 4.1vw, 34px) !important;
+  height: clamp(58px, 10vw, 84px) !important;
+  font-size: clamp(22px, 4vw, 34px) !important;
   padding: 0 !important;
   margin: 0 !important;
-
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
@@ -126,7 +123,6 @@ const handleBackspace = () => {
   box-shadow: 0 8px 18px rgba(28, 176, 246, 0.2);
 }
 
-/* 退格按钮特殊样式 */
 .bnBack {
   background-color: #f5f7fa !important;
   border-color: #dcdfe6 !important;
@@ -140,7 +136,6 @@ const handleBackspace = () => {
   color: #409eff !important;
 }
 
-/* 0 按钮 */
 .zero-btn {
   background-color: #ecf5ff !important;
   border-color: #c6e2ff !important;
@@ -152,7 +147,6 @@ const handleBackspace = () => {
   background-color: #d9ecff !important;
 }
 
-/* 确认按钮 */
 .confirm-btn {
   font-weight: bold !important;
   background-color: #58cc71 !important;
@@ -168,7 +162,6 @@ const handleBackspace = () => {
   opacity: 0.6;
 }
 
-/* 显示区域 */
 .display-area {
   margin-top: 16px;
 }
@@ -185,22 +178,40 @@ const handleBackspace = () => {
   color: #409eff;
 }
 
-/* 移动端适配 */
-@media (max-width: 480px) {
-  .grid-btn {
-    height: 64px !important;
-    font-size: 28px !important;
+@media (max-width: 768px) {
+  .keypad-shell {
+    padding: 12px;
   }
-  
+
+  .grid-btn {
+    height: 60px !important;
+    font-size: 24px !important;
+  }
+
   .display-value {
     font-size: 28px;
   }
 }
 
+@media (max-width: 480px) {
+  .grid-container {
+    gap: 10px;
+  }
+
+  .grid-btn {
+    height: 56px !important;
+    font-size: 22px !important;
+  }
+
+  .display-value {
+    font-size: 26px;
+  }
+}
+
 @media (max-width: 360px) {
   .grid-btn {
-    height: 58px !important;
-    font-size: 24px !important;
+    height: 52px !important;
+    font-size: 20px !important;
   }
 }
 
@@ -210,14 +221,4 @@ const handleBackspace = () => {
     transform: none !important;
   }
 }
-
-/* 调试用 - 可以取消注释查看网格边界 */
-/*
-.grid-container {
-  outline: 1px dashed red;
-}
-.grid-btn {
-  outline: 1px solid blue;
-}
-*/
 </style>

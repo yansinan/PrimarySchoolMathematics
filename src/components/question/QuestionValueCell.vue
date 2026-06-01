@@ -84,7 +84,6 @@ const handleSubmit = () => {
 
 .math-answer-input {
   font-size: clamp(2.4rem, 6vw, 6rem);
-  /* font-size: clamp(2rem, 5vw, 4.2rem); */
   font-weight: 700;
   color: #2c3e50;
   display: block;
@@ -101,5 +100,21 @@ const handleSubmit = () => {
 
 .math-answer-input:focus {
   border-bottom-color: #1cb0f6;
+}
+
+.math-answer-placeholder {
+  font-weight: 500;
+  color: #bdc3c7;
+  letter-spacing: 5px;
+  border-bottom: 4px solid #bdc3c7;
+  line-height: 1;
+  display: inline-flex;
+  align-items: flex-end;
+  justify-content: center;
+  min-width: 2em;
+  padding-bottom: 0.12em;
+  vertical-align: bottom;
+  text-align: center;
+  font-size: $math-font-size-medium;
 }
 </style>

@@ -119,24 +119,23 @@ const carryMark = computed(() => {
   justify-content: center;
   align-items: center;
   width: 100%;
-  padding: 20px 10px;
+  padding: clamp(10px, 2vw, 18px) 8px;
 }
 
 .vertical-equation {
   display:flex;
   flex-direction: column;
-  // font-family: 'Courier New', monospace;
   position: relative;
   width: min(100%, 420px);
   margin: 0 auto;
-  --vertical-digit-size: clamp(1.9rem, 5.2vw, 3.1rem);
-  --vertical-operator-size: clamp(1.5rem, 4.2vw, 2.3rem);
+  --vertical-digit-size: clamp(1.7rem, 4.6vw, 2.8rem);
+  --vertical-operator-size: clamp(1.3rem, 3.8vw, 2.1rem);
 }
 
 .v-row {
   width: 100%;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .result-row {
@@ -174,18 +173,19 @@ const carryMark = computed(() => {
   display: inline-block;
 }
 
-/* 使用共享样式，这里只需要定义字体大小 */
 :deep(.math-number-vertical) {
-  min-width: 2.8em;
+  min-width: 2.6em;
   text-align: right;
   font-family: 'Courier New', monospace;
   font-size: var(--vertical-digit-size);
-  line-height: 1.1;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  display: inline-flex;
+  align-items: flex-end;
 }
 
-/* 使用共享样式，这里只需要定义边距 */
 .math-line {
-  margin: 2px 0 12px 0;
+  margin: 2px 0 10px 0;
   width: 100%;
   border-bottom-width: 3px;
 }
@@ -200,21 +200,20 @@ const carryMark = computed(() => {
 :deep(.math-answer-placeholder) {
   text-align: right;
   font-size: var(--vertical-digit-size);
-  line-height: 1.1;
+  line-height: 1.02;
 }
 
 :deep(.math-answer-input) {
-  width: min(100%, 2.6em);
+  width: min(100%, 2.4em);
 }
 
 .math-carry-mark {
   position: absolute;
-  top: 20px;
-  right: 30px;
+  top: 18px;
+  right: 24px;
   font-weight: bold;
 }
 
-/* 移动端适配 */
 @media (max-width: 768px) {
   .vertical-equation {
     width: min(100%, 360px);
@@ -222,7 +221,21 @@ const carryMark = computed(() => {
 
   .math-carry-mark {
     top: 15px;
-    right: 20px;
+    right: 18px;
+  }
+}
+
+@media (max-width: 480px) {
+  .vertical-layout {
+    padding: 8px 4px;
+  }
+
+  .v-row {
+    margin-bottom: 5px;
+  }
+
+  .math-line {
+    margin: 2px 0 8px 0;
   }
 }
 </style>

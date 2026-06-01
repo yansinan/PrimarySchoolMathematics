@@ -98,22 +98,34 @@ const carryHint = computed(() => {
 
 .equation-row {
   width: 100%;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
+  align-items: center;
 }
 
 .number-col, .operator-col, .equals-col, .answer-col {
   display: flex;
   justify-content: center;
-  align-items: baseline;
+  align-items: center;
 }
 
-/* 使用共享样式，这里只需要定义额外的样式 */
+.number-col,
+.answer-col {
+  min-width: 0;
+  padding-bottom: 2px;
+}
+
+.operator-col,
+.equals-col {
+  flex: 0 0 auto;
+}
+
 .math-number {
-  line-height: 1.2;
+  line-height: 1.05;
+  white-space: nowrap;
 }
 
 .hint-row {
-  margin-top: 20px;
+  margin-top: 12px;
 }
 
 .carry-alert {
@@ -121,10 +133,44 @@ const carryHint = computed(() => {
   margin: 0 auto;
 }
 
-/* 移动端适配 */
-@media (max-width: 480px) {
-  .equation-row .el-col {
+@media (max-width: 768px) {
+  .equation-row {
+    margin-bottom: 10px;
+  }
+
+  .equation-row :deep(.el-col) {
     padding: 0 2px;
+  }
+
+  .math-number,
+  .math-operator,
+  .math-equals {
+    transform: scale(0.92);
+    transform-origin: center;
+  }
+
+  .answer-col {
+    padding-bottom: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .equation-row {
+    margin-bottom: 8px;
+  }
+
+  .hint-row {
+    margin-top: 8px;
+  }
+
+  .math-number,
+  .math-operator,
+  .math-equals {
+    transform: scale(0.84);
+  }
+
+  .answer-col {
+    padding-bottom: 0;
   }
 }
 </style>

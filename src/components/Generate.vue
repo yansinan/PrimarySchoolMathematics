@@ -4,7 +4,7 @@
         class="box-item"
         content="生成测试"
         placement="top"    >
-      <el-button type="success" :icon="List" size="large" circle @click="practiceStore.setGenerateDrawerVisible(true)" class="coffee-me fixed left-5 inset-y-1/4 text-lg"/>
+      <el-button type="success" :icon="List" size="large" circle @click="practiceStore.setGenerateDrawerVisible(true)" class="coffee-me fixed left-5 inset-y-1/4 z-[9999] text-lg"/>
     </el-tooltip>
 
     <el-drawer v-model="practiceStore.generateDrawerVisible" size="80%" direction="ltr" title="测试生成" :before-close="handleClose">
@@ -169,8 +169,7 @@ const selectedConfiguration = (configuration) => {
 const buttonLoading = ref(false)
 const appStore = useAppStore()
 const router = useRouter()
-
-const getPapers = () => {
+const generate = () => {
   // 生成试卷数量不能过多
   const numberOfFormulas = paperList.value.reduce((prev, cur) => {
     prev += parseInt(cur.numberOfFormulas)
@@ -183,16 +182,22 @@ const getPapers = () => {
   }
 
   const papers = createFormulasGenerator(toRaw(unref(formData)), toRaw(unref(paperList)))
-  return papers
-}
-const generate = () => {
-  const papers=getPapers();
   appStore.navigateToPrint(router, formData.value.fileNameGeneratedRule == fileNameGeneratedRuleEnum.baseOnTitleAndIndex.key ? formData.value.paperTitle : "", papers)
   paperList.value = []
 }
 const generateFormulas = () => {
-  const papers=getPapers();
+  // 生成试卷数量不能过多
+  const numberOfFormulas = paperList.value.reduce((prev, cur) => {
+    prev += parseInt(cur.numberOfFormulas)
+    return prev
+  }, 0)
 
+  if (numberOfFormulas * formData.value.numberOfPapers > 1000) {
+    proxy.$message.error('题目总数不能超过1000题!')
+    return
+  }
+
+  const papers = createFormulasGenerator(toRaw(unref(formData)), toRaw(unref(paperList)))
   const listFormulas = papers.reduce((prev, cur) => {
     prev.push(...cur.formulas)
     return prev
@@ -207,23 +212,9 @@ const generateFormulas = () => {
     })
     return prev;
   }, []);  
-  // debugger
-  practiceStore.setGenerateDrawerVisible(false);
-  practiceStore.setListPractices(listResult);
-  // debugger;
-}
-/**
- * 
- * @param {Function} done 
- */
-const handleClose = (done) => {
-  refForm?.value?.validate((valid) => {
-    if (!valid) return
-
-    done()
-  })
-  console.log("关闭生成菜单")
+  debugger
 }
 </script>
 
-<style lang="scss" scoped></style>
+<style lang="scss" scoped>
+</style>

@@ -1,47 +1,49 @@
 <!-- views/PracticeView.vue -->
 <template>
   <el-container class="practice-view">
-    <!-- 头部暂时用简单文字代替 -->
-    <el-header class="simple-header">
-      <span class="stage-badge">{{ currentStage }}</span>
-      <span class="streak-badge" v-if="session.streak > 0">🔥 {{ session.streak }}</span>
-    
-    <!-- 进度组件 -->
-    <ProgressSteps
-      :total="totalQuestions"
-      :current="currentIndex + 1"
-      :answers="session.answers"
-      :correct-count="correctCount"
-    />
-    </el-header>
-    
-    <!-- 题目展示区域 - 动态组件 -->
-    <el-main class="question-area">
-      <component
-        :is="currentLayout"
-        :show-answer="session.feedbackType !== null"
-        :answer="currentQuestion.solution"
-        :user-answer="session.currentAnswer"
-        :enable-direct-input="session.displayMode.input === 'keypad' && session.feedbackType === null"
-        :class="{
-          'correct-flash': session.feedbackType === 'correct',
-          'wrong-flash': session.feedbackType === 'wrong'
-        }"
-        @update:user-answer="handleInput"
-        @submit-answer="handleSubmit"
-      />
-      </el-main>
-    
-    <!-- 输入区域 - 动态组件 -->
-    <component
-      :is="currentInput"
-      v-bind="inputProps"
-      @input="handleInput"
-      @select="handleSelect"
-      @backspace="handleBackspace"
-      @submit="handleSubmit"
-      @next="handleNext"
-    />
+    <el-main class="practice-shell">
+      <el-card class="practice-card" shadow="never">
+        <div class="practice-card__header">
+          <div class="stage-badge">{{ currentStage }}</div>
+          <div class="streak-badge" v-if="session.streak > 0">🔥 {{ session.streak }}</div>
+        </div>
+
+        <ProgressSteps
+          :total="totalQuestions"
+          :current="currentIndex + 1"
+          :answers="session.answers"
+          :correct-count="correctCount"
+        />
+
+        <div class="question-area">
+          <component
+            :is="currentLayout"
+            :show-answer="session.feedbackType !== null"
+            :answer="currentQuestion.solution"
+            :user-answer="session.currentAnswer"
+            :enable-direct-input="session.displayMode.input === 'keypad' && session.feedbackType === null"
+            :class="{
+              'correct-flash': session.feedbackType === 'correct',
+              'wrong-flash': session.feedbackType === 'wrong'
+            }"
+            @update:user-answer="handleInput"
+            @submit-answer="handleSubmit"
+          />
+        </div>
+
+        <div class="input-area">
+          <component
+            :is="currentInput"
+            v-bind="inputProps"
+            @input="handleInput"
+            @select="handleSelect"
+            @backspace="handleBackspace"
+            @submit="handleSubmit"
+            @next="handleNext"
+          />
+        </div>
+      </el-card>
+    </el-main>
   </el-container>
 </template>
 
@@ -49,7 +51,6 @@
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 
-// 组件导入
 import ProgressSteps from '@/components/layout/ProgressSteps.vue'
 import HorizontalLayout from '@/components/question/HorizontalLayout.vue'
 import VerticalLayout from '@/components/question/VerticalLayout.vue'
@@ -57,14 +58,10 @@ import NumberKeypad from '@/components/input/NumberKeypad.vue'
 import OptionButtons from '@/components/input/OptionButtons.vue'
 import { getCarryType, parseEquation } from '@/utils/equationParser'
 
-// ============ 临时对象代替services ============
-
-
 import { usePracticeStore } from '@/stores/practice'
-// 界面操作参数
-const practiceStore = usePracticeStore()
-// 监听事件变化
 import { storeToRefs } from 'pinia'
+
+const practiceStore = usePracticeStore()
 const {
   listPractices,
   totalQuestions,
@@ -73,31 +70,25 @@ const {
   currentQuestion,
   isLastQuestion,
   correctCount
-} = storeToRefs(practiceStore) // 所有题目 [{ equation, solution }]
+} = storeToRefs(practiceStore)
 
-// 临时展示策略
 const tempDisplayStrategy = {
   stats: {
     consecutiveWrong: 0,
     accuracyRate: 1.0
   },
-  
   decide(equation) {
-    // 简单决策逻辑
     if (this.stats.consecutiveWrong >= 3) {
       return { layout: 'horizontal', input: 'options' }
     }
-    
-    // 进位/退位题用竖式
+
     const parsedEquation = parseEquation(equation)
     if (getCarryType(parsedEquation)) {
       return { layout: 'vertical', input: 'keypad' }
     }
-    
-    // 默认用横式+键盘
+
     return { layout: 'horizontal', input: 'keypad' }
   },
-  
   updateStats(isCorrect) {
     if (isCorrect) {
       this.stats.consecutiveWrong = 0
@@ -109,17 +100,8 @@ const tempDisplayStrategy = {
   }
 }
 
-// ============ 状态定义 ============
-
-// 用户信息
 const currentStage = ref('一年级')
 
-// 题目相关
-// const totalQuestions = ref(10)       // 总题数
-
-// ============ 计算属性 ============
-
-// 动态组件映射
 const layoutComponents = {
   horizontal: HorizontalLayout,
   vertical: VerticalLayout
@@ -133,53 +115,43 @@ const inputComponents = {
 const currentLayout = computed(() => layoutComponents[session.value.displayMode.layout])
 const currentInput = computed(() => inputComponents[session.value.displayMode.input])
 
-// 传递给输入组件的属性
 const inputProps = computed(() => {
   const baseProps = {
     disabled: session.value.feedbackType !== null,
     showResult: session.value.feedbackType !== null
   }
-  
+
   if (session.value.displayMode.input === 'keypad') {
     return {
       ...baseProps,
       currentValue: session.value.currentAnswer
     }
-  } else {
-    return {
-      ...baseProps,
-      options: session.value.currentOptions,
-      correctAnswer: currentQuestion.value.solution,
-      selectedOption: session.value.selectedOption
-    }
+  }
+
+  return {
+    ...baseProps,
+    options: session.value.currentOptions,
+    correctAnswer: currentQuestion.value.solution,
+    selectedOption: session.value.selectedOption
   }
 })
 
-// ============ 方法定义 ============
-
-// 初始化练习
 const initPractice = () => {
-
-  // 重置状态
   practiceStore.resetPracticeSession()
-  
-  // 重置策略统计
+
   tempDisplayStrategy.stats = {
     consecutiveWrong: 0,
     accuracyRate: 1.0
   }
-  
-  // 初始化展示模式
+
   const mode = tempDisplayStrategy.decide(currentQuestion.value.equation)
   session.value.displayMode = mode
-  
-  // 如果是选择题模式，生成选项
+
   if (mode.input === 'options') {
     generateOptions(currentQuestion.value.solution)
   }
 }
 
-// 生成选择题选项
 const generateOptions = (correct) => {
   const options = [correct]
   while (options.length < 4) {
@@ -189,11 +161,9 @@ const generateOptions = (correct) => {
       options.push(wrong)
     }
   }
-  // 打乱顺序
   session.value.currentOptions = options.sort(() => Math.random() - 0.5)
 }
 
-// 处理输入
 const handleInput = (value) => {
   session.value.currentAnswer = value
 }
@@ -207,26 +177,23 @@ const handleSelect = (option) => {
   handleSubmit(option)
 }
 
-// 提交答案
 const handleSubmit = (answer) => {
   const userAnswer = answer !== undefined ? answer : Number(session.value.currentAnswer)
-  
+
   if (isNaN(userAnswer)) {
     ElMessage.warning('请输入答案')
     return
   }
-  
+
   const isCorrect = userAnswer === currentQuestion.value.solution
-  
-  // 记录答案
+
   session.value.answers.push({
     ...currentQuestion.value,
     userAnswer,
     isCorrect,
     timestamp: Date.now()
   })
-  
-  // 更新连续正确数
+
   if (isCorrect) {
     session.value.streak++
     session.value.feedbackType = 'correct'
@@ -236,8 +203,7 @@ const handleSubmit = (answer) => {
       offset: 100,
       customClass: 'feedback-message'
     })
-    
-    // 正确后自动进入下一题
+
     setTimeout(() => {
       handleNext()
     }, 800)
@@ -250,53 +216,41 @@ const handleSubmit = (answer) => {
       offset: 100,
       customClass: 'feedback-message'
     })
-    
-    // 错误后短暂停留
+
     setTimeout(() => {
       if (session.value.displayMode.input === 'keypad') {
-        session.value.feedbackType = null  // 键盘模式清除反馈，可重新输入
+        session.value.feedbackType = null
       }
     }, 1500)
   }
-  
-  // 更新策略的统计
+
   tempDisplayStrategy.updateStats(isCorrect)
 }
 
-// 下一题
 const handleNext = () => {
   if (!isLastQuestion.value) {
-    // 还有下一题
     practiceStore.nextQuestion()
-    
-    // 重置状态
     practiceStore.resetQuestionInputState()
-    
-    // 重新决策展示模式
+
     const mode = tempDisplayStrategy.decide(currentQuestion.value.equation)
     session.value.displayMode = mode
-    
-    // 如果是选择题模式，生成新选项
+
     if (mode.input === 'options') {
       generateOptions(currentQuestion.value.solution)
     }
   } else {
-    // 练习完成
     ElMessage.success('恭喜！完成所有题目！')
     console.log('练习完成', {
       total: totalQuestions.value,
-      correct: correctCount.value,
-      answers: answers.value
+      correct: correctCount.value
     })
   }
 }
 
-// ============ 生命周期 ============
-
-// 监听题目变化（用于调试）
 watch(currentQuestion, (newQ) => {
   console.log('当前题目:', newQ)
 })
+
 watch(listPractices, (newPracticeList) => {
   if (newPracticeList.length > 0) {
     initPractice()
@@ -306,42 +260,62 @@ watch(listPractices, (newPracticeList) => {
 
 <style scoped>
 .practice-view {
-  max-width: 800px;
-  width: 60%;
-  margin: 0 auto;
-  background-color: #f8f9fa;
+  width: 100%;
+  min-height: calc(100dvh - 16px);
 }
 
-.simple-header {
+.practice-shell {
+  padding: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.practice-card {
+  width: min(100%, 980px);
+  border: 0;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 12px 32px rgba(23, 110, 191, 0.08);
+}
+
+.practice-card__header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 0;
-  margin-bottom: 8px;
-  border-bottom: 1px solid #e9ecef;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.stage-badge,
+.streak-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-weight: 600;
+  line-height: 1;
+  border: 1px solid #dbe7f4;
 }
 
 .stage-badge {
-  font-size: 1.2rem;
-  font-weight: 600;
   color: #1e3c5c;
-  background-color: #e9ecef;
-  padding: 4px 12px;
-  border-radius: 20px;
+  background: #e9f4ff;
 }
 
 .streak-badge {
-  font-size: 1.2rem;
-  font-weight: 600;
-  color: #e67e22;
-  background-color: #fff3e0;
-  padding: 4px 12px;
-  border-radius: 20px;
+  color: #d97706;
+  background: #fff7ed;
 }
 
 .question-area {
-  align-items: center;
-  margin: 20px 0;
+  margin-top: 8px;
+}
+
+.input-area {
+  margin-top: 14px;
 }
 
 .correct-flash {
@@ -354,17 +328,52 @@ watch(listPractices, (newPracticeList) => {
 
 @keyframes correctFlash {
   0% { transform: scale(1); }
-  50% { transform: scale(1.05); color: #58cc71; }
+  50% { transform: scale(1.03); color: #58cc71; }
   100% { transform: scale(1); }
 }
 
 @keyframes wrongFlash {
   0% { transform: translateX(0); }
-  20% { transform: translateX(-10px); }
-  40% { transform: translateX(10px); }
-  60% { transform: translateX(-5px); }
-  80% { transform: translateX(5px); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
   100% { transform: translateX(0); }
+}
+
+@media (max-width: 1024px) {
+  .practice-card {
+    width: 100%;
+    border-radius: 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .practice-card {
+    border-radius: 18px;
+    padding: 8px 6px;
+  }
+
+  .practice-card__header {
+    margin-bottom: 8px;
+  }
+
+  .input-area {
+    margin-top: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .practice-card {
+    border-radius: 16px;
+    padding: 6px 4px;
+  }
+
+  .stage-badge,
+  .streak-badge {
+    padding: 5px 10px;
+    font-size: 14px;
+  }
 }
 </style>
 

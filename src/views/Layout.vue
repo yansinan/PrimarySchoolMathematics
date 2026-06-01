@@ -1,30 +1,33 @@
 <template>
-  <el-container>
-    <el-header height="64px">
-      <Header />
-    </el-header>
-    <el-main>
-      <Generate />
-      <!-- <ProgressSteps /> -->
-      <!-- <NumberKeypad /> -->
-      <!-- <OptionButtons /> -->
+  <el-container class="practice-layout">
+    <Generate />
+    <el-main class="practice-layout__main">
       <Practice />
     </el-main>
-    <el-footer>
-      <Footer />
-    </el-footer>
   </el-container>
 </template>
 
 <script setup>
-import { Header, Footer, Menu } from "@/components";
-import Home from "./Home.vue";
-// 解算式
-import {Generate} from '@/components';
-// import {NumberKeypad,OptionButtons,ProgressSteps} from '@/components';
-
-import {Practice} from '@/components';
- 
+import { Generate, Practice } from '@/components'
 </script>
 
-<style lang="scss" scoped></style>
+<style lang="scss" scoped>
+.practice-layout {
+  min-height: 100dvh;
+  background: linear-gradient(180deg, #f7fbff 0%, #eef6ff 100%);
+  overflow: hidden;
+}
+
+.practice-layout__main {
+  width: 100%;
+  padding: clamp(8px, 1.8vw, 18px);
+  overflow: hidden;
+}
+
+:global(html),
+:global(body),
+:global(#app) {
+  height: 100%;
+  overflow: hidden;
+}
+</style>
