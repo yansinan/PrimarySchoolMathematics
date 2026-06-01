@@ -73,7 +73,8 @@ const props = defineProps({
   showInput: {
     type: Boolean,
     default: false
-  }
+  },
+  /** 逐位模式：从右向左输入（竖式计算用）*/
 })
 
 const emit = defineEmits(['input', 'backspace', 'submit'])

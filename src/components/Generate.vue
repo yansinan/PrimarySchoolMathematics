@@ -121,6 +121,8 @@ const formData = ref({
   ],
   resultMinValue: 1, // 试题运行结果最小值
   resultMaxValue: 9, // 试题运行结果最大值
+  targetMin: 10, // 自适应最少答题数
+  targetMax: 30, // 自适应最多答题数
   generateMode: '1',
   customFormulaList: [
     { formula: '' }
@@ -152,6 +154,8 @@ onMounted(async () => {
   formData.value.formulaList = config.formulaList
   formData.value.resultMinValue = config.resultMinValue
   formData.value.resultMaxValue = config.resultMaxValue
+  formData.value.targetMin = config.targetMin ?? 10
+  formData.value.targetMax = config.targetMax ?? 30
   formData.value.fileNameGeneratedRule = config.fileNameGeneratedRule
 })
 
@@ -189,6 +193,8 @@ const selectedConfiguration = (configuration) => {
   formData.value.formulaList = config.formulaList
   formData.value.resultMinValue = config.resultMinValue
   formData.value.resultMaxValue = config.resultMaxValue
+  formData.value.targetMin = config.targetMin ?? 10
+  formData.value.targetMax = config.targetMax ?? 30
   formData.value.fileNameGeneratedRule = config.fileNameGeneratedRule
 }
 

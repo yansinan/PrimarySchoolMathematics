@@ -1,23 +1,23 @@
 /**
  * 数学能力诊断引擎
  *
- * 首次使用时自动生成 10 题快速诊断测试（5 级 × 2 题），
+ * 首次使用时自动生成 5 题快速诊断测试（5 级 × 1 题），
  * 完成后分析弱项并产出针对性练习配置。
- * 错误 2 次即判定该等级薄弱，后续练习中会自然回归真实水平。
+ * 错误 1 次即判定该等级薄弱（5级×1题），后续练习中会自然回归真实水平。
  */
 
 import { EquationSolver } from './EquationSolver'
 
 // ─── 难度等级定义 ───
 export const DIAG_LEVELS = [
-  { id: 'L1', label: '个位数基础',  count: 2 },
-  { id: 'L2', label: '个位数进退位', count: 2 },
-  { id: 'L3', label: '两位数无进退位', count: 2 },
-  { id: 'L4', label: '两位数进退位',   count: 2 },
-  { id: 'L5', label: '混合题型',     count: 2 },
+  { id: 'L1', label: '个位数基础',  count: 1 },
+  { id: 'L2', label: '个位数进退位', count: 1 },
+  { id: 'L3', label: '两位数无进退位', count: 1 },
+  { id: 'L4', label: '两位数进退位',   count: 1 },
+  { id: 'L5', label: '混合题型',     count: 1 },
 ]
 
-const DIAG_TOTAL = DIAG_LEVELS.reduce((s, l) => s + l.count, 0) // 10
+const DIAG_TOTAL = DIAG_LEVELS.reduce((s, l) => s + l.count, 0) // 5
 
 // ─── 辅助函数 ───
 function rand(min, max) {

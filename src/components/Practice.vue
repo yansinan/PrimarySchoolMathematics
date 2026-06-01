@@ -22,12 +22,15 @@
             :answer="currentQuestion.solution"
             :user-answer="session.currentAnswer"
             :enable-direct-input="session.displayMode.input === 'keypad' && session.feedbackType === null"
+            :digit-mode="session.displayMode.layout === 'vertical' && session.displayMode.input === 'keypad'"
+            :focus-slot="digitFocusIdx"
             :class="{
               'correct-flash': session.feedbackType === 'correct',
               'wrong-flash': session.feedbackType === 'wrong'
             }"
             @update:user-answer="handleInput"
             @submit-answer="handleSubmit"
+            @focus="digitFocusIdx = $event"
           />
         </div>
 
@@ -68,7 +71,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { TrendCharts } from '@element-plus/icons-vue'
 
 import ProgressSteps from '@/components/layout/ProgressSteps.vue'
@@ -80,7 +83,8 @@ import { getCarryType, parseEquation } from '@/utils/equationParser'
 import { generateDiagnosticQuestions, analyzeAbility, generatePracticeConfig } from '@/utils/diagnostic'
 import { createFormulasGenerator } from '@/utils/paperGenerator'
 import { EquationSolver } from '@/utils/EquationSolver'
-import { createAdaptiveEngine, getGroupConfig, getGroupSize, evaluateGroup, getDifficultyLabel, prepareChoiceOptions, applyBlankToQuestions } from '@/utils/adaptiveEngine'
+import { createAdaptiveEngine, getDifficultyConfig, getGroupSize, evaluateGroup, getDifficultyLabel, diversifyBatch } from '@/utils/adaptiveEngine'
+import { formatDuration } from '@/utils/timeFormat'
 
 import { usePracticeStore } from '@/stores/practice'
 import { useStatsStore } from '@/stores/stats'
@@ -134,6 +138,8 @@ const tempDisplayStrategy = {
 /** 自适应引擎状态 */
 const adaptiveEngine = ref(null)
 const adaptiveGroupIndex = ref(0)
+/** 避免 handleNext 重复调用（choice 模式下 下一题按钮 + setTimeout 同时触发）*/
+let nextLocked = false
 
 const currentStage = computed(() => {
   if (isAssessment.value) {
@@ -228,11 +234,117 @@ const generateOptions = (correct) => {
   session.value.currentOptions = options.sort(() => Math.random() - 0.5)
 }
 
+/** 竖式逐位输入：用户点选的格子索引（-1=未选择）*/
+const digitFocusIdx = ref(-1)
+
+/** 竖式 slot 字符串：用 '_' 表示空格，如 "_3" 表示十位是3 */
+const digitPadStr = ref('')
+
+/** 当前竖式中最大位数 */
+function calcMaxDigits() {
+  const eq = currentQuestion.value?.equation || ''
+  const parts = eq.split(/[+\-×÷=]/).map(s => s.trim()).filter(Boolean)
+  return Math.max(2, ...parts.map(s => s.replace('__', '').length))
+}
+
+/** 从 padStr + maxDigits 构造左对齐的字符数组 */
+function getPadSlots() {
+  const maxD = calcMaxDigits()
+  const raw = digitPadStr.value || ''
+  const arr = new Array(maxD).fill('_')
+  for (let i = 0; i < raw.length && i < maxD; i++) {
+    arr[i] = raw[i]
+  }
+  return arr
+}
+
+/** 将左对齐字符数组转回 padStr（移除尾随 _）*/
+function slotsToPadStr(arr) {
+  return arr.join('').replace(/_+$/, '')
+}
+
+/** 从 padStr 生成给 DigitInput 的值（移除 _，作为纯数字字符串）*/
+function padStrToDisplay(padStr) {
+  return padStr.replace(/_/g, '')
+}
+
+/** 
+ * 同步 display value 和 padStr。
+ * 从 session.currentAnswer 检测是否有 _ 来判断当前模式。
+ */
+function syncPadStr() {
+  const cur = session.value.currentAnswer || ''
+  if (cur.includes('_')) {
+    digitPadStr.value = cur
+  } else {
+    const maxD = calcMaxDigits()
+    // 左对齐，右侧补 _
+    digitPadStr.value = cur.length >= maxD ? cur : cur + '_'.repeat(maxD - cur.length)
+  }
+}
+
+/** 将数字字符串右对齐 + _ 补齐（DigitInput 左对齐模型用）*/
+function rightPadDigits(value, maxD) {
+  const digits = String(value || '').replace(/_/g, '')   // 去掉已有 _
+  const last = digits.slice(-maxD)                      // 只取最后 maxD 位
+  // 全为空 → 返回空字符串（让 confirm 按钮禁用）
+  if (!last) return ''
+  const padded = last.length >= maxD ? last : '_'.repeat(maxD - last.length) + last
+  return padded
+}
+
 const handleInput = (value) => {
+  if (digitFocusIdx.value >= 0 && session.value.displayMode.layout === 'vertical') {
+    // ── 点击模式：按格填入 ──
+    const focusIdx = digitFocusIdx.value
+    const oldLen = session.value.currentAnswer.length
+    const newLen = value.length
+
+    if (newLen < oldLen) {
+      const slots = getPadSlots()
+      if (focusIdx >= 0 && focusIdx < slots.length) slots[focusIdx] = '_'
+      digitPadStr.value = slotsToPadStr(slots)
+      session.value.currentAnswer = digitPadStr.value
+    } else if (newLen > oldLen) {
+      syncPadStr()
+      const slots = getPadSlots()
+      const newDigit = value.slice(-1)
+      if (focusIdx >= 0 && focusIdx < slots.length) slots[focusIdx] = newDigit
+      digitPadStr.value = slotsToPadStr(slots)
+      session.value.currentAnswer = digitPadStr.value
+      digitFocusIdx.value = Math.max(0, focusIdx - 1)
+    }
+    return
+  }
+  // ── 标准模式：竖式+键盘时右对齐补齐，其他保持原样 ──
+  if (session.value.displayMode.layout === 'vertical' && session.value.displayMode.input === 'keypad') {
+    session.value.currentAnswer = rightPadDigits(value, calcMaxDigits())
+    return
+  }
   session.value.currentAnswer = value
 }
 
 const handleBackspace = () => {
+  if (digitFocusIdx.value >= 0 && session.value.displayMode.layout === 'vertical') {
+    // ── 点击模式 ──
+    syncPadStr()
+    const slots = getPadSlots()
+    if (slots[digitFocusIdx.value] !== '_') {
+      slots[digitFocusIdx.value] = '_'
+    } else {
+      for (let i = slots.length - 1; i >= 0; i--) {
+        if (slots[i] !== '_') {
+          slots[i] = '_'
+          digitFocusIdx.value = i
+          break
+        }
+      }
+    }
+    digitPadStr.value = slotsToPadStr(slots)
+    session.value.currentAnswer = digitPadStr.value
+    return
+  }
+  // ── 标准模式 ──
   session.value.currentAnswer = session.value.currentAnswer.slice(0, -1)
 }
 
@@ -242,7 +354,8 @@ const handleSelect = (option) => {
 }
 
 const handleSubmit = (answer) => {
-  const userAnswer = answer !== undefined ? answer : Number(session.value.currentAnswer)
+  const rawAnswer = String(session.value.currentAnswer || '').replace(/_/g, '')
+  const userAnswer = answer !== undefined ? answer : Number(rawAnswer)
 
   if (isNaN(userAnswer)) {
     ElMessage.warning('请输入答案')
@@ -338,10 +451,19 @@ const handleSubmit = (answer) => {
 }
 
 const handleNext = () => {
+  if (nextLocked) return
+  nextLocked = true
+
   if (!isLastQuestion.value) {
     practiceStore.nextQuestion()
     practiceStore.resetQuestionInputState()
     practiceStore.startQuestionTimer()
+    digitFocusIdx.value = -1  // 重置点击焦点
+
+    if (!currentQuestion.value) {
+      nextLocked = false
+      return
+    }
 
     const mode = tempDisplayStrategy.decide(currentQuestion.value.equation)
 
@@ -356,20 +478,25 @@ const handleNext = () => {
         generateOptions(currentQuestion.value.solution)
       }
     }
+    nextLocked = false
   } else {
     // ── Session complete — handle based on phase ──
-    if (isAssessment.value) {
-      handleAssessmentComplete()
-    } else if (adaptiveEngine.value) {
-      completeAdaptiveGroup()
+    const fn = isAssessment.value ? handleAssessmentComplete :
+               adaptiveEngine.value ? completeAdaptiveGroup : handlePracticeComplete
+    // reset nextLocked after the handler runs
+    const result = fn()
+    // If fn is async, give it a tick to unlock
+    if (result instanceof Promise) {
+      result.finally(() => { nextLocked = false })
     } else {
-      handlePracticeComplete()
+      nextLocked = false
     }
   }
 }
 
-/** 生成一组题目 */
-function generateBatch(config, count) {
+/** 生成一组题目（内建题型穿插） */
+function generateBatch(engine, count) {
+  const config = getDifficultyConfig(engine)
   const paperList = [{
     step: config.step,
     numberOfFormulas: count,
@@ -381,22 +508,13 @@ function generateBatch(config, count) {
   }]
   const papers = createFormulasGenerator(config, paperList)
   const formulas = papers.reduce((p, c) => { p.push(...c.formulas); return p }, [])
-  let questions = formulas.map(cur => ({
+  const baseQuestions = formulas.map(cur => ({
     equation: cur,
     solution: EquationSolver.solve(cur)
   })).filter(q => q.solution !== null && !isNaN(q.solution))
 
-  // 应用空白位置模式
-  if (config.blankMode && config.blankMode === 'mixed') {
-    questions = applyBlankToQuestions(questions, config)
-  }
-
-  // 应用选择题选项
-  if (config.inputMode && config.inputMode !== 'keypad') {
-    questions = prepareChoiceOptions(questions, config)
-  }
-
-  return questions
+  // 题型多样化：混合不同的输入模式和填空位置
+  return diversifyBatch(baseQuestions, engine)
 }
 
 /** 诊断完成 → 分析能力 → 启动自适应练习 */
@@ -413,38 +531,111 @@ const handleAssessmentComplete = async () => {
   })
 
   // 创建自适应引擎，生成第 1 组
-  const engine = createAdaptiveEngine(profile)
+  // 从配置中读取练习量范围，未配置时使用默认值
+  const snapshot = practiceStore.session.configSnapshot || {}
+  const targetMin = snapshot.targetMin ?? 10
+  const targetMax = snapshot.targetMax ?? 30
+  const engine = createAdaptiveEngine(profile, targetMin, targetMax)
   adaptiveEngine.value = engine
   adaptiveGroupIndex.value = 1
 
-  const config = getGroupConfig(engine)
   const size = getGroupSize(engine)
-  const firstQuestions = generateBatch(config, size)
+  const firstQuestions = generateBatch(engine, size)
 
   practiceStore.completeAssessment(profile)
   practiceStore.setListPractices(firstQuestions)
 }
 
 /** 自适应一组完成 → 评估 → 生成下一组或结束 */
-const completeAdaptiveGroup = () => {
+const completeAdaptiveGroup = async () => {
   const allAnswers = [...session.value.answers]
   const engine = adaptiveEngine.value
   const size = getGroupSize(engine)
   const groupAnswers = allAnswers.slice(-size)
+  const groupCorrect = groupAnswers.filter(a => a.isCorrect).length
+  const groupTime = groupAnswers.reduce((s, a) => s + (a.responseTime || 0), 0)
 
+  // ── 小组反馈 ──
+  const groupIdx = adaptiveGroupIndex.value
+  const label = getDifficultyLabel(engine)
+  const correctRate = Math.round((groupCorrect / groupAnswers.length) * 100)
+
+  let groupComment = ''
+  if (correctRate === 100 && groupTime < groupAnswers.length * 5000) {
+    groupComment = '又快又准！👍'
+  } else if (correctRate >= 80) {
+    groupComment = '表现不错！💪'
+  } else if (correctRate >= 60) {
+    groupComment = '继续加油！📝'
+  } else {
+    groupComment = '别灰心，再来一组！'
+  }
+
+  ElMessage({
+    message: `✅ 第${groupIdx}组结束！${groupCorrect}/${groupAnswers.length} 正确 · ${formatDuration(groupTime)} · ${groupComment}`,
+    duration: 3000,
+    offset: 100,
+    customClass: 'feedback-message'
+  })
+
+  // 评估并决定下一步
   const result = evaluateGroup(engine, groupAnswers)
   adaptiveEngine.value = result.engine
   adaptiveGroupIndex.value++
 
   if (result.done) {
-    // 全部自适应完成 → 一次性保存
-    ElMessage({
-      message: `🎉 自适应练习完成！共 ${result.engine.totalAnswered} 题`,
-      duration: 3000,
-      offset: 100,
-      customClass: 'feedback-message'
-    })
-    session.value.answers = allAnswers
+    // ── 全部完成 → 显示精美的结束画面 ──
+    const finalAnswers = allAnswers
+    const totalCorrect = finalAnswers.filter(a => a.isCorrect).length
+    const totalTime = finalAnswers.reduce((s, a) => s + (a.responseTime || 0), 0)
+    const totalRate = Math.round((totalCorrect / finalAnswers.length) * 100)
+
+    // 计算评语
+    let comment = ''
+    let emoji = ''
+    if (totalRate >= 95) {
+      emoji = '🏆'
+      comment = '太棒了！你是数学小达人！'
+    } else if (totalRate >= 80) {
+      emoji = '🌟'
+      comment = '做得很好！继续保持！'
+    } else if (totalRate >= 60) {
+      emoji = '💪'
+      comment = '不错哦！每次练习都会进步！'
+    } else {
+      emoji = '🌱'
+      comment = '没关系，多练几次就能掌握！'
+    }
+
+    try {
+      await ElMessageBox.alert(
+        `<div style="text-align:center;padding:8px 0;">
+          <div style="font-size:48px;margin-bottom:12px;">${emoji}</div>
+          <div style="font-size:20px;font-weight:700;color:#1e3c5c;margin-bottom:4px;">练习完成</div>
+          <div style="font-size:14px;color:#606266;margin-bottom:12px;">${comment}</div>
+          <div style="display:flex;justify-content:center;gap:20px;flex-wrap:wrap;font-size:14px;">
+            <div><span style="color:#909399;">共答</span> <strong>${finalAnswers.length}</strong> 题</div>
+            <div><span style="color:#909399;">正确</span> <strong style="color:#58cc71;">${totalCorrect}</strong> 题</div>
+            <div><span style="color:#909399;">正确率</span> <strong style="color:${totalRate >= 80 ? '#58cc71' : '#e6a23c'};">${totalRate}%</strong></div>
+            <div><span style="color:#909399;">用时</span> <strong>${formatDuration(totalTime)}</strong></div>
+          </div>
+        </div>`,
+        '🎉 本轮练习汇总',
+        {
+          confirmButtonText: '开始新一轮',
+          dangerouslyUseHTMLString: true,
+          confirmButtonClass: 'el-button--primary',
+          callback: () => {
+            // 开始新一轮
+            startNewAdaptiveSession(); nextLocked = false
+          }
+        }
+      )
+    } catch {
+      // 用户点了关闭 → 退出到空闲状态
+    }
+
+    session.value.answers = finalAnswers
     adaptiveEngine.value = null
     adaptiveGroupIndex.value = 0
     practiceStore.saveSessionToDB()
@@ -452,10 +643,48 @@ const completeAdaptiveGroup = () => {
   }
 
   // 生成下一组
-  const nextQuestions = generateBatch(result.nextConfig, result.nextGroupSize)
+  const nextQuestions = generateBatch(result.engine, result.nextGroupSize)
+  practiceStore.resetCurrentIndex()
   practiceStore.setListPractices(nextQuestions)
-  // 恢复累计的答题记录（watch → initPractice 会重置）
   session.value.answers = [...allAnswers]
+}
+
+/** 开始新一轮自适应练习（基于已有能力画像或重新评估） */
+const startNewAdaptiveSession = () => {
+  const profile = practiceStore.abilityProfile
+  if (!profile) {
+    // 没有画像 → 重新评估
+    practiceStore.setPhase('idle')
+    practiceStore.setListPractices([])
+    const questions = generateDiagnosticQuestions()
+    if (questions.length > 0) {
+      practiceStore.startAssessment(questions)
+    }
+    return
+  }
+
+  // 基于已有画像生成新一轮练习
+  const snapshot = practiceStore.session.configSnapshot || {}
+  const targetMin = snapshot.targetMin ?? 10
+  const targetMax = snapshot.targetMax ?? 30
+  const engine = createAdaptiveEngine(profile, targetMin, targetMax)
+  adaptiveEngine.value = engine
+  adaptiveGroupIndex.value = 1
+
+  practiceStore.resetPracticeSession()
+  practiceStore.session.sessionStartTime = Date.now()
+  practiceStore.setPhase('practice')
+
+  const size = getGroupSize(engine)
+  const questions = generateBatch(engine, size)
+  practiceStore.setListPractices(questions)
+
+  ElMessage({
+    message: '🔄 新一轮开始！加油！',
+    duration: 2000,
+    offset: 100,
+    customClass: 'feedback-message'
+  })
 }
 
 /** 正常练习完成 → 保存到 DB */
@@ -492,10 +721,8 @@ watch(currentQuestion, (newQ) => {
 
 watch(listPractices, (newPracticeList) => {
   if (newPracticeList.length > 0) {
-    // 自适应组切换时需保留累积的答案
     const isAdaptiveTransition = adaptiveEngine.value && adaptiveGroupIndex.value > 1
     const saved = isAdaptiveTransition ? [...session.value.answers] : []
-    // 先重置索引，确保 currentQuestion 能正确读取新列表
     practiceStore.resetCurrentIndex()
     initPractice()
     if (isAdaptiveTransition) {
@@ -506,11 +733,18 @@ watch(listPractices, (newPracticeList) => {
 
 /** 首次进入自动触发能力诊断 */
 onMounted(() => {
+  // 情况 1: 首次进入 → 自动诊断
   if (isIdle.value && listPractices.value.length === 0) {
     const questions = generateDiagnosticQuestions()
     if (questions.length > 0) {
       practiceStore.startAssessment(questions)
     }
+    return
+  }
+
+  // 情况 2: 已有能力画像但题目已清空（刷新后）→ 恢复练习
+  if (isPractice.value && abilityProfile.value && listPractices.value.length === 0) {
+    startNewAdaptiveSession()
   }
 })
 </script>

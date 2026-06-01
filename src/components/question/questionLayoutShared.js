@@ -24,10 +24,20 @@ export const questionLayoutProps = {
   equation: {
     type: String,
     default: ''
+  },
+  /** 逐位数字输入模式（竖式计算）*/
+  digitMode: {
+    type: Boolean,
+    default: false
+  },
+  /** 逐位数字输入的外部焦点索引 */
+  focusSlot: {
+    type: Number,
+    default: -1
   }
 }
 
-export const questionLayoutEmits = ['update:userAnswer', 'submitAnswer']
+export const questionLayoutEmits = ['update:userAnswer', 'submitAnswer', 'focus']
 
 /**
  * 读取当前题目的算式解析结果与进退位类型。

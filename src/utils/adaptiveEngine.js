@@ -14,7 +14,6 @@
  */
 
 import { generatePracticeConfig } from './diagnostic'
-import { EquationSolver } from './EquationSolver'
 
 // ─── 精细难度分阶（16级，每步变化微小） ───
 //
@@ -61,11 +60,6 @@ const ASSIST_LEVELS = [
 /* ============================================================
    填空位置模式
    ============================================================ */
-const BLANK_MODES = [
-  { key: 'result', label: '结果填空' },   // 标准：3+5=__
-  { key: 'mixed',  label: '随意填空' },   // 混合：3+__=8, __+5=8, 3+5=__
-]
-
 // ─── 为选择题生成干扰选项 ───
 function generateDistractors(correct, count) {
   const distractors = new Set()
@@ -112,39 +106,38 @@ function initialDifficulty(profile) {
  */
 export function getDifficultyLabel(engine) {
   const level = DIFFICULTY_LEVELS[engine.difficultyIdx]
-  const base = level ? level.label : '综合'
-  const assist = ASSIST_LEVELS[engine.assistLevel]
-  const assistLabel = assist && assist.key !== 'keypad' ? ` · ${assist.label}` : ''
-  return base + assistLabel
+  return level ? level.label : '综合'
 }
 
 /**
  * 创建自适应引擎实例
  */
-export function createAdaptiveEngine(profile) {
+export function createAdaptiveEngine(profile, targetMin = 10, targetMax = 30) {
   const baseConfig = generatePracticeConfig(profile)
   const startIdx = initialDifficulty(profile)
   return {
     difficultyIdx: startIdx,
-    assistLevel: 0,         // 索引 ASSIST_LEVELS; 0=keypad(无辅助)
-    blankMode: 'result',    // 'result' | 'mixed'
-    groupSizeIdx: 0,        // 索引 GROUP_SIZES
-    totalAnswered: 0,       // 累计答题数
-    groupIndex: 0,          // 已完成组数
-    groupsAtThisLevel: 0,   // 当前三维组合已完成的组数
-    consecutiveGood: 0,     // 连续几组表现好
-    consecutiveBad: 0,      // 连续几组表现差
-    history: [],            // 各组的记录
+    assistLevel: 0,
+    blankMode: 'result',
+    groupSizeIdx: 0,
+    totalAnswered: 0,
+    groupIndex: 0,
+    groupsAtThisLevel: 0,
+    consecutiveGood: 0,
+    consecutiveBad: 0,
+    targetMin,
+    targetMax,
+    lastGroupResult: null,  // 最后生成的组摘要
+    history: [],
     baseConfig,
   }
 }
 
 /**
- * 获取当前组配置（含 mode 信息）
+ * 获取当前组的难度配置（不含 mode 信息）
  */
-export function getGroupConfig(engine) {
+export function getDifficultyConfig(engine) {
   const level = DIFFICULTY_LEVELS[engine.difficultyIdx] || DIFFICULTY_LEVELS[4]
-  const assist = ASSIST_LEVELS[engine.assistLevel] || ASSIST_LEVELS[0]
   return {
     ...engine.baseConfig,
     formulaList: level.formulaList,
@@ -152,10 +145,6 @@ export function getGroupConfig(engine) {
     abdication: level.abdication,
     resultMinValue: 1,
     resultMaxValue: level.resultMax,
-    // 扩展信息
-    inputMode: assist.key,           // 'keypad' | 'choice2' | 'choice4'
-    optionCount: assist.optionCount, // 0 | 2 | 4
-    blankMode: engine.blankMode,     // 'result' | 'mixed'
   }
 }
 
@@ -167,58 +156,62 @@ export function getGroupSize(engine) {
 }
 
 /**
- * 生成选择题选项列表（适用于当前组配置）
+ * 基于引擎的辅助级别，决定单题的输入模式
  */
-export function prepareChoiceOptions(questions, config) {
-  if (config.inputMode === 'keypad') return questions
-  const count = config.optionCount || 4
-  return questions.map(q => {
-    const distractors = generateDistractors(q.solution, count - 1)
-    // 混洗选项
-    const opts = [q.solution, ...distractors].sort(() => Math.random() - 0.5)
-    return { ...q, options: opts }
-  })
+function pickInputMode(engine) {
+  const r = Math.random()
+  const L = engine.assistLevel // 0=keypad, 1=choice2, 2=choice4
+
+  if (L === 0) {
+    // keypad主导：70% keypad, 20% choice2, 10% choice4
+    if (r < 0.70) return 'keypad'
+    if (r < 0.90) return 'choice2'
+    return 'choice4'
+  }
+  if (L === 1) {
+    // choice2主导：20% keypad, 55% choice2, 25% choice4
+    if (r < 0.20) return 'keypad'
+    if (r < 0.75) return 'choice2'
+    return 'choice4'
+  }
+  // choice4主导：10% keypad, 25% choice2, 65% choice4
+  if (r < 0.10) return 'keypad'
+  if (r < 0.35) return 'choice2'
+  return 'choice4'
 }
 
 /**
- * 应用空白位置模式到题目
- * 使用 EquationSolver 重新求解空白位置的值
+ * 为一组题生成多样的题目形式
+ * @param {Array<{equation:string,solution:number}>} baseEquations 基础算式（均为 result 填空）
+ * @param {object} engine 当前引擎
+ * @returns {Array<{equation:string,solution:number,options?:number[]}>}
  */
-export function applyBlankToQuestions(questions, config) {
-  return questions.map(q => {
-    const eqWithAnswer = q.equation  // "3+5=8"
-    const resultPart = eqWithAnswer.split('=')[1]
-    const eqPart = eqWithAnswer.split('=')[0]
+/**
+ * 为一组题生成多样的题目形式（仅支持 result 填空，避免混合填空的复杂度）
+ */
+export function diversifyBatch(baseEquations, engine) {
+  return baseEquations.map(q => {
+    const inputMode = pickInputMode(engine)
+    let equation = q.equation
+    let solution = q.solution
+    let options = undefined
 
-    // 随机选空白位置
-    const parts = eqPart.split(/[+\-×÷]/)
-    const ops = eqPart.match(/[+\-×÷]/)
-    if (!ops || parts.length < 2) return { ...q, equation: `${eqPart}=__` }
+    // 统一使用 result 填空
+    const eqPart = equation.replace(/\=$/, '').split('=')[0]
+    equation = `${eqPart}=__`
 
-    const choice = Math.floor(Math.random() * 3)
-    let newEquation, newSolution
-
-    if (choice === 0) {
-      // 结果填空: 3+5=__
-      newEquation = `${eqPart}=__`
-      // 结果是 resultPart
-      newSolution = parseInt(resultPart)
-    } else if (choice === 1) {
-      // 左数填空: __+5=8
-      newEquation = `__${ops[0]}${parts[1]}=${resultPart}`
-      newSolution = EquationSolver.solve(newEquation)
-    } else {
-      // 右数填空: 3+__=8
-      newEquation = `${parts[0]}${ops[0]}__=${resultPart}`
-      newSolution = EquationSolver.solve(newEquation)
+    // 选择题选项
+    if (inputMode !== 'keypad') {
+      const count = inputMode === 'choice2' ? 2 : 4
+      const distractors = generateDistractors(solution, count - 1)
+      options = [solution, ...distractors].sort(() => Math.random() - 0.5)
     }
 
-    return {
-      ...q,
-      equation: newEquation,
-      solution: (newSolution !== null && !isNaN(newSolution)) ? newSolution : q.solution,
-    }
+    return { ...q, equation, solution, options }
   })
+} // ← closes diversifyBatch
+
+/**
 }
 
 /**
@@ -226,7 +219,7 @@ export function applyBlankToQuestions(questions, config) {
  */
 export function evaluateGroup(engine, groupAnswers) {
   const total = groupAnswers.length
-  if (total === 0) return { engine, nextConfig: null, nextGroupSize: 0, done: true }
+  if (total === 0) return { engine, nextGroupSize: 0, done: true }
 
   const correct = groupAnswers.filter(a => a.isCorrect).length
   const accuracy = correct / total
@@ -340,27 +333,45 @@ export function evaluateGroup(engine, groupAnswers) {
     next.groupSizeIdx = Math.max(0, engine.groupSizeIdx - 1)
   }
 
-  // 结束条件
-  const MAX_GROUPS = 12
-  const MAX_QUESTIONS = 60
-  if (next.history.length >= MAX_GROUPS || next.totalAnswered >= MAX_QUESTIONS) {
-    return { engine: next, nextConfig: null, nextGroupSize: 0, done: true }
+  // ── 结束条件：基于 targetMin ~ targetMax ══
+  const { targetMin, targetMax } = engine
+  next.lastGroupResult = { groupIdx: next.groupIndex, accuracy, avgTime, total: next.totalAnswered }
+
+  // 1. 未达到最小目标 → 必须继续
+  if (next.totalAnswered < targetMin) {
+    return { engine: next, nextGroupSize: GROUP_SIZES[next.groupSizeIdx], done: false }
   }
 
-  const level = DIFFICULTY_LEVELS[next.difficultyIdx] || DIFFICULTY_LEVELS[4]
-  const assist = ASSIST_LEVELS[next.assistLevel] || ASSIST_LEVELS[0]
-  const nextConfig = {
-    ...engine.baseConfig,
-    formulaList: level.formulaList,
-    carry: level.carry,
-    abdication: level.abdication,
-    resultMinValue: 1,
-    resultMaxValue: level.resultMax,
-    inputMode: assist.key,
-    optionCount: assist.optionCount,
-    blankMode: next.blankMode,
-    numberOfFormulas: GROUP_SIZES[next.groupSizeIdx],
+  // 2. 超过最大目标 → 必须结束
+  if (next.totalAnswered >= targetMax) {
+    return { engine: next, nextGroupSize: 0, done: true }
   }
 
-  return { engine: next, nextConfig, nextGroupSize: GROUP_SIZES[next.groupSizeIdx], done: false }
+  // 3. 在 min ~ max 之间 → 根据表现智能判断
+  // 原则：准确率高+速度快 → 提前结束（已掌握，够用了）
+  //      准确率高但慢 → 继续练提速
+  //      准确率低 → 需要更多练习巩固
+  const recentGroups = next.history.slice(-2)
+  const recentAllGood = recentGroups.length >= 2 && recentGroups.every(g => g.accuracy >= GOOD)
+  const recentAllFast = recentGroups.length >= 2 && recentGroups.every(g => g.avgTime < FAST)
+
+  if (accuracy >= GOOD && avgTime < FAST && recentAllGood && recentAllFast) {
+    // 连续多组又快又好 → 已经掌握了，提前结束
+    return { engine: next, nextGroupSize: 0, done: true }
+  }
+
+  if (accuracy < BAD) {
+    // 差 → 适当减少题量、降低难度继续巩固。
+    // 但如果已经超过 min 太多且连续差 → 避免厌烦，提前软结束
+    if (next.totalAnswered >= targetMin + 5 && next.consecutiveBad >= 2) {
+      return { engine: next, nextGroupSize: 0, done: true }
+    }
+  }
+
+  // 最多 12 组封顶
+  if (next.history.length >= 12) {
+    return { engine: next, nextGroupSize: 0, done: true }
+  }
+
+  return { engine: next, nextGroupSize: GROUP_SIZES[next.groupSizeIdx], done: false }
 }

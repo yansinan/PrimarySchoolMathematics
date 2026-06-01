@@ -2,14 +2,38 @@ import { defineStore } from 'pinia'
 import { EMPTY_PARSED_EQUATION, getCarryType, parseEquation } from '@/utils/equationParser'
 import { saveSession } from '@/utils/database'
 
+const LS_KEY = 'psm_profile'
+
+/** 从 localStorage 恢复持久化的诊断状态 */
+function loadPersistedProfile() {
+  try {
+    const raw = localStorage.getItem(LS_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+
+/** 持久化诊断状态到 localStorage */
+function savePersistedProfile(profile, phase) {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify({ profile, phase }))
+  } catch {}
+}
+
+/** 清除持久化的诊断状态 */
+function clearPersistedProfile() {
+  try { localStorage.removeItem(LS_KEY) } catch {}
+}
+
+const saved = loadPersistedProfile()
+
 export const usePracticeStore = defineStore('drawer', {
   state: () => ({
     generateDrawerVisible: false,
     listPractices: [],
     /** @type {'idle'|'assessment'|'practice'} */
-    phase: 'idle',
+    phase: saved?.phase === 'practice' ? 'practice' : 'idle',
     /** @type {null|{levelScores:Object, weakLevels:string[], allCorrect:boolean}} */
-    abilityProfile: null,
+    abilityProfile: saved?.profile || null,
     session: {
       currentIndex: 0,
       answers: [],
@@ -77,9 +101,16 @@ export const usePracticeStore = defineStore('drawer', {
     // ── Phase management ──
     setPhase(p) {
       this.phase = p
+      if (p === 'idle') clearPersistedProfile()
+      else if (this.abilityProfile) savePersistedProfile(this.abilityProfile, p)
     },
     setAbilityProfile(profile) {
       this.abilityProfile = profile
+      if (profile && this.phase !== 'idle') {
+        savePersistedProfile(profile, this.phase)
+      } else {
+        clearPersistedProfile()
+      }
     },
     /** 启动诊断模式并载入诊断题 */
     startAssessment(questions) {
@@ -92,6 +123,7 @@ export const usePracticeStore = defineStore('drawer', {
       this.abilityProfile = profile
       this.phase = 'practice'
       this.session.answers = [] // clear assessment answers
+      savePersistedProfile(profile, 'practice')
     },
 
     nextQuestion() {

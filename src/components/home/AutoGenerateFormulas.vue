@@ -16,7 +16,7 @@
       </ElFormItem>
 
       <ElFormItem :label="`算数项${index + 1}`">
-        <ElRow :gutter="8">
+        <ElRow :gutter="12">
           <ElCol :xs="24" :sm="8">
             <ElFormItem :prop="`formulaList.${index}.min`" :rules="requiredNumberRule">
               <ElInput v-model.number="item.min">
@@ -36,7 +36,7 @@
     </template>
 
     <ElFormItem label="运算结果">
-      <ElRow :gutter="8">
+      <ElRow :gutter="12">
         <ElCol :xs="24" :sm="8">
           <ElFormItem prop="resultMinValue"
             :rules="[{ required: true, message: '请填写运算结果最小值' }, { type: 'number', message: '请填写数字' }]">
@@ -58,11 +58,31 @@
 
     <ElFormItem prop="numberOfFormulas"
       :rules="[{ required: true, message: '请填写口算题数量' }, { type: 'number', message: '请填写数字' }]">
-      <ElRow :gutter="20">
+      <ElRow :gutter="12">
         <ElCol :xs="24" :sm="14">
           <ElInput v-model.number="formData.numberOfFormulas">
             <template #prepend>口算题数量</template>
           </ElInput>
+        </ElCol>
+      </ElRow>
+    </ElFormItem>
+
+    <ElFormItem label="自适应练习量">
+      <ElRow :gutter="12">
+        <ElCol :xs="12" :sm="8">
+          <ElInput v-model.number="formData.targetMin" size="default" placeholder="最少">
+            <template #prepend>最少</template>
+            <template #append>题</template>
+          </ElInput>
+        </ElCol>
+        <ElCol :xs="12" :sm="8">
+          <ElInput v-model.number="formData.targetMax" size="default" placeholder="最多">
+            <template #prepend>最多</template>
+            <template #append>题</template>
+          </ElInput>
+        </ElCol>
+        <ElCol :xs="24" :sm="8" class="target-hint-col">
+          <span class="target-hint">答好可提前结束</span>
         </ElCol>
       </ElRow>
     </ElFormItem>
@@ -200,4 +220,33 @@ const addConfiguration = () => {
 }
 </script>
 
-<style lang="scss" scoped></style>
+<style lang="scss" scoped>
+.target-hint-col {
+  display: flex;
+  align-items: center;
+}
+
+.target-hint {
+  font-size: 12px;
+  color: #909399;
+  white-space: nowrap;
+  display: inline-block;
+  padding: 0 0 0 4px;
+}
+
+@media (max-width: 768px) {
+  .target-hint-col {
+    margin-top: 6px;
+    padding-left: 4px;
+  }
+  .target-hint {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 768px) {
+  .target-hint-col {
+    margin-top: 4px;
+  }
+}
+</style>

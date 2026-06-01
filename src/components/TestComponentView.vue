@@ -47,6 +47,35 @@
         </div>
       </div>
     </section>
+
+    <el-divider />
+
+    <!-- ──── DigitInput 演示 ──── -->
+    <section class="test-section">
+      <h2>DigitInput（逐位数字输入）组件演示</h2>
+      <div class="digit-demo">
+        <div class="test-case">
+          <h3>输入: 35（最大3位）</h3>
+          <DigitInput pad-value="_35" :max-digits="3" />
+        </div>
+        <div class="test-case">
+          <h3>输入: 42（最大4位）</h3>
+          <DigitInput pad-value="__42" :max-digits="4" />
+        </div>
+        <div class="test-case">
+          <h3>输入: 579（最大3位）</h3>
+          <DigitInput pad-value="579" :max-digits="3" />
+        </div>
+        <div class="test-case">
+          <h3>空输入（最大3位）</h3>
+          <DigitInput pad-value="" :max-digits="3" />
+        </div>
+        <div class="test-case">
+          <h3>单数字: 7（最大3位）</h3>
+          <DigitInput pad-value="__7" :max-digits="3" />
+        </div>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -54,6 +83,7 @@
 import { reactive } from 'vue'
 import HorizontalLayout from './question/HorizontalLayout.vue'
 import VerticalLayout from './question/VerticalLayout.vue'
+import DigitInput from './question/DigitInput.vue'
 
 const horizontalCases = reactive([
   { label: '1. 正常算式：3+4=__',    equation: '3+4=7',   answer: '7', show: false },
@@ -149,7 +179,20 @@ const verticalCases = reactive([
   color: #606266;
   word-break: break-all;
 }
+.digit-demo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
 
+.digit-demo .test-case {
+  flex: 0 0 auto;
+  min-width: 200px;
+}
+
+.digit-demo .test-case h3 {
+  font-size: 0.85rem;
+}
 @media (max-width: 480px) {
   .test-container {
     padding: 10px 12px;

@@ -49,6 +49,8 @@ export default class {
           ],
           resultMinValue: 1, // 试题运行结果最小值
           resultMaxValue: 9, // 试题运行结果最大值
+          targetMin: 10, // 自适应最少答题数
+          targetMax: 30, // 自适应最多答题数
           fileNameGeneratedRule: fileNameGeneratedRuleEnum.baseOnTitleAndIndex.key
         }
       }]

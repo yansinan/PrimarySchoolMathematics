@@ -70,14 +70,23 @@ const handleSelect = (option) => {
 }
 
 .options-grid {
-  @include inputUi.input-grid(2, 4, 16px);
+  display: flex;
+  justify-content: center;
+  gap: 16px;
   margin: 16px 0 20px;
+  flex-wrap: wrap;
 }
 
 .option-btn {
-  @include inputUi.input-button-base;
+  flex: 1 1 auto;
+  max-width: 200px;
+  min-width: 60px;
   height: clamp(64px, 11vw, 100px) !important;
   font-size: clamp(22px, 4vw, 36px) !important;
+  border-radius: 16px !important;
+  font-weight: 700 !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 4px 12px rgba(17, 24, 39, 0.08);
 }
 
 .option-btn:hover:not(:disabled) {
@@ -120,6 +129,7 @@ const handleSelect = (option) => {
   .option-btn {
     height: 64px !important;
     font-size: 22px !important;
+    min-width: 48px;
   }
 }
 

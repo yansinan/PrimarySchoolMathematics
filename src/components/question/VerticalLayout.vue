@@ -47,12 +47,22 @@
       <div class="eq-row result-row">
         <div class="op-cell"></div>
         <div class="digits-cell result-content">
+          <!-- 竖式逐位数字输入（输入/答案均保持方块样式） -->
+          <DigitInput
+            v-if="isResultBlank && digitMode"
+            :pad-value="showAnswer ? String(answer ?? '') : String(userAnswer ?? '')"
+            :max-digits="maxDigits"
+            :active-slot="focusSlot"
+            :show-result="showAnswer"
+            @focus="(idx) => $emit('focus', idx)"
+          />
           <QuestionValueCell
+            v-else
             :is-blank="parsedEquation.blankPosition === 'result'"
             :show-answer="showAnswer"
             :answer="answer"
             answer-display="text"
-            :editable="enableDirectInput && parsedEquation.blankPosition === 'result'"
+            :editable="enableDirectInput && parsedEquation.blankPosition === 'result' && !digitMode"
             :user-answer="userAnswer"
             :value="parsedEquation.resultValue"
             number-class="math-number-vertical"
@@ -68,6 +78,7 @@
 <script setup>
 import { computed } from 'vue'
 import QuestionValueCell from '@/components/question/QuestionValueCell.vue'
+import DigitInput from '@/components/question/DigitInput.vue'
 import { useQuestionEquation, questionLayoutProps, questionLayoutEmits } from '@/components/question/questionLayoutShared'
 
 const props = defineProps(questionLayoutProps)
@@ -75,6 +86,12 @@ const props = defineProps(questionLayoutProps)
 defineEmits(questionLayoutEmits)
 
 const { parsedEquation } = useQuestionEquation(props)
+
+/** 结果行当前是否为空白（待填）*/
+const isResultBlank = computed(() => {
+  const bp = parsedEquation.value.blankPosition
+  return bp === 'result' || bp === ''
+})
 
 const maxDigits = computed(() => {
   const answerValue = String(props.showAnswer ? (props.answer ?? '') : (props.userAnswer ?? ''))
