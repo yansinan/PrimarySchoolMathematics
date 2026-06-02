@@ -4,7 +4,7 @@
     <!-- 使用el-row进行整体布局 -->
     <el-row :gutter="20" justify="space-around" align="middle" class="equation-row">
       <!-- 左边数字或填空（DigitInput 统一替换） -->
-      <el-col :span="6" class="number-col">
+      <el-col :span="4" class="number-col">
         <DigitInput
           v-if="parsedEquation.blankPosition === 'leftOperand' && enableDirectInput"
           :model-value="showAnswer ? String(answer ?? '') : String(userAnswer ?? '')"
@@ -30,7 +30,7 @@
       </el-col>
       
       <!-- 右边数字或填空（DigitInput 统一替换） -->
-      <el-col :span="6" class="number-col">
+      <el-col :span="5" class="number-col">
         <DigitInput
           v-if="parsedEquation.blankPosition === 'rightOperand' && enableDirectInput"
           :model-value="showAnswer ? String(answer ?? '') : String(userAnswer ?? '')"
@@ -96,7 +96,6 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { ElRow, ElCol, ElText, ElAlert } from 'element-plus'
-import QuestionValueCell from '@/components/question/QuestionValueCell.vue'
 import DigitInput from '@/components/question/DigitInput.vue'
 import { useQuestionEquation, questionLayoutProps, questionLayoutEmits } from '@/components/question/questionLayoutShared'
 
@@ -113,17 +112,9 @@ defineExpose({ acceptDigit, acceptBackspace })
 
 const { parsedEquation, carryType } = useQuestionEquation(props)
 
-/** 最大位数：按空白位置所需位数显示方块，不多留 */
+/** 最大位数：按答案（填空位置的真实值）位数显示方块 */
 const maxDigits = computed(() => {
-  const blankPos = parsedEquation.value.blankPosition
-  if (blankPos === 'result') {
-    return Math.max(String(props.answer ?? '').replace('-', '').length, 1)
-  }
-  if (blankPos === 'leftOperand') {
-    return Math.max(String(parsedEquation.value.leftOperand || '').replace('-', '').length, 1)
-  }
-  // rightOperand
-  return Math.max(String(parsedEquation.value.rightOperand || '').replace('-', '').length, 1)
+  return Math.max(String(props.answer ?? '').replace('-', '').length, 1)
 })
 
 const carryHint = computed(() => {
@@ -148,6 +139,11 @@ $math-font-size-medium: clamp(2.4rem, 6vw, 6rem);
   border-radius: 24px;
   background: linear-gradient(180deg, #fbfdff 0%, #f3f8ff 100%);
   box-shadow: 0 10px 28px rgba(28, 176, 246, 0.08);
+}
+
+/* DigitInput 字号与 .math-number 统一 */
+:deep(.digit-input) {
+  font-size: $math-font-size-large;
 }
 
 .math-number {

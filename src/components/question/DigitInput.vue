@@ -228,7 +228,7 @@ const digitInputStyle = computed(() => ({ '--box-count': digitCount.value }))
   position: relative;
   width: 1.05em;
   height: 1.2em;
-  font-family: 'Courier New', monospace;
+  /* font-family: 'Courier New', monospace; */
   font-weight: 700;
   color: #2c3e50;
   background: #fff;
