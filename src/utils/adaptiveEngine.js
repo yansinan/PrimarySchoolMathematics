@@ -128,6 +128,7 @@ export function createAdaptiveEngine(profile, targetMin = 10, targetMax = 30) {
     targetMin,
     targetMax,
     lastGroupResult: null,  // 最后生成的组摘要
+    lastEvaluation: null,   // 用户自评 1-5
     history: [],
     baseConfig,
   }
@@ -209,9 +210,6 @@ export function diversifyBatch(baseEquations, engine) {
 
     return { ...q, equation, solution, options }
   })
-} // ← closes diversifyBatch
-
-/**
 }
 
 /**
@@ -236,6 +234,7 @@ export function evaluateGroup(engine, groupAnswers) {
       assistLevel: engine.assistLevel,
       blankMode: engine.blankMode,
       groupSize: total,
+      evaluation: engine.lastEvaluation,
     }],
   }
 

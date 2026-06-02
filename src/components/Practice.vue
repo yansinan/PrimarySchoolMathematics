@@ -297,7 +297,9 @@ const handleSubmit = (answer) => {
 
   // ── / metadata ──
 
-  session.value.answers.push({
+  // 按题号去重：如果已答过该题（重试），替换旧记录而非追加
+  const existingIdx = session.value.answers.findIndex(a => a.questionIndex === currentIndex.value)
+  const answerEntry = {
     ...currentQuestion.value,
     userAnswer,
     isCorrect,
@@ -308,8 +310,14 @@ const handleSubmit = (answer) => {
     isBorrow,
     stepCount,
     operandMin,
-    operandMax
-  })
+    operandMax,
+    questionIndex: currentIndex.value
+  }
+  if (existingIdx >= 0) {
+    session.value.answers[existingIdx] = answerEntry
+  } else {
+    session.value.answers.push(answerEntry)
+  }
 
   if (isCorrect) {
     session.value.streak++
@@ -488,12 +496,71 @@ const completeAdaptiveGroup = async () => {
     groupComment = '别灰心，再来一组！'
   }
 
-  ElMessage({
-    message: `✅ 第${groupIdx}组结束！${groupCorrect}/${groupAnswers.length} 正确 · ${formatDuration(groupTime)} · ${groupComment}`,
-    duration: 3000,
-    offset: 100,
-    customClass: 'feedback-message'
-  })
+  // ── 强化小组反馈：弹出自我评价对话框 ──
+  let evaluationScore = 3
+
+  const scoreLabels = { 1: '有点难…', 2: '不太轻松', 3: '刚刚好', 4: '挺容易', 5: '太简单' }
+  const evalHtml = `
+    <div style="text-align:center;">
+      <div style="font-size:13px;color:#909399;margin-bottom:2px;">第${groupIdx}组 · ${groupCorrect}/${groupAnswers.length} 正确 · ${formatDuration(groupTime)}</div>
+      <div style="font-size:14px;font-weight:600;color:#1e3c5c;margin:10px 0 14px;">感觉怎么样？选一个表情吧</div>
+      <div style="display:flex;justify-content:center;gap:8px;">
+        ${[1,2,3,4,5].map(s => `
+          <div onclick="window.__evalSelect && window.__evalSelect(${s})" data-s="${s}"
+            style="width:52px;height:52px;display:flex;align-items:center;justify-content:center;
+                   font-size:30px;cursor:pointer;border-radius:16px;border:2px solid transparent;
+                   background:#f7fbff;box-shadow:0 2px 8px rgba(23,110,191,0.06);
+                   transition:all .2s ease;"
+            onmouseover="this.style.background='#e9f4ff';this.style.borderColor='#409eff';this.style.transform='scale(1.1)'"
+            onmouseout="this.style.background='#f7fbff';this.style.borderColor='transparent';this.style.transform='scale(1)'"
+          >${['😭','😟','😊','😂','😌'][s-1]}</div>
+        `).join('')}
+      </div>
+      <div style="margin-top:4px;font-size:11px;color:#c0c4cc;" id="eval-hint">点击表情打分 · 单击即继续</div>
+    </div>`
+
+  // 设置全局选择函数（ElMessageBox 内 HTML 无法直接访问 Vue 作用域）
+  const evalKey = '__eval_result_' + Date.now()
+  window[evalKey] = null
+  window.__evalSelect = (score) => {
+    window[evalKey] = score
+    // 高亮选中
+    document.querySelectorAll('[data-s]').forEach(el => {
+      el.style.borderColor = parseInt(el.getAttribute('data-s')) === score ? '#409eff' : 'transparent'
+      el.style.background = parseInt(el.getAttribute('data-s')) === score ? '#d9ecff' : '#f7fbff'
+    })
+    document.getElementById('eval-hint').textContent = `已选「${scoreLabels[score] || ''}」`
+    // 延时关闭
+    setTimeout(() => {
+      const closeBtn = document.querySelector('.el-message-box__close')
+      if (closeBtn) closeBtn.click()
+    }, 400)
+  }
+
+  try {
+    await ElMessageBox({
+      title: '💬 给这组题点个评',
+      message: evalHtml,
+      dangerouslyUseHTMLString: true,
+      showConfirmButton: false,
+      showCancelButton: false,
+      closeOnClickModal: true,
+      closeOnPressEscape: true,
+      customClass: 'eval-dialog',
+      beforeClose: (action, instance, done) => {
+        const score = window[evalKey]
+        if (score !== null && score !== undefined) {
+          evaluationScore = score
+        }
+        window[evalKey] = null
+        delete window[evalKey]
+        window.__evalSelect = null
+        done()
+      }
+    })
+  } catch { /* 关闭或超时 → 默认 3 */ }
+
+  adaptiveEngine.value.lastEvaluation = evaluationScore
 
   // 评估并决定下一步
   const result = evaluateGroup(engine, groupAnswers)
@@ -525,37 +592,57 @@ const completeAdaptiveGroup = async () => {
     }
 
     try {
-      await ElMessageBox.alert(
-        `<div style="text-align:center;padding:8px 0;">
-          <div style="font-size:48px;margin-bottom:12px;">${emoji}</div>
-          <div style="font-size:20px;font-weight:700;color:#1e3c5c;margin-bottom:4px;">练习完成</div>
-          <div style="font-size:14px;color:#606266;margin-bottom:12px;">${comment}</div>
-          <div style="display:flex;justify-content:center;gap:20px;flex-wrap:wrap;font-size:14px;">
-            <div><span style="color:#909399;">共答</span> <strong>${finalAnswers.length}</strong> 题</div>
-            <div><span style="color:#909399;">正确</span> <strong style="color:#58cc71;">${totalCorrect}</strong> 题</div>
-            <div><span style="color:#909399;">正确率</span> <strong style="color:${totalRate >= 80 ? '#58cc71' : '#e6a23c'};">${totalRate}%</strong></div>
-            <div><span style="color:#909399;">用时</span> <strong>${formatDuration(totalTime)}</strong></div>
+      await ElMessageBox.confirm(
+        `<div style="text-align:center;padding:2px 0;">
+          <div style="font-size:52px;margin-bottom:6px;line-height:1.2;">${emoji}</div>
+          <div style="font-size:22px;font-weight:700;color:#1e3c5c;margin-bottom:2px;">练习完成</div>
+          <div style="font-size:14px;color:#909399;margin-bottom:14px;">${comment}</div>
+          <div style="display:flex;justify-content:center;gap:16px;flex-wrap:wrap;font-size:14px;">
+            <div style="background:#f7fbff;border-radius:12px;padding:8px 16px;min-width:64px;">
+              <div style="font-size:22px;font-weight:700;color:#1e3c5c;">${finalAnswers.length}</div>
+              <div style="font-size:12px;color:#909399;">共答</div>
+            </div>
+            <div style="background:#f7fbff;border-radius:12px;padding:8px 16px;min-width:64px;">
+              <div style="font-size:22px;font-weight:700;color:#58cc71;">${totalCorrect}</div>
+              <div style="font-size:12px;color:#909399;">正确</div>
+            </div>
+            <div style="background:#f7fbff;border-radius:12px;padding:8px 16px;min-width:64px;">
+              <div style="font-size:22px;font-weight:700;color:${totalRate >= 80 ? '#58cc71' : '#e6a23c'};">${totalRate}%</div>
+              <div style="font-size:12px;color:#909399;">正确率</div>
+            </div>
+            <div style="background:#f7fbff;border-radius:12px;padding:8px 16px;min-width:64px;">
+              <div style="font-size:22px;font-weight:700;color:#1e3c5c;">${formatDuration(totalTime)}</div>
+              <div style="font-size:12px;color:#909399;">用时</div>
+            </div>
           </div>
         </div>`,
         '🎉 本轮练习汇总',
         {
           confirmButtonText: '开始新一轮',
-          dangerouslyUseHTMLString: true,
+          cancelButtonText: '关闭',
+          showCancelButton: true,
           confirmButtonClass: 'el-button--primary',
-          callback: () => {
-            // 开始新一轮
-            startNewAdaptiveSession(); nextLocked = false
+          cancelButtonClass: 'finish-close-btn',
+          dangerouslyUseHTMLString: true,
+          customClass: 'eval-dialog',
+          callback: (action) => {
+            if (action === 'confirm') {
+              startNewAdaptiveSession(); nextLocked = false
+            }
           }
         }
       )
-    } catch {
-      // 用户点了关闭 → 退出到空闲状态
-    }
+    } catch {}
 
     session.value.answers = finalAnswers
     adaptiveEngine.value = null
     adaptiveGroupIndex.value = 0
-    practiceStore.saveSessionToDB()
+
+    // 从 history 中收集自我评价记录
+    const evalRecs = (result.engine.history || [])
+      .filter(h => h.evaluation != null)
+      .map(h => ({ group: h.groupIdx, score: h.evaluation }))
+    practiceStore.saveSessionToDB(evalRecs.length ? JSON.stringify(evalRecs) : null)
     return
   }
 
@@ -904,5 +991,58 @@ onMounted(() => {
   font-weight: bold !important;
   text-align: center !important;
   z-index: 9999 !important;
+}
+
+/* ── 自我评价对话框 ── */
+.eval-dialog {
+  width: min(400px, calc(100vw - 48px)) !important;
+  border-radius: 20px !important;
+  padding: 4px 0 !important;
+  box-shadow: 0 20px 60px rgba(23, 110, 191, 0.12) !important;
+}
+
+.eval-dialog .el-message-box__header {
+  padding: 18px 20px 0 !important;
+}
+
+.eval-dialog .el-message-box__title {
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  color: #1e3c5c !important;
+}
+
+.eval-dialog .el-message-box__content {
+  padding: 16px 20px 24px !important;
+}
+
+.eval-dialog .el-message-box__close {
+  font-size: 18px !important;
+  color: #c0ccda !important;
+}
+
+.eval-dialog .el-message-box__close:hover {
+  color: #909399 !important;
+}
+
+/* ── 完成弹窗的"关闭"按钮 ── */
+.finish-close-btn {
+  background: #f0f2f5 !important;
+  border-color: #dcdfe6 !important;
+  color: #606266 !important;
+  border-radius: 20px !important;
+  padding: 8px 20px !important;
+  font-size: 14px !important;
+}
+
+.finish-close-btn:hover {
+  background: #e4e7ed !important;
+  color: #303133 !important;
+}
+
+.eval-dialog .el-button--primary {
+  border-radius: 20px !important;
+  padding: 8px 20px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
 }
 </style>

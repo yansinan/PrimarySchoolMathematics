@@ -218,16 +218,16 @@ const digitInputStyle = computed(() => ({ '--box-count': digitCount.value }))
   gap: 4px;
   direction: ltr;
   align-items: center;
+  font-size: clamp(1.7rem, 5.5vw, 6rem);
 }
 
 .digit-box {
-  width: calc(var(--vertical-digit-size, 2.8rem) * 0.92);
-  height: calc(var(--vertical-digit-size, 2.8rem) * 1.15);
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   position: relative;
-  font-size: var(--vertical-digit-size, 2.8rem);
+  width: 1.05em;
+  height: 1.2em;
   font-family: 'Courier New', monospace;
   font-weight: 700;
   color: #2c3e50;

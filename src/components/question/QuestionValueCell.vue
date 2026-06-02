@@ -80,7 +80,18 @@ const handleSubmit = () => {
 </script>
 
 <style lang="scss" scoped>
-@import '@/styles/math-equation.scss';
+// 原 math-equation.scss 合并至此
+$math-font-size-large: clamp(3rem, 8vw, 8rem);
+$math-font-size-medium: clamp(2.4rem, 6vw, 6rem);
+$math-font-size-small: clamp(2.1rem, 5vw, 5rem);
+
+.math-number {
+  font-weight: 700;
+  color: #2c3e50;
+  min-width: 2em;
+  text-align: center;
+  font-size: $math-font-size-large;
+}
 
 .math-answer-input {
   font-size: clamp(2.4rem, 6vw, 6rem);
@@ -114,5 +125,32 @@ const handleSubmit = () => {
   vertical-align: baseline;
   text-align: center;
   font-size: $math-font-size-medium;
+}
+
+.math-answer-display {
+  font-weight: 700;
+  color: #27ae60;
+  border-bottom: 4px solid #27ae60;
+  padding: 0 10px;
+  display: inline-block;
+  min-width: 2em;
+  text-align: center;
+  font-size: $math-font-size-small;
+}
+
+.math-answer-tag {
+  font-weight: 700 !important;
+  padding: 0.5rem 2rem !important;
+  border-radius: 20px !important;
+  line-height: 1.2 !important;
+  min-height: auto !important;
+  height: auto !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #2c3e50 !important;
+  background-color: #f0f9ff !important;
+  border-color: #bae6fd !important;
+  font-size: $math-font-size-large !important;
 }
 </style>

@@ -58,6 +58,7 @@ class PracticeSession {
     this.correctCount = 0
     this.accuracy = 0
     this.totalDuration = 0
+    this.evaluations = null   // JSON string: {"groupEvals":[{"group":1,"score":4},...],"finalComment":""}
     this.createdAt = new Date().toISOString()
     this.synced = 0
     this.updatedAt = new Date().toISOString()
@@ -105,6 +106,7 @@ export async function saveSession(sessionData, answersData) {
     correctCount: sessionData.correctCount || 0,
     accuracy: sessionData.accuracy || 0,
     totalDuration: sessionData.totalDuration || 0,
+    evaluations: sessionData.evaluations || null,
     createdAt: now,
     synced: 0,
     updatedAt: now

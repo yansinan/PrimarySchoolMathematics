@@ -12,6 +12,7 @@
             :show-answer="t.show"
             :answer="t.answer"
             :user-answer="t.userAnswer || ''"
+            enable-direct-input
           />
           <div class="case-info">
             <code>equation="{{ t.equation }}"</code>
@@ -37,6 +38,7 @@
             :show-answer="t.show"
             :answer="t.answer"
             :user-answer="t.userAnswer || ''"
+            enable-direct-input
           />
           <div class="case-info">
             <code>equation="{{ t.equation }}"</code>

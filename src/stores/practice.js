@@ -169,20 +169,30 @@ export const usePracticeStore = defineStore('drawer', {
      * Persist the completed session and its answers to IndexedDB.
      * Called after the last question is answered.
      */
-    async saveSessionToDB() {
+    async saveSessionToDB(evaluations) {
       const answers = this.session.answers
       if (!answers.length) return
 
-      const correctCount = answers.filter(a => a.isCorrect).length
+      // 按 questionIndex 去重，确保每个问题只算一次
+      const seen = new Set()
+      const uniqueAnswers = answers.filter(a => {
+        const key = a.questionIndex ?? a.equation
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+
+      const correctCount = uniqueAnswers.filter(a => a.isCorrect).length
       const totalDuration = Date.now() - (this.session.sessionStartTime || Date.now())
 
       const sessionData = {
         studentId: 'default',
         config: this.session.configSnapshot || {},
-        totalQuestions: answers.length,
+        totalQuestions: uniqueAnswers.length,
         correctCount,
-        accuracy: answers.length > 0 ? correctCount / answers.length : 0,
-        totalDuration
+        accuracy: uniqueAnswers.length > 0 ? correctCount / uniqueAnswers.length : 0,
+        totalDuration,
+        evaluations: evaluations || null
       }
 
       const answersData = answers.map(a => ({

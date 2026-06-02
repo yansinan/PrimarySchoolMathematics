@@ -5,17 +5,20 @@
       <div class="eq-row first-row">
         <div class="op-cell"></div>
         <div class="digits-cell first-digits-cell">
+          <DigitInput
+            v-if="parsedEquation.blankPosition === 'leftOperand' && enableDirectInput"
+            :model-value="showAnswer ? String(answer ?? '') : String(userAnswer ?? '')"
+            :max-digits="maxDigits"
+            :initial-focus="-1"
+            :show-result="showAnswer"
+            @focus="(idx) => $emit('focus', idx)"
+          />
           <QuestionValueCell
-            :is-blank="parsedEquation.blankPosition === 'leftOperand'"
-            :show-answer="showAnswer"
-            :answer="answer"
-            answer-display="text"
-            :editable="enableDirectInput && parsedEquation.blankPosition === 'leftOperand'"
-            :user-answer="userAnswer"
+            v-else
+            :is-blank="false"
+            :show-answer="false"
             :value="parsedEquation.leftOperand"
             number-class="math-number-vertical"
-            @update:user-answer="$emit('update:userAnswer', $event)"
-            @submit-answer="$emit('submitAnswer')"
           />
         </div>
       </div>
@@ -25,17 +28,20 @@
           <span class="math-operator">{{ parsedEquation.operator }}</span>
         </div>
         <div class="digits-cell">
+          <DigitInput
+            v-if="parsedEquation.blankPosition === 'rightOperand' && enableDirectInput"
+            :model-value="showAnswer ? String(answer ?? '') : String(userAnswer ?? '')"
+            :max-digits="maxDigits"
+            :initial-focus="-1"
+            :show-result="showAnswer"
+            @focus="(idx) => $emit('focus', idx)"
+          />
           <QuestionValueCell
-            :is-blank="parsedEquation.blankPosition === 'rightOperand'"
-            :show-answer="showAnswer"
-            :answer="answer"
-            answer-display="text"
-            :editable="enableDirectInput && parsedEquation.blankPosition === 'rightOperand'"
-            :user-answer="userAnswer"
+            v-else
+            :is-blank="false"
+            :show-answer="false"
             :value="parsedEquation.rightOperand"
             number-class="math-number-vertical"
-            @update:user-answer="$emit('update:userAnswer', $event)"
-            @submit-answer="$emit('submitAnswer')"
           />
         </div>
       </div>
@@ -47,29 +53,30 @@
       <div class="eq-row result-row">
         <div class="op-cell"></div>
         <div class="digits-cell result-content">
-          <!-- 竖式逐位数字输入（输入/答案均保持方块样式） -->
           <DigitInput
             ref="digitRef"
-            v-if="isResultBlank && digitMode"
+            v-if="isResultBlank && enableDirectInput"
             :model-value="showAnswer ? String(answer ?? '') : String(userAnswer ?? '')"
             :max-digits="maxDigits"
-            :active-slot="focusSlot"
+            :initial-focus="-1"
             :show-result="showAnswer"
             @focus="(idx) => emit('focus', idx)"
           />
-          <QuestionValueCell
-            v-else
-            :is-blank="parsedEquation.blankPosition === 'result'"
-            :show-answer="showAnswer"
-            :answer="answer"
-            answer-display="text"
-            :editable="enableDirectInput && parsedEquation.blankPosition === 'result' && !digitMode"
-            :user-answer="userAnswer"
-            :value="parsedEquation.resultValue"
-            number-class="math-number-vertical"
-            @update:user-answer="$emit('update:userAnswer', $event)"
-            @submit-answer="$emit('submitAnswer')"
-          />
+          <template v-else>
+            <DigitInput
+              v-if="showAnswer && isResultBlank"
+              :model-value="String(answer ?? '')"
+              :max-digits="maxDigits"
+              :show-result="true"
+            />
+            <QuestionValueCell
+              v-else
+              :is-blank="false"
+              :show-answer="false"
+              :value="parsedEquation.resultValue"
+              number-class="math-number-vertical"
+            />
+          </template>
         </div>
       </div>
     </div>
@@ -86,7 +93,7 @@ const props = defineProps(questionLayoutProps)
 
 const emit = defineEmits(questionLayoutEmits)
 
-const { parsedEquation } = useQuestionEquation(props)
+const { parsedEquation, carryType } = useQuestionEquation(props)
 
 /** 结果行当前是否为空白（待填）*/
 const isResultBlank = computed(() => {
@@ -94,16 +101,17 @@ const isResultBlank = computed(() => {
   return bp === 'result' || bp === ''
 })
 
+/** 最大位数：按空白位置所需位数显示方块，不多留 */
 const maxDigits = computed(() => {
-  const answerValue = String(props.showAnswer ? (props.answer ?? '') : (props.userAnswer ?? ''))
-  const values = [
-    String(parsedEquation.value.leftOperand || ''),
-    String(parsedEquation.value.rightOperand || ''),
-    String(parsedEquation.value.resultValue || ''),
-    answerValue
-  ]
-  const lens = values.map((v) => v.replace('-', '').length).filter(Boolean)
-  return Math.max(...lens, 2)
+  const blankPos = parsedEquation.value.blankPosition
+  if (blankPos === 'result') {
+    return Math.max(String(props.answer ?? '').replace('-', '').length, 1)
+  }
+  if (blankPos === 'leftOperand') {
+    return Math.max(String(parsedEquation.value.leftOperand || '').replace('-', '').length, 1)
+  }
+  // rightOperand
+  return Math.max(String(parsedEquation.value.rightOperand || '').replace('-', '').length, 1)
 })
 
 const equationStyle = computed(() => ({
@@ -119,7 +127,14 @@ defineExpose({ acceptDigit, acceptBackspace })
 </script>
 
 <style lang="scss" scoped>
-@import '@/styles/math-equation.scss';
+// 原 math-equation.scss 合并至此
+.math-question-surface {
+  padding: clamp(16px, 2.5vw, 24px);
+  border: 1px solid #dbe7f4;
+  border-radius: 24px;
+  background: linear-gradient(180deg, #fbfdff 0%, #f3f8ff 100%);
+  box-shadow: 0 10px 28px rgba(28, 176, 246, 0.08);
+}
 
 .vertical-layout {
   display: flex;
@@ -208,6 +223,7 @@ defineExpose({ acceptDigit, acceptBackspace })
 }
 
 .math-line {
+  border-bottom: 4px solid #333;
   margin: 2px 0 10px 0;
   width: calc(var(--digits-width) + (var(--digit-cell-width) * 0.52));
   max-width: calc(var(--op-width) + var(--digits-width));
@@ -284,6 +300,10 @@ defineExpose({ acceptDigit, acceptBackspace })
 }
 
 @media (max-width: 768px) {
+  .math-question-surface {
+    border-radius: 20px;
+  }
+
   .vertical-equation {
     --vertical-digit-size: clamp(1.55rem, 5vw, 2.1rem);
   }
@@ -291,9 +311,18 @@ defineExpose({ acceptDigit, acceptBackspace })
   .line-row {
     width: calc(var(--op-width) + var(--digits-width) + var(--col-gap));
   }
+
+  .math-line {
+    border-bottom-width: 3px;
+  }
 }
 
 @media (max-width: 480px) {
+  .math-question-surface {
+    padding: 14px 12px;
+    border-radius: 18px;
+  }
+
   .vertical-layout {
     padding: 8px 4px;
   }
