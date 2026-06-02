@@ -4,7 +4,7 @@
       <h1>清空练习记录</h1>
       <p class="warning-text">此操作将永久删除所有练习记录、统计数据及能力评估结果，不可恢复。</p>
       
-      <div v-if="!confirmed" class="confirm-area">
+      <div v-if="!done" class="confirm-area">
         <el-checkbox v-model="confirmed">我确认要清空所有数据</el-checkbox>
         <div class="actions">
           <el-button type="danger" :disabled="!confirmed" @click="handleReset">
@@ -13,8 +13,7 @@
           <el-button @click="$router.push('/home')">取消</el-button>
         </div>
       </div>
-
-      <div v-else-if="done" class="done-area">
+      <div v-else class="done-area">
         <el-result icon="success" title="已清空" sub-title="所有练习记录已删除">
           <template #extra>
             <el-button type="primary" @click="$router.push('/home')">返回首页</el-button>

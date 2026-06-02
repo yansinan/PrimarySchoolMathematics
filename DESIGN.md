@@ -187,3 +187,28 @@ selfEval 5 → 升级只需 2 组好成绩，快速减少题量
 3. **竖式计算** — 竖式布局已支持，可丰富竖式题型
 4. **定时模式** — 可增加限时挑战模式
 5. **多用户** — studentId 字段已预留
+
+### 个性化速度基准（待实现）
+
+当前系统的速度等级判断使用了全局固定阈值（`<3s/+2, <5s/+1, <8s/0, <12s/-1, ≥12s/-2`）。随着用户做题数据的积累，应该切换到**个性化基准线**：
+
+**思路**：
+1. 按难度级别（或难度级别+运算符）统计每个用户的历史平均用时，作为该用户的"正常"速度基准
+2. 实际做题速度与个人基准线比较来判断快慢，而非全局固定值
+3. 例如：某用户两位数加减平均 8s，则对 ta 来说 6s 算"快"、12s 算"慢"
+
+**实现要点**：
+- 从 `answers` 表中按 `(operator, operandMin, operandMax, stepCount)` 分组统计用户的历史 `responseTime` 均值
+- 在 `createAdaptiveEngine()` 时加载该用户的个人基准数据
+- 新用户的基准逐渐收敛——前期用全局阈值，3~5 组数据后切换到个人基线
+- 基准需要定期重新计算（或每次练习后增量更新），以反映进步
+
+```
+// 伪代码示例
+function getPersonalBaseline(studentId, difficultyCtx) {
+  const history = db.answers
+    .where({ studentId, operator: ctx.operator, stepCount: ctx.stepCount })
+    .average('responseTime')
+  return history || FALLBACK_THRESHOLD  // 数据不足时用全局阈值
+}
+```
