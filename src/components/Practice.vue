@@ -83,10 +83,11 @@ import NumberKeypad from '@/components/input/NumberKeypad.vue'
 import OptionButtons from '@/components/input/OptionButtons.vue'
 import { getCarryType, parseEquation } from '@/utils/equationParser'
 import { generateDiagnosticQuestions, analyzeAbility, generatePracticeConfig } from '@/utils/diagnostic'
-import { createFormulasGenerator } from '@/utils/paperGenerator'
-import { EquationSolver } from '@/utils/EquationSolver'
 import { createAdaptiveEngine, getDifficultyConfig, getGroupSize, evaluateGroup, getDifficultyLabel, diversifyBatch } from '@/utils/adaptiveEngine'
 import { formatDuration } from '@/utils/timeFormat'
+import { generateAdaptiveBatch } from '@/utils/adaptiveBatch'
+import { decideDisplayMode, updateDisplayStats, createInitialStats } from '@/utils/displayStrategy'
+import { FEEDBACK_DELAYS, ASSESSMENT_ABORT_WRONG_STREAK, getGroupComment } from '@/constants/practice'
 
 import { usePracticeStore } from '@/stores/practice'
 import { useStatsStore } from '@/stores/stats'
@@ -130,33 +131,9 @@ const {
   abilityProfile
 } = storeToRefs(practiceStore)
 
-const tempDisplayStrategy = {
-  stats: {
-    consecutiveWrong: 0,
-    accuracyRate: 1.0
-  },
-  decide(equation) {
-    if (this.stats.consecutiveWrong >= 3) {
-      return { layout: 'horizontal', input: 'options' }
-    }
-
-    const parsedEquation = parseEquation(equation)
-    if (getCarryType(parsedEquation)) {
-      return { layout: 'vertical', input: 'keypad' }
-    }
-
-    return { layout: 'horizontal', input: 'keypad' }
-  },
-  updateStats(isCorrect) {
-    if (isCorrect) {
-      this.stats.consecutiveWrong = 0
-      this.stats.accuracyRate = this.stats.accuracyRate * 0.9 + 0.1
-    } else {
-      this.stats.consecutiveWrong++
-      this.stats.accuracyRate = this.stats.accuracyRate * 0.9
-    }
-  }
-}
+// ── 题目展示策略状态（抽到 utils/displayStrategy.js，纯函数化） ──
+// 注意：原实现是模块级 mutable，改为 ref 化的响应式状态
+const displayStats = ref(createInitialStats())
 
 /** 当前组之前累积的答案数，用于 ProgressSteps 截取 */
 const groupAnswerOffset = ref(0)
@@ -228,12 +205,9 @@ const initPractice = () => {
   practiceStore.resetPracticeSession()
   practiceStore.session.sessionStartTime = Date.now()
 
-  tempDisplayStrategy.stats = {
-    consecutiveWrong: 0,
-    accuracyRate: 1.0
-  }
+  displayStats.value = createInitialStats()
 
-  const mode = tempDisplayStrategy.decide(currentQuestion.value.equation)
+  const mode = decideDisplayMode(currentQuestion.value.equation, displayStats.value)
 
   // 如果题目来自自适应引擎且预置了选项，使用 choice 模式
   const isAdaptiveChoice = currentQuestion.value.options && currentQuestion.value.options.length > 0
@@ -373,30 +347,30 @@ const handleSubmit = (answer) => {
   if (isCorrect) {
     session.value.streak++
     session.value.feedbackType = 'correct'
-    tempDisplayStrategy.updateStats(true)
+    displayStats.value = updateDisplayStats(displayStats.value, true)
     ElMessage.success({
       message: '✓ 正确！',
-      duration: 800,
+      duration: FEEDBACK_DELAYS.correct,
       offset: 100,
       customClass: 'feedback-message'
     })
 
     setTimeout(() => {
       handleNext()
-    }, 800)
+    }, FEEDBACK_DELAYS.correct)
   } else {
     session.value.streak = 0
     session.value.feedbackType = 'wrong'
     ElMessage.error({
       message: `✗ 正确答案是 ${currentQuestion.value.solution}`,
-      duration: 1500,
+      duration: FEEDBACK_DELAYS.wrong,
       offset: 100,
       customClass: 'feedback-message'
     })
 
-    // 评估模式下连续错 2 次 → 提前结束评估，直接进入练习
-    tempDisplayStrategy.updateStats(isCorrect)
-    const shouldAbortAssessment = isAssessment.value && tempDisplayStrategy.stats.consecutiveWrong >= 2
+    // 评估模式下连续错 N 次 → 提前结束评估
+    displayStats.value = updateDisplayStats(displayStats.value, isCorrect)
+    const shouldAbortAssessment = isAssessment.value && displayStats.value.consecutiveWrong >= ASSESSMENT_ABORT_WRONG_STREAK
 
     if (shouldAbortAssessment) {
       const nextFn = () => {
@@ -407,9 +381,9 @@ const handleSubmit = (answer) => {
       }
 
       if (session.value.displayMode.input === 'keypad') {
-        setTimeout(nextFn, 1500)
+        setTimeout(nextFn, FEEDBACK_DELAYS.assessmentAbort)
       } else {
-        setTimeout(nextFn, 1500)
+        setTimeout(nextFn, FEEDBACK_DELAYS.assessmentAbort)
       }
     } else {
       setTimeout(() => {
@@ -418,9 +392,9 @@ const handleSubmit = (answer) => {
           session.value.currentAnswer = ''
           digitFocusIdx.value = -1
         }
-      }, 1500)
+      }, FEEDBACK_DELAYS.wrong)
     }
-    return // skip the extra tempDisplayStrategy.updateStats call below
+    return // skip the extra displayStats update call below
   }
 
   // (isCorrect path also falls through — already handled above)
@@ -441,7 +415,7 @@ const handleNext = () => {
       return
     }
 
-    const mode = tempDisplayStrategy.decide(currentQuestion.value.equation)
+    const mode = decideDisplayMode(currentQuestion.value.equation, displayStats.value)
 
     // 自适应引擎预置选项
     const isAdaptiveChoice = currentQuestion.value.options && currentQuestion.value.options.length > 0
@@ -470,28 +444,7 @@ const handleNext = () => {
   }
 }
 
-/** 生成一组题目（内建题型穿插） */
-function generateBatch(engine, count) {
-  const config = getDifficultyConfig(engine)
-  const paperList = [{
-    step: config.step,
-    numberOfFormulas: count,
-    whereIsResult: config.whereIsResult,
-    formulaList: config.formulaList,
-    resultMinValue: config.resultMinValue,
-    resultMaxValue: config.resultMaxValue,
-    customFormulaList: null
-  }]
-  const papers = createFormulasGenerator(config, paperList)
-  const formulas = papers.reduce((p, c) => { p.push(...c.formulas); return p }, [])
-  const baseQuestions = formulas.map(cur => ({
-    equation: cur,
-    solution: EquationSolver.solve(cur)
-  })).filter(q => q.solution !== null && !isNaN(q.solution))
-
-  // 题型多样化：混合不同的输入模式和填空位置
-  return diversifyBatch(baseQuestions, engine)
-}
+/** 生成一组题目已抽到 utils/adaptiveBatch.js 的 generateAdaptiveBatch */
 
 /** 诊断完成 → 分析能力 → 启动自适应练习 */
 const handleAssessmentComplete = async () => {
@@ -516,7 +469,7 @@ const handleAssessmentComplete = async () => {
   adaptiveGroupIndex.value = 1
 
   const size = getGroupSize(engine)
-  const firstQuestions = generateBatch(engine, size)
+  const firstQuestions = generateAdaptiveBatch(engine, size)
 
   practiceStore.completeAssessment(profile)
   practiceStore.setListPractices(firstQuestions)
@@ -725,7 +678,7 @@ const completeAdaptiveGroup = async () => {
   }
 
   // 生成下一组
-  const nextQuestions = generateBatch(result.engine, result.nextGroupSize)
+  const nextQuestions = generateAdaptiveBatch(result.engine, result.nextGroupSize)
   groupAnswerOffset.value = allAnswers.length
   practiceStore.resetCurrentIndex()
   practiceStore.setListPractices(nextQuestions)
@@ -759,7 +712,7 @@ const startNewAdaptiveSession = () => {
   practiceStore.setPhase('practice')
 
   const size = getGroupSize(engine)
-  const questions = generateBatch(engine, size)
+  const questions = generateAdaptiveBatch(engine, size)
   practiceStore.setListPractices(questions)
 
   ElMessage({
