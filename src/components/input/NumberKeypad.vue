@@ -85,6 +85,7 @@ const handleNumber = (num) => {
 
 const handleBackspace = () => {
   if (props.currentValue) {
+    emit('backspace')
     emit('input', props.currentValue.slice(0, -1))
   }
 }

@@ -34,6 +34,11 @@ export const questionLayoutProps = {
   focusSlot: {
     type: Number,
     default: -1
+  },
+  /** 初始焦点位置：-1=最右侧（个位），0=最左侧 */
+  initialFocus: {
+    type: Number,
+    default: -1
   }
 }
 

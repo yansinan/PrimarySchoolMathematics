@@ -17,6 +17,7 @@
 
         <div class="question-area">
           <component
+            ref="layoutRef"
             :is="currentLayout"
             :show-answer="session.feedbackType !== null"
             :answer="currentQuestion.solution"
@@ -234,117 +235,32 @@ const generateOptions = (correct) => {
   session.value.currentOptions = options.sort(() => Math.random() - 0.5)
 }
 
-/** 竖式逐位输入：用户点选的格子索引（-1=未选择）*/
+/** 竖式逐位输入：委托给 DigitInput */
 const digitFocusIdx = ref(-1)
-
-/** 竖式 slot 字符串：用 '_' 表示空格，如 "_3" 表示十位是3 */
-const digitPadStr = ref('')
-
-/** 当前竖式中最大位数 */
-function calcMaxDigits() {
-  const eq = currentQuestion.value?.equation || ''
-  const parts = eq.split(/[+\-×÷=]/).map(s => s.trim()).filter(Boolean)
-  return Math.max(2, ...parts.map(s => s.replace('__', '').length))
-}
-
-/** 从 padStr + maxDigits 构造左对齐的字符数组 */
-function getPadSlots() {
-  const maxD = calcMaxDigits()
-  const raw = digitPadStr.value || ''
-  const arr = new Array(maxD).fill('_')
-  for (let i = 0; i < raw.length && i < maxD; i++) {
-    arr[i] = raw[i]
-  }
-  return arr
-}
-
-/** 将左对齐字符数组转回 padStr（移除尾随 _）*/
-function slotsToPadStr(arr) {
-  return arr.join('').replace(/_+$/, '')
-}
-
-/** 从 padStr 生成给 DigitInput 的值（移除 _，作为纯数字字符串）*/
-function padStrToDisplay(padStr) {
-  return padStr.replace(/_/g, '')
-}
-
-/** 
- * 同步 display value 和 padStr。
- * 从 session.currentAnswer 检测是否有 _ 来判断当前模式。
- */
-function syncPadStr() {
-  const cur = session.value.currentAnswer || ''
-  if (cur.includes('_')) {
-    digitPadStr.value = cur
-  } else {
-    const maxD = calcMaxDigits()
-    // 左对齐，右侧补 _
-    digitPadStr.value = cur.length >= maxD ? cur : cur + '_'.repeat(maxD - cur.length)
-  }
-}
-
-/** 将数字字符串右对齐 + _ 补齐（DigitInput 左对齐模型用）*/
-function rightPadDigits(value, maxD) {
-  const digits = String(value || '').replace(/_/g, '')   // 去掉已有 _
-  const last = digits.slice(-maxD)                      // 只取最后 maxD 位
-  // 全为空 → 返回空字符串（让 confirm 按钮禁用）
-  if (!last) return ''
-  const padded = last.length >= maxD ? last : '_'.repeat(maxD - last.length) + last
-  return padded
-}
+const layoutRef = ref(null)
+/** 防退格后 @input 重复处理 */
+let bsLock = false
 
 const handleInput = (value) => {
-  if (digitFocusIdx.value >= 0 && session.value.displayMode.layout === 'vertical') {
-    // ── 点击模式：按格填入 ──
-    const focusIdx = digitFocusIdx.value
-    const oldLen = session.value.currentAnswer.length
-    const newLen = value.length
-
-    if (newLen < oldLen) {
-      const slots = getPadSlots()
-      if (focusIdx >= 0 && focusIdx < slots.length) slots[focusIdx] = '_'
-      digitPadStr.value = slotsToPadStr(slots)
-      session.value.currentAnswer = digitPadStr.value
-    } else if (newLen > oldLen) {
-      syncPadStr()
-      const slots = getPadSlots()
-      const newDigit = value.slice(-1)
-      if (focusIdx >= 0 && focusIdx < slots.length) slots[focusIdx] = newDigit
-      digitPadStr.value = slotsToPadStr(slots)
-      session.value.currentAnswer = digitPadStr.value
-      digitFocusIdx.value = Math.max(0, focusIdx - 1)
-    }
-    return
-  }
-  // ── 标准模式：竖式+键盘时右对齐补齐，其他保持原样 ──
   if (session.value.displayMode.layout === 'vertical' && session.value.displayMode.input === 'keypad') {
-    session.value.currentAnswer = rightPadDigits(value, calcMaxDigits())
+    if (bsLock) { bsLock = false; return }   // 退格触发的 input，跳过
+    const digit = value.replace(/_/g, '').slice(-1)
+    if (digit && layoutRef.value?.acceptDigit) {
+      session.value.currentAnswer = layoutRef.value.acceptDigit(digit)
+    }
     return
   }
   session.value.currentAnswer = value
 }
 
 const handleBackspace = () => {
-  if (digitFocusIdx.value >= 0 && session.value.displayMode.layout === 'vertical') {
-    // ── 点击模式 ──
-    syncPadStr()
-    const slots = getPadSlots()
-    if (slots[digitFocusIdx.value] !== '_') {
-      slots[digitFocusIdx.value] = '_'
-    } else {
-      for (let i = slots.length - 1; i >= 0; i--) {
-        if (slots[i] !== '_') {
-          slots[i] = '_'
-          digitFocusIdx.value = i
-          break
-        }
-      }
+  if (session.value.displayMode.layout === 'vertical' && session.value.displayMode.input === 'keypad') {
+    bsLock = true
+    if (layoutRef.value?.acceptBackspace) {
+      session.value.currentAnswer = layoutRef.value.acceptBackspace()
     }
-    digitPadStr.value = slotsToPadStr(slots)
-    session.value.currentAnswer = digitPadStr.value
     return
   }
-  // ── 标准模式 ──
   session.value.currentAnswer = session.value.currentAnswer.slice(0, -1)
 }
 
@@ -427,7 +343,7 @@ const handleSubmit = (answer) => {
       const nextFn = () => {
         session.value.feedbackType = null
         session.value.currentAnswer = ''
-        // 将剩余未答等级标记为弱项（保守处理）
+        digitFocusIdx.value = -1
         handleAssessmentComplete()
       }
 
@@ -441,6 +357,7 @@ const handleSubmit = (answer) => {
         if (session.value.displayMode.input === 'keypad') {
           session.value.feedbackType = null
           session.value.currentAnswer = ''
+          digitFocusIdx.value = -1
         }
       }, 1500)
     }
@@ -724,6 +641,7 @@ watch(listPractices, (newPracticeList) => {
     const isAdaptiveTransition = adaptiveEngine.value && adaptiveGroupIndex.value > 1
     const saved = isAdaptiveTransition ? [...session.value.answers] : []
     practiceStore.resetCurrentIndex()
+    digitFocusIdx.value = -1  // 新题重置焦点
     initPractice()
     if (isAdaptiveTransition) {
       session.value.answers = saved

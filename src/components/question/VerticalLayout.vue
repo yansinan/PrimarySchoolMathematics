@@ -49,12 +49,13 @@
         <div class="digits-cell result-content">
           <!-- 竖式逐位数字输入（输入/答案均保持方块样式） -->
           <DigitInput
+            ref="digitRef"
             v-if="isResultBlank && digitMode"
-            :pad-value="showAnswer ? String(answer ?? '') : String(userAnswer ?? '')"
+            :model-value="showAnswer ? String(answer ?? '') : String(userAnswer ?? '')"
             :max-digits="maxDigits"
             :active-slot="focusSlot"
             :show-result="showAnswer"
-            @focus="(idx) => $emit('focus', idx)"
+            @focus="(idx) => emit('focus', idx)"
           />
           <QuestionValueCell
             v-else
@@ -76,14 +77,14 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import QuestionValueCell from '@/components/question/QuestionValueCell.vue'
 import DigitInput from '@/components/question/DigitInput.vue'
 import { useQuestionEquation, questionLayoutProps, questionLayoutEmits } from '@/components/question/questionLayoutShared'
 
 const props = defineProps(questionLayoutProps)
 
-defineEmits(questionLayoutEmits)
+const emit = defineEmits(questionLayoutEmits)
 
 const { parsedEquation } = useQuestionEquation(props)
 
@@ -108,6 +109,13 @@ const maxDigits = computed(() => {
 const equationStyle = computed(() => ({
   '--digits-count': maxDigits.value
 }))
+
+/** 转发 DigitInput 的暴露方法给父组件 */
+const digitRef = ref(null)
+const acceptDigit = (digit) => digitRef.value?.acceptDigit(digit) ?? ''
+const acceptBackspace = () => digitRef.value?.acceptBackspace() ?? ''
+
+defineExpose({ acceptDigit, acceptBackspace })
 </script>
 
 <style lang="scss" scoped>

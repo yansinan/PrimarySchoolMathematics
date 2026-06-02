@@ -1,0 +1,1 @@
+import{J as a}from"./index.bd107884.js";const s=a("app",{state:()=>({printPreviewPapers:[]}),actions:{navigateToPrint(t,e,p){this.$patch(r=>{r.printPreviewPapers=p,t.push({path:"/print",query:{fileName:e}})})}}});export{s as u};

@@ -56,23 +56,23 @@
       <div class="digit-demo">
         <div class="test-case">
           <h3>输入: 35（最大3位）</h3>
-          <DigitInput pad-value="_35" :max-digits="3" />
+          <DigitInput model-value="_35" :max-digits="3" />
         </div>
         <div class="test-case">
           <h3>输入: 42（最大4位）</h3>
-          <DigitInput pad-value="__42" :max-digits="4" />
+          <DigitInput model-value="__42" :max-digits="4" />
         </div>
         <div class="test-case">
           <h3>输入: 579（最大3位）</h3>
-          <DigitInput pad-value="579" :max-digits="3" />
+          <DigitInput model-value="579" :max-digits="3" />
         </div>
         <div class="test-case">
           <h3>空输入（最大3位）</h3>
-          <DigitInput pad-value="" :max-digits="3" />
+          <DigitInput model-value="" :max-digits="3" />
         </div>
         <div class="test-case">
           <h3>单数字: 7（最大3位）</h3>
-          <DigitInput pad-value="__7" :max-digits="3" />
+          <DigitInput model-value="__7" :max-digits="3" />
         </div>
       </div>
     </section>
