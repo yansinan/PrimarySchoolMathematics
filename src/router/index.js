@@ -20,6 +20,11 @@ export const routes = [
         path: '/test',
         name: 'test',
         component: () => import('../views/TestView.vue'),
+    },
+    {
+        path: '/reset',
+        name: 'reset',
+        component: () => import('../views/ResetData.vue'),
     }
 ];
 

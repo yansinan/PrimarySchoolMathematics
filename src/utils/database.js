@@ -477,4 +477,16 @@ export async function getAllAnswers(studentId = 'default') {
   }))
 }
 
+/**
+ * 清空所有练习记录（IndexedDB + localStorage）
+ * 用于 /reset 页面
+ */
+export async function clearAllData() {
+  await db.transaction('rw', db.practiceSessions, db.answers, async () => {
+    await db.practiceSessions.clear()
+    await db.answers.clear()
+  })
+  try { localStorage.removeItem('psm_profile') } catch {}
+}
+
 export default db

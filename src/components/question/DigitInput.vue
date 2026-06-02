@@ -72,7 +72,7 @@ function fromSlots(arr) {
   return arr.map(c => c !== null ? c : '_').join('')
 }
 
-const digitCount = computed(() => Math.max(2, props.maxDigits))
+const digitCount = computed(() => Math.max(1, props.maxDigits))
 
 /* ============================================================
    显示

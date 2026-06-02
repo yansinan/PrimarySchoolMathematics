@@ -59,3 +59,6 @@ lerna-debug.log*
 *.sw?
 .config/fish/*
 .yarnrc
+
+# Build artifacts for GitHub Pages
+docs/
