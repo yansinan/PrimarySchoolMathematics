@@ -45,8 +45,9 @@ const DIFFICULTY_LEVELS = [
   { label: '综合挑战',     formulaList: [{ min: 10, max: 999, operators: null }, { min: 10, max: 999, operators: [1, 2] }], carry: '1', abdication: '1', resultMax: 1998 },
 ]
 
-// 小组题量阶梯（从少到多，保持低压力）
-const GROUP_SIZES = [4, 5, 6, 7, 8, 10, 12]
+// 小组题量阶梯（每个速度级别对应一个基数）
+// x 为速度等级(0~4)，公式 y = 2 + (4*x) ± (2*random)
+const GROUP_SIZES = [6, 10, 14, 18, 22]
 
 /* ============================================================
    输入辅助模式 — 降低认知负荷，帮学生建立信心
@@ -150,10 +151,15 @@ export function getDifficultyConfig(engine) {
 }
 
 /**
- * 获取当前组题数
+ * 根据速度等级计算组题数
+ * 公式: y = 2 + (4*x) ± (2*random)，x 为速度等级(0~4)
+ * 结果不少于 4 道
  */
 export function getGroupSize(engine) {
-  return GROUP_SIZES[engine.groupSizeIdx] || 5
+  const x = engine.groupSizeIdx || 0
+  const base = 2 + 4 * x
+  const jitter = Math.floor(Math.random() * 5) - 2  // -2 ~ +2
+  return Math.max(4, base + jitter * 2)  // jitter*2 使波动幅度为 ±4
 }
 
 /**
@@ -238,15 +244,25 @@ export function evaluateGroup(engine, groupAnswers) {
     }],
   }
 
-  const FAST = 5000
-  const SLOW = 12000
+  const FAST = 4000        // 反应快（更严格）
+  const SLOW = 10000       // 反应慢
+  const VERY_SLOW = 16000  // 非常慢
   const GOOD = 0.80
   const BAD = 0.50
-  const MIN_GROUPS = 3  // 同一三维组合至少练 3 组才考虑变动
+  const MIN_GROUPS = 2  // 同一三维组合至少练 2 组才考虑变动
+
+  // ─── 根据每道题平均用时计算速度等级 x ───
+  // x 范围 0~4，用于 getGroupSize 公式
+  let speedAdjust = 0
+  if (avgTime < 3000) speedAdjust = 2         // 极快 +2
+  else if (avgTime < 5000) speedAdjust = 1     // 快 +1
+  else if (avgTime < 8000) speedAdjust = 0     // 正常 0
+  else if (avgTime < 12000) speedAdjust = -1   // 慢 -1
+  else speedAdjust = -2                         // 极慢 -2
 
   // ─── 根据表现决定如何调整 ───
-  if (accuracy >= GOOD && avgTime < FAST) {
-    // 又快又好：尝试解除辅助 → 尝试混合填空 → 升级难度
+  if (accuracy >= GOOD) {
+    // 正确率好
     next.consecutiveGood = engine.consecutiveGood + 1
     next.consecutiveBad = 0
 
@@ -256,41 +272,37 @@ export function evaluateGroup(engine, groupAnswers) {
         next.assistLevel = engine.assistLevel - 1
         next.consecutiveGood = 0
         next.groupsAtThisLevel = 0
-        next.groupSizeIdx = Math.min(GROUP_SIZES.length - 1, engine.groupSizeIdx + 1)
       }
       // 2) 辅助已解除 → 尝试混合填空
       else if (engine.blankMode === 'result') {
         next.blankMode = 'mixed'
         next.consecutiveGood = 0
         next.groupsAtThisLevel = 0
-        next.groupSizeIdx = Math.min(GROUP_SIZES.length - 1, engine.groupSizeIdx + 1)
       }
       // 3) 混合填空也过了 → 升级难度
       else {
         next.difficultyIdx = Math.min(DIFFICULTY_LEVELS.length - 1, engine.difficultyIdx + 1)
-        next.blankMode = 'result'  // 新难度从标准填空开始
+        next.blankMode = 'result'
         next.consecutiveGood = 0
         next.groupsAtThisLevel = 0
-        next.groupSizeIdx = Math.min(GROUP_SIZES.length - 1, engine.groupSizeIdx + 1)
       }
-    } else {
-      // 好但还不够 → 微增题量
-      next.groupSizeIdx = Math.min(GROUP_SIZES.length - 1, engine.groupSizeIdx + 1)
     }
 
-  } else if (accuracy < BAD || avgTime > SLOW) {
-    // 差或慢：先给辅助 → 再降难度
+    // 题量：速度越快题量越大
+    next.groupSizeIdx = Math.min(GROUP_SIZES.length - 1, Math.max(0, engine.groupSizeIdx + speedAdjust))
+
+  } else if (accuracy < BAD) {
+    // 正确率差
     next.consecutiveBad = engine.consecutiveBad + 1
     next.consecutiveGood = 0
 
     if (next.consecutiveBad >= 2) {
-      // 1) 先增加辅助（没辅助 → 加辅助，有辅助 → 更多辅助）
+      // 1) 先增加辅助
       if (engine.assistLevel < ASSIST_LEVELS.length - 1) {
         next.assistLevel = engine.assistLevel + 1
-        next.blankMode = 'result'  // 有辅助时只填空结果
+        next.blankMode = 'result'
         next.consecutiveBad = 0
         next.groupsAtThisLevel = 0
-        next.groupSizeIdx = Math.max(0, engine.groupSizeIdx - 1)
       }
       // 2) 辅助已最大 → 降难度
       else {
@@ -299,37 +311,17 @@ export function evaluateGroup(engine, groupAnswers) {
         next.blankMode = 'result'
         next.consecutiveBad = 0
         next.groupsAtThisLevel = 0
-        next.groupSizeIdx = Math.max(0, engine.groupSizeIdx - 2)
       }
-    } else {
-      // 一组差 → 减题量
-      next.groupSizeIdx = Math.max(0, engine.groupSizeIdx - 1)
     }
 
-  } else if (accuracy >= GOOD) {
-    // 正确率高但慢 → 维持，多练
-    next.consecutiveGood = engine.consecutiveGood + 1
-    next.consecutiveBad = 0
-
-    if (next.consecutiveGood >= 4 && next.groupsAtThisLevel >= MIN_GROUPS + 1) {
-      // 持续稳定好 → 温和尝试下一步（不跳级）
-      if (engine.assistLevel > 0) {
-        next.assistLevel = engine.assistLevel - 1
-      } else if (engine.blankMode === 'result') {
-        next.blankMode = 'mixed'
-      } else {
-        next.difficultyIdx = Math.min(DIFFICULTY_LEVELS.length - 1, engine.difficultyIdx + 1)
-        next.blankMode = 'result'
-      }
-      next.consecutiveGood = 0
-      next.groupsAtThisLevel = 0
-    }
+    // 差或慢 → 减少题量
+    next.groupSizeIdx = Math.max(0, engine.groupSizeIdx + Math.min(-1, speedAdjust))
 
   } else {
     // 及格边缘 → 巩固
     next.consecutiveGood = 0
     next.consecutiveBad = 0
-    next.groupSizeIdx = Math.max(0, engine.groupSizeIdx - 1)
+    next.groupSizeIdx = Math.max(0, engine.groupSizeIdx + speedAdjust - 1)
   }
 
   // ── 结束条件：基于 targetMin ~ targetMax ══
@@ -367,8 +359,8 @@ export function evaluateGroup(engine, groupAnswers) {
     }
   }
 
-  // 最多 12 组封顶
-  if (next.history.length >= 12) {
+  // 最多 5 组封顶
+  if (next.history.length >= 5) {
     return { engine: next, nextGroupSize: 0, done: true }
   }
 
