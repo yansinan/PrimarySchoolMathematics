@@ -61,9 +61,8 @@ lerna-debug.log*
 .config/fish/*
 .yarnrc
 
-# Build artifacts for GitHub Pages (but allow design docs)
+# Build artifacts for GitHub Pages (only docs/ subdir)
+# designDocs/ is for design documentation and is fully tracked
 docs/assets/
 docs/index.html
-# But allow design docs:
-!docs/DESIGN-*.md
-!docs/CHANGELOG.md
+docs/vite.svg
