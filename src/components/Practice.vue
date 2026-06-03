@@ -442,7 +442,7 @@ const handleNext = () => {
   } else {
     // ── Session complete — handle based on phase ──
     const fn = isAssessment.value ? handleAssessmentComplete :
-               adaptiveEngine.value ? completeGroup : handlePracticeComplete
+               adaptiveEngine.value ? completeAdaptiveGroup : handlePracticeComplete
     // reset nextLocked after the handler runs
     const result = fn()
     // If fn is async, give it a tick to unlock
@@ -607,7 +607,8 @@ const handlePracticeComplete = async () => {
     })
   } catch { /* 弹窗异常 → action 保持 'close' */ }
 
-  // 清理题目再跳转
+  // 关闭弹窗后清空题目，watch 会根据 phase/abilityProfile 自动恢复或跳走
+  // （注意：不清空会导致 lastQuestion 重复显示"已完成"状态，所以清空）
   practiceStore.setListPractices([])
   router.push('/home')
   if (action === 'confirm') {
@@ -626,6 +627,26 @@ watch(listPractices, (newPracticeList) => {
       session.value.answers = saved
     } else {
       groupAnswerOffset.value = 0
+    }
+    return
+  }
+
+  // 防御性修复：listPractices 变空时（用户完成全部练习关闭弹窗后）
+  // 卡 loading 的两个常见场景：
+  //  1) 自适应完成（completeAdaptiveGroup）→ 弹窗关闭 → setListPractices([])
+  //     abilityProfile 存在 → 启动新一轮自适应
+  //  2) 普通练习完成（handlePracticeComplete）→ 弹窗关闭 → setListPractices([])
+  //     abilityProfile=null，但 phase=practice（Generate.vue 调用 setAbilityProfile(null)）
+  //     没有 profile 也不能用 startNewAdaptiveSession → 重新进入 idle + 触发诊断
+  // 这样无论用户从哪种模式完成练习，都不会卡在 loading 状态
+  if (abilityProfile.value && !adaptiveEngine.value) {
+    startNewAdaptiveSession()
+  } else if (phase.value === 'practice' && !abilityProfile.value) {
+    // 普通练习模式完成：重新进入诊断模式
+    practiceStore.setPhase('idle')
+    const questions = generateDiagnosticQuestions()
+    if (questions.length > 0) {
+      practiceStore.startAssessment(questions)
     }
   }
 })

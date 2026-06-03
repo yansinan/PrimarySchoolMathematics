@@ -1,8 +1,9 @@
 import { defineStore } from 'pinia'
 import { EMPTY_PARSED_EQUATION, getCarryType, parseEquation } from '@/utils/equationParser'
 import { saveSession } from '@/utils/database'
+import { LS_KEY_PSM_PROFILE } from '@/constants/storageKeys'
 
-const LS_KEY = 'psm_profile'
+const LS_KEY = LS_KEY_PSM_PROFILE
 
 /** 从 localStorage 恢复持久化的诊断状态 */
 function loadPersistedProfile() {
