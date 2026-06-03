@@ -328,7 +328,11 @@ const handleSubmit = (answer) => {
   // ── / metadata ──
 
   // 按题号去重：如果已答过该题（重试），替换旧记录而非追加
-  const existingIdx = session.value.answers.findIndex(a => a.questionIndex === currentIndex.value)
+  // 注意：questionIndex = groupAnswerOffset + currentIndex（跨组全局唯一）
+  // 必须用 answerEntry.questionIndex 比较，不能用 currentIndex.value
+  // （后者只反映当前组内的题号，会跨组冲突导致后续题号累加失效）
+  const newQuestionIndex = groupAnswerOffset.value + currentIndex.value
+  const existingIdx = session.value.answers.findIndex(a => a.questionIndex === newQuestionIndex)
   const answerEntry = {
     ...currentQuestion.value,
     userAnswer,
@@ -341,7 +345,7 @@ const handleSubmit = (answer) => {
     stepCount,
     operandMin,
     operandMax,
-    questionIndex: groupAnswerOffset.value + currentIndex.value
+    questionIndex: newQuestionIndex
   }
   if (existingIdx >= 0) {
     session.value.answers[existingIdx] = answerEntry
