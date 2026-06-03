@@ -119,11 +119,13 @@ export const usePracticeStore = defineStore('drawer', {
       this.listPractices = questions
       this.resetPracticeSession()
     },
-    /** 完成诊断、记录能力画像 */
+    /** 完成诊断、记录能力画像
+     * 注意：不再清空 session.answers，让"整轮"统计包含诊断+自适应累计
+     * （之前的清空导致完成弹窗只显示最后一组数据，看起来像 bug）
+     */
     completeAssessment(profile) {
       this.abilityProfile = profile
       this.phase = 'practice'
-      this.session.answers = [] // clear assessment answers
       savePersistedProfile(profile, 'practice')
     },
 
