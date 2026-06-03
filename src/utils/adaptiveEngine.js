@@ -22,7 +22,7 @@ import { ACCURACY_THRESHOLDS, SPEED_THRESHOLDS } from '../constants/practice'
 // 数字大小: 小(≤5) → 中(≤9) → 大(≤20) → 两位数小 → 两位数大 → 大数
 // 进退位: 禁止 → 混合(允许但不强制) → 鼓励(倾向)
 //
-const DIFFICULTY_LEVELS = [
+export const DIFFICULTY_LEVELS = [
   // ─── 第一阶段：建立信心 ───
   { label: '起步',       formulaList: [{ min: 1, max: 5, operators: null }, { min: 1, max: 5, operators: [1, 2] }], carry: '3', abdication: '3', resultMax: 10 },
   { label: '个位数巩固',   formulaList: [{ min: 1, max: 6, operators: null }, { min: 1, max: 6, operators: [1, 2] }], carry: '3', abdication: '3', resultMax: 12 },

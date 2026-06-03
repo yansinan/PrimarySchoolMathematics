@@ -2,6 +2,9 @@
 <template>
   <el-container class="practice-view">
     <el-main class="practice-shell">
+      <!-- P2: 用户能力画像卡片（仅在有答题数据时显示） -->
+      <AbilityCard v-if="overallStats.total > 0" />
+
       <el-card class="practice-card" shadow="never" v-if="currentQuestion !== null">
         <div class="practice-card__header">
           <div class="stage-badge" :class="{ 'stage-badge--assessment': isAssessment }">{{ currentStage }}</div>
@@ -97,6 +100,7 @@ import NumberKeypad from '@/components/input/NumberKeypad.vue'
 import OptionButtons from '@/components/input/OptionButtons.vue'
 import PracticeSummaryDialog from '@/components/PracticeSummaryDialog.vue'
 import SelfEvaluationDialog from '@/components/SelfEvaluationDialog.vue'
+import AbilityCard from '@/components/profile/AbilityCard.vue'
 import { getCarryType, parseEquation } from '@/utils/equationParser'
 import { generateDiagnosticQuestions, analyzeAbility, generatePracticeConfig } from '@/utils/diagnostic'
 import { createAdaptiveEngine, getGroupSize, evaluateGroup, getDifficultyLabel } from '@/utils/adaptiveEngine'
@@ -106,6 +110,7 @@ import { decideDisplayMode, updateDisplayStats, createInitialStats } from '@/uti
 import { useAdaptiveSession } from '@/composables/useAdaptiveSession'
 import { usePracticeDialogs } from '@/composables/usePracticeDialogs'
 import { usePracticeSaver } from '@/composables/usePracticeSaver'
+import { useAbilityProfile } from '@/composables/useAbilityProfile'
 import { FEEDBACK_DELAYS, ASSESSMENT_ABORT_WRONG_STREAK, getGroupComment, getCommentByRate } from '@/constants/practice'
 
 import { usePracticeStore } from '@/stores/practice'
@@ -154,6 +159,9 @@ const dialogs = usePracticeDialogs()
 
 // ── 持久化 composable（封装 4 处 saveSessionToDB 调用） ──
 const saver = usePracticeSaver()
+
+// ── 用户能力画像 composable（P2: UI 展示） ──
+const { overallStats } = useAbilityProfile()
 
 /** 自适应引擎状态（注：adaptiveEngine / adaptiveGroupIndex / groupAnswerOffset
  *  / groupCorrectCount / nextLocked 等已抽到 useAdaptiveSession） */
