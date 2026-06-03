@@ -61,5 +61,9 @@ lerna-debug.log*
 .config/fish/*
 .yarnrc
 
-# Build artifacts for GitHub Pages
-docs/
+# Build artifacts for GitHub Pages (but allow design docs)
+docs/assets/
+docs/index.html
+# But allow design docs:
+!docs/DESIGN-*.md
+!docs/CHANGELOG.md
