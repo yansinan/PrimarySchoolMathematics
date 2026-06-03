@@ -109,7 +109,7 @@ import { decideDisplayMode, updateDisplayStats, createInitialStats } from '@/uti
 import { useAdaptiveSession } from '@/composables/useAdaptiveSession'
 import { usePracticeDialogs } from '@/composables/usePracticeDialogs'
 import { usePracticeSaver } from '@/composables/usePracticeSaver'
-import { FEEDBACK_DELAYS, ASSESSMENT_ABORT_WRONG_STREAK, getGroupComment, getCommentByRate } from '@/constants/practice'
+import { FEEDBACK_DELAYS, ASSESSMENT_ABORT_WRONG_STREAK, getGroupComment, getCommentByRate, ASSIST_LEVELS } from '@/constants/practice'
 
 import { usePracticeStore } from '@/stores/practice'
 import { useStatsStore } from '@/stores/stats'
@@ -212,31 +212,58 @@ const inputProps = computed(() => {
   }
 })
 
+/**
+ * 根据当前题目的 inputMode 字段应用 displayMode
+ *
+ * P0 重构（参见 PLAN-v2-roadmap.md）：
+ * - 自适应引擎生成的题目携带 inputMode 字段（在 diversifyBatch 中写入）
+ * - 查 ASSIST_LEVELS 表得到 layout/input，避免旧版硬编码选择题→横式的逻辑
+ * - 普通 Generate.vue 练习题没有 inputMode，回退到 decideDisplayMode 做 per-question 救援
+ *
+ * @returns {void} 直接修改 session.value.displayMode / session.value.currentOptions
+ */
+const applyDisplayModeForCurrentQuestion = () => {
+  const q = currentQuestion.value
+  if (!q) return
+
+  // 自适应题：inputMode 已由 diversifyBatch 写入；查 ASSIST_LEVELS 表得到 layout/input
+  const modeConfig = q.inputMode && ASSIST_LEVELS.find(m => m.key === q.inputMode)
+
+  if (modeConfig) {
+    session.value.displayMode = { layout: modeConfig.layout, input: modeConfig.input }
+    if (modeConfig.input === 'options' && q.options?.length) {
+      // 选择题：拷贝引擎预置的 options 数组
+      session.value.currentOptions = [...q.options]
+    } else {
+      // keypad 题：清空旧选项数组（防止上一题残留）
+      session.value.currentOptions = []
+    }
+    return
+  }
+
+  // 非自适应题（普通 Generate.vue 练习题）：保留 decideDisplayMode 作为 fallback / per-question 救援
+  const mode = decideDisplayMode(q.equation, displayStats.value)
+  session.value.displayMode = mode
+  if (mode.input === 'options') {
+    generateOptions(q.solution)
+  } else {
+    session.value.currentOptions = []
+  }
+}
+
 const initPractice = () => {
   if (!currentQuestion.value) return
 
-  // 只重置题目相关的输入/反馈状态，保留 session.answers 累计
-  // （之前 resetPracticeSession 会清空 answers，导致诊断答案丢失，
-  //   完成弹窗的"整轮"统计不准确）
-  practiceStore.resetQuestionInputState()
+  // 关键：每组开始时清空 session.answers（之前组答题不应留在本组）
+  // 整轮所有组的累计存到 adaptiveAnswers（弹窗用）
+  practiceStore.session.answers = []
+  practiceStore.session.currentIndex = 0
   practiceStore.session.sessionStartTime = Date.now()
 
   displayStats.value = createInitialStats()
 
-  const mode = decideDisplayMode(currentQuestion.value.equation, displayStats.value)
-
-  // 如果题目来自自适应引擎且预置了选项，使用 choice 模式
-  const isAdaptiveChoice = currentQuestion.value.options && currentQuestion.value.options.length > 0
-  if (isAdaptiveChoice) {
-    session.value.displayMode = { layout: 'horizontal', input: 'options' }
-    session.value.currentOptions = [...currentQuestion.value.options]
-  } else {
-    session.value.displayMode = mode
-
-    if (mode.input === 'options') {
-      generateOptions(currentQuestion.value.solution)
-    }
-  }
+  // P0 重构：从 currentQuestion.inputMode 查 ASSIST_LEVELS 表决定 layout/input
+  applyDisplayModeForCurrentQuestion()
 
   // Start the first question timer
   practiceStore.startQuestionTimer()
@@ -435,19 +462,8 @@ const handleNext = () => {
       return
     }
 
-    const mode = decideDisplayMode(currentQuestion.value.equation, displayStats.value)
-
-    // 自适应引擎预置选项
-    const isAdaptiveChoice = currentQuestion.value.options && currentQuestion.value.options.length > 0
-    if (isAdaptiveChoice) {
-      session.value.displayMode = { layout: 'horizontal', input: 'options' }
-      session.value.currentOptions = [...currentQuestion.value.options]
-    } else {
-      session.value.displayMode = mode
-      if (mode.input === 'options') {
-        generateOptions(currentQuestion.value.solution)
-      }
-    }
+    // P0 重构：与 initPractice 共用同一套 displayMode 应用逻辑
+    applyDisplayModeForCurrentQuestion()
     nextLocked.value = false
   } else {
     // ── Session complete — handle based on phase ──
@@ -536,12 +552,15 @@ const completeAdaptiveGroup = async () => {
 
   // ── 实时保存检查点 ──
   // 每组完成后立即保存到数据库，防止中途数据丢失
-  session.value.answers = allAnswers
+  // 关键修复：session.answers 维持"本组"边界（不累加多组）
+  // 整轮所有组的累计存到 adaptiveAnswers
+  practiceStore.adaptiveAnswers = [...practiceStore.adaptiveAnswers, ...allAnswers]
   saver.saveGroupCheckpoint(result.engine.history)
 
   if (result.done) {
     // ── 全部完成 → 显示精美的结束画面 ──
-    const finalAnswers = allAnswers
+    // finalAnswers 现在用 adaptiveAnswers（整轮所有组），不是 allAnswers（最后一组）
+    const finalAnswers = practiceStore.adaptiveAnswers
     const totalCorrect = finalAnswers.filter(a => a.isCorrect).length
     const totalTime = finalAnswers.reduce((s, a) => s + (a.responseTime || 0), 0)
     const totalRate = Math.round((totalCorrect / finalAnswers.length) * 100)

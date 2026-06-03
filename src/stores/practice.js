@@ -33,12 +33,20 @@ export const usePracticeStore = defineStore('drawer', {
     listPractices: [],
     /** @type {'idle'|'assessment'|'practice'} */
     phase: saved?.phase === 'practice' ? 'practice' : 'idle',
-    /** @type {null|{levelScores:Object, weakLevels:string[], allCorrect:boolean}} */
+    /** @type {null|{
+     *   levelScores:Object,
+     *   weakLevels:string[],
+     *   allCorrect:boolean,
+     *   diagAnswers?: Array,
+     *   adaptiveHistory?: Array
+     * }} */
     abilityProfile: saved?.profile || null,
     /** 当前自适应难度索引（-1 表示无自适应进行中）。由 useAdaptiveSession 同步。*/
     currentDifficultyIdx: -1,
     /** 当前自适应组序号（0 表示无） */
     currentGroupIndex: 0,
+    /** 自适应阶段累计答题（按题号追加，跨组不去重） */
+    adaptiveAnswers: [],
     session: {
       currentIndex: 0,
       answers: [],
@@ -124,15 +132,29 @@ export const usePracticeStore = defineStore('drawer', {
       this.resetPracticeSession()
     },
     /** 完成诊断、记录能力画像
-     * 注意：不再清空 session.answers，让"整轮"统计包含诊断+自适应累计
-     * （之前的清空导致完成弹窗只显示最后一组数据，看起来像 bug）
+     * 数据流设计：
+     *  - session.answers 只装"当前/最近一组"题（弹窗用，避免 125% bug）
+     *  - abilityProfile.diagAnswers 保留诊断阶段所有题（AbilityCard 强项/薄弱用）
+     *  - adaptiveAnswers 跨组累加（AbilityCard 整体准确率用）
+     *  - resetPracticeSession 时清空 adaptiveAnswers（新一轮开始）
      */
     completeAssessment(profile) {
-      this.abilityProfile = profile
+      // 把诊断答题（含 level 字段）保存到 abilityProfile.diagAnswers，
+      // 后续强项/薄弱评估从这取，不再依赖 session.answers。
+      const enrichedProfile = {
+        ...profile,
+        diagAnswers: [...this.session.answers],  // 诊断阶段全部答题（含 L1~L5 标签）
+      }
+      this.abilityProfile = enrichedProfile
       this.phase = 'practice'
       this.currentDifficultyIdx = 0  // 诊断完成，从难度 0 开始
       this.currentGroupIndex = 1
-      savePersistedProfile(profile, 'practice')
+      // 清空 session.answers（避免 125% 正确率 bug）
+      this.session.answers = []
+      // 清空 adaptiveAnswers（新一轮自适应开始）
+      this.adaptiveAnswers = []
+      this.session.currentIndex = 0
+      savePersistedProfile(enrichedProfile, 'practice')
     },
     setCurrentDifficulty(idx, groupIdx) {
       this.currentDifficultyIdx = idx
@@ -154,9 +176,10 @@ export const usePracticeStore = defineStore('drawer', {
       this.session.selectedOption = null
       this.session.streak = 0
       this.session.currentOptions = []
+      // P0 重构：竖式为新标准默认值（参见 PLAN-v2-roadmap.md）
       this.session.displayMode = {
-        layout: 'horizontal',
-        input: 'options'
+        layout: 'vertical',
+        input: 'keypad'
       }
       this.session.startTime = null
       this.session.sessionStartTime = null
