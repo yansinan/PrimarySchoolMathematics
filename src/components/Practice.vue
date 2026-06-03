@@ -257,7 +257,7 @@ const initPractice = () => {
   // 关键：每组开始时清空 session.answers（之前组答题不应留在本组）
   // 整轮所有组的累计存到 adaptiveAnswers（弹窗用）
   practiceStore.session.answers = []
-  practiceStore.session.currentIndex = 0
+  // 注意：currentIndex 不在这里重置，由调用方控制（handleNext 之前已 nextQuestion++）
   practiceStore.session.sessionStartTime = Date.now()
 
   displayStats.value = createInitialStats()
