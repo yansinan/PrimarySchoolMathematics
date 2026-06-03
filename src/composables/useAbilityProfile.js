@@ -20,7 +20,6 @@
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { usePracticeStore } from '@/stores/practice'
-import { useAdaptiveSession } from '@/composables/useAdaptiveSession'
 import { DIAG_LEVELS } from '@/utils/diagnostic'
 import { DIFFICULTY_LEVELS, getDifficultyLabel } from '@/utils/adaptiveEngine'
 
