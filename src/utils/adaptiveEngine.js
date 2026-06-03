@@ -361,10 +361,11 @@ export function evaluateGroup(engine, groupAnswers) {
     }
   }
 
-  // 最多 8 组封顶（从 5 放宽），避免大组未答完就被强制结束
-  // 之前 5 组封顶在含 22 题大组的场景下会过早触发：做完 4 组 + 第 5 组 11/22 时
+  // 最多 6 组封顶（从 5 放宽），避免大组未答完就被强制结束
+  // 之前 5 组封顶太严：做完 4 组 + 第 5 组（22 道大组）只答 11 道时
   // next.history.length=5 → done=true，导致用户被强制结束未答完的大组
-  if (next.history.length >= 8) {
+  // 6 组是合理上限，既给大组留空间又不让用户练太久
+  if (next.history.length >= 6) {
     return { engine: next, nextGroupSize: 0, done: true }
   }
 

@@ -212,7 +212,10 @@ const inputProps = computed(() => {
 const initPractice = () => {
   if (!currentQuestion.value) return
 
-  practiceStore.resetPracticeSession()
+  // 只重置题目相关的输入/反馈状态，保留 session.answers 累计
+  // （之前 resetPracticeSession 会清空 answers，导致诊断答案丢失，
+  //   完成弹窗的"整轮"统计不准确）
+  practiceStore.resetQuestionInputState()
   practiceStore.session.sessionStartTime = Date.now()
 
   displayStats.value = createInitialStats()
@@ -623,14 +626,17 @@ const handlePracticeComplete = async () => {
 watch(listPractices, (newPracticeList) => {
   if (newPracticeList.length > 0) {
     const isAdaptiveTransition = adaptiveEngine.value && adaptiveGroupIndex.value > 1
+    // 保存当前 answers 用于组间切换时恢复（避免 initPractice 的 reset 清空）
     const saved = isAdaptiveTransition ? [...session.value.answers] : []
+    // 关键：groupAnswerOffset 必须指向本组开始位置
+    // - 组间切换（adaptive 第 2+ 组）：保留之前组的所有答案，offset = saved 长度
+    // - 第一组（从诊断/普通练习切到自适应）：offset = 当前 answers 长度（含诊断 5 道）
+    groupAnswerOffset.value = saved.length
     practiceStore.resetCurrentIndex()
     digitFocusIdx.value = -1  // 新题重置焦点
     initPractice()
     if (isAdaptiveTransition) {
       session.value.answers = saved
-    } else {
-      groupAnswerOffset.value = 0
     }
     return
   }
