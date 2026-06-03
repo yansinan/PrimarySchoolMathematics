@@ -110,6 +110,7 @@ import { useAdaptiveSession } from '@/composables/useAdaptiveSession'
 import { usePracticeDialogs } from '@/composables/usePracticeDialogs'
 import { usePracticeSaver } from '@/composables/usePracticeSaver'
 import { FEEDBACK_DELAYS, ASSESSMENT_ABORT_WRONG_STREAK, getGroupComment, getCommentByRate, ASSIST_LEVELS } from '@/constants/practice'
+import { TARGET_LIMITS } from '@/utils/formDefaults'
 
 import { usePracticeStore } from '@/stores/practice'
 import { useStatsStore } from '@/stores/stats'
@@ -498,8 +499,8 @@ const handleAssessmentComplete = async () => {
   // 创建自适应引擎，生成第 1 组
   // 从配置中读取练习量范围，未配置时使用默认值
   const snapshot = practiceStore.session.configSnapshot || {}
-  const targetMin = snapshot.targetMin ?? 10
-  const targetMax = snapshot.targetMax ?? 30
+  const targetMin = Math.max(1, snapshot.targetMin ?? 10)
+  const targetMax = Math.min(TARGET_LIMITS.absoluteMax, snapshot.targetMax ?? 30)
   const engine = createAdaptiveEngine(profile, targetMin, targetMax)
   adaptiveEngine.value = engine
   adaptiveGroupIndex.value = 1
@@ -557,7 +558,11 @@ const completeAdaptiveGroup = async () => {
   practiceStore.adaptiveAnswers = [...practiceStore.adaptiveAnswers, ...allAnswers]
   saver.saveGroupCheckpoint(result.engine.history)
 
-  if (result.done) {
+  // ── 强制兜底：累积答题超过硬上限 → 直接结束（不管引擎当前结果如何）──
+  // 修复"configSnapshot 污染导致 targetMax 过大、练习永远不结束"的 bug
+  const forceDone = practiceStore.adaptiveAnswers.length >= TARGET_LIMITS.absoluteMax
+
+  if (result.done || forceDone) {
     // ── 全部完成 → 显示精美的结束画面 ──
     // finalAnswers 现在用 adaptiveAnswers（整轮所有组），不是 allAnswers（最后一组）
     const finalAnswers = practiceStore.adaptiveAnswers
@@ -591,9 +596,15 @@ const completeAdaptiveGroup = async () => {
       startNewAdaptiveSession()
     } else {
       // 'cancel' 或 'close' 都视为查看分析或返回首页
+      // 注意：setListPractices([]) 已在上面执行，watch 触发时 adaptiveEngine 还非 null，
+      // 所以 watch 不会执行 startNewAdaptiveSession。需要在此处显式处理。
+      const shouldRestart = abilityProfile.value && action !== 'cancel'
       adaptiveEngine.value = null
       adaptiveGroupIndex.value = 0
       groupAnswerOffset.value = 0
+      if (shouldRestart) {
+        startNewAdaptiveSession()
+      }
       router.push('/home')
       if (action === 'cancel') {
         setTimeout(() => statsStore.openDrawer(), 300)

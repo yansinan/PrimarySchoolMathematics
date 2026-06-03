@@ -27,6 +27,8 @@ export const TARGET_LIMITS = {
   min: 1,        // targetMin 下限
   max: 100,      // targetMax 上限（防止刷题/单组过大）
   stepMin: 5,    // UI 步进（可选）
+  /** 练习数量绝对硬上限（引擎中强制使用，防止 configSnapshot 污染导致的超量） */
+  absoluteMax: 60,
 }
 
 /**

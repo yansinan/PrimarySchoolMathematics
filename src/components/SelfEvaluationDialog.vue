@@ -103,16 +103,15 @@ const scoreLabels = {
 
 function selectScore(score) {
   selectedScore.value = score
-  // 单击即继续：400ms 后关闭（与原版一致）
-  setTimeout(() => {
-    emit('select', score)
-    emit('update:visible', false)
-  }, 400)
+  // 不再自动关闭，让用户看清楚选择的分数后手动关闭（点外部或按 ESC）
+  // 之前 400ms 自动关闭太快，用户来不及看就被跳走
+  // 选择后通过 @update:model-value → handleUpdate 在关闭时触发 select
 }
 
 function handleUpdate(val) {
-  if (!val) emit('select', selectedScore.value)  // 关闭时返回当前选择（或默认 3）
-  emit('update:visible', val)
+  // 弹窗关闭时（点击外部或按 ESC）才 emit select
+  // 避免 selectScore 和 handleUpdate 双重 emit 导致的 promise 二次解析
+  if (!val) emit('select', selectedScore.value)
 }
 </script>
 
