@@ -453,17 +453,14 @@ const handleNext = () => {
 
   if (!isLastQuestion.value) {
     practiceStore.nextQuestion()
-    practiceStore.resetQuestionInputState()
-    practiceStore.startQuestionTimer()
-    digitFocusIdx.value = -1  // 重置点击焦点
-
+    // 关键修复：调 initPractice（之前仅在 watch 路径调，handleNext 直接跳题时漏调）
+    //  initPractice 重置 session.answers（每组只含本组）、currentIndex=0、displayStats
+    initPractice()
     if (!currentQuestion.value) {
       nextLocked.value = false
       return
     }
-
-    // P0 重构：与 initPractice 共用同一套 displayMode 应用逻辑
-    applyDisplayModeForCurrentQuestion()
+    digitFocusIdx.value = -1  // 重置点击焦点
     nextLocked.value = false
   } else {
     // ── Session complete — handle based on phase ──
