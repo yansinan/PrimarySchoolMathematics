@@ -62,7 +62,8 @@ export const usePracticeStore = defineStore('drawer', {
       // ── Stats / timing extensions ──
       startTime: null,           // current question start time (ms)
       sessionStartTime: null,    // entire session start time (ms)
-      configSnapshot: null       // config snapshot from Generate.vue
+      configSnapshot: null,      // config snapshot from Generate.vue，仅用于数据库统计
+      adaptiveConfig: null       // 自适应引擎专用配置，只在诊断完成时设置，不受 Generate.vue 污染
     }
   }),
   getters: {
@@ -136,22 +137,26 @@ export const usePracticeStore = defineStore('drawer', {
      *  - session.answers 只装"当前/最近一组"题（弹窗用，避免 125% bug）
      *  - abilityProfile.diagAnswers 保留诊断阶段所有题（AbilityCard 强项/薄弱用）
      *  - adaptiveAnswers 跨组累加（AbilityCard 整体准确率用）
-     *  - resetPracticeSession 时清空 adaptiveAnswers（新一轮开始）
+     *  - session.adaptiveConfig 诊断完成时设置，自适应引擎专用，不受 Generate.vue 污染
+     *  - resetPracticeSession 时清空 adaptiveAnswers 和 adaptiveConfig（新一轮开始）
      */
-    completeAssessment(profile) {
-      // 把诊断答题（含 level 字段）保存到 abilityProfile.diagAnswers，
-      // 后续强项/薄弱评估从这取，不再依赖 session.answers。
+    completeAssessment(profile, adaptiveOptions = {}) {
+      // 把诊断答题（含 level 字段）保存到 abilityProfile.diagAnswers
       const enrichedProfile = {
         ...profile,
-        diagAnswers: [...this.session.answers],  // 诊断阶段全部答题（含 L1~L5 标签）
+        diagAnswers: [...this.session.answers],
       }
       this.abilityProfile = enrichedProfile
       this.phase = 'practice'
-      this.currentDifficultyIdx = 0  // 诊断完成，从难度 0 开始
+      this.currentDifficultyIdx = 0
       this.currentGroupIndex = 1
-      // 清空 session.answers（避免 125% 正确率 bug）
+      // 设置自适应专用配置（不受 configSnapshot 污染）
+      this.session.adaptiveConfig = {
+        targetMin: Math.max(1, adaptiveOptions.targetMin ?? 10),
+        targetMax: Math.min(60, adaptiveOptions.targetMax ?? 30),
+      }
+      // 清空 session.answers 和 adaptiveAnswers
       this.session.answers = []
-      // 清空 adaptiveAnswers（新一轮自适应开始）
       this.adaptiveAnswers = []
       this.session.currentIndex = 0
       savePersistedProfile(enrichedProfile, 'practice')

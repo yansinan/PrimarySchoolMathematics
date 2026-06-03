@@ -56,9 +56,12 @@ export function useAdaptiveSession() {
     }
 
     // 基于已有画像生成新一轮练习
-    const snapshot = practiceStore.session.configSnapshot || {}
-    const targetMin = snapshot.targetMin ?? 10
-    const targetMax = snapshot.targetMax ?? 30
+    // 从 adaptiveConfig 读取（由 completeAssessment 设置，不受 Generate.vue 污染）
+    // 退回到 configSnapshot 仅当 adaptiveConfig 不存在时（已接入旧数据的用户）
+    const adaptiveConfig = practiceStore.session.adaptiveConfig || {}
+    const fallbackConfig = practiceStore.session.configSnapshot || {}
+    const targetMin = adaptiveConfig.targetMin ?? fallbackConfig.targetMin ?? 10
+    const targetMax = adaptiveConfig.targetMax ?? fallbackConfig.targetMax ?? 30
     const engine = createAdaptiveEngine(profile, targetMin, targetMax)
     adaptiveEngine.value = engine
     adaptiveGroupIndex.value = 1
