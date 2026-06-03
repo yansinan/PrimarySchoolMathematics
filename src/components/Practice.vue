@@ -83,9 +83,10 @@ import NumberKeypad from '@/components/input/NumberKeypad.vue'
 import OptionButtons from '@/components/input/OptionButtons.vue'
 import { getCarryType, parseEquation } from '@/utils/equationParser'
 import { generateDiagnosticQuestions, analyzeAbility, generatePracticeConfig } from '@/utils/diagnostic'
-import { createAdaptiveEngine, getDifficultyConfig, getGroupSize, evaluateGroup, getDifficultyLabel, diversifyBatch } from '@/utils/adaptiveEngine'
+import { createAdaptiveEngine, getGroupSize, evaluateGroup, getDifficultyLabel } from '@/utils/adaptiveEngine'
 import { formatDuration } from '@/utils/timeFormat'
 import { generateAdaptiveBatch } from '@/utils/adaptiveBatch'
+import { genSummaryHtml } from '@/utils/practiceSummary'
 import { decideDisplayMode, updateDisplayStats, createInitialStats } from '@/utils/displayStrategy'
 import { useAdaptiveSession } from '@/composables/useAdaptiveSession'
 import { FEEDBACK_DELAYS, ASSESSMENT_ABORT_WRONG_STREAK, getGroupComment } from '@/constants/practice'
@@ -94,25 +95,7 @@ import { usePracticeStore } from '@/stores/practice'
 import { useStatsStore } from '@/stores/stats'
 import { storeToRefs } from 'pinia'
 
-// ── 辅助：生成汇总弹窗 HTML ──
-function genSummaryHtml(emoji, comment, totalAns, correctAns, rate, rateColor) {
-  var h = '<div style="text-align:center;padding:4px 0;">'
-  h += '<div style="font-size:52px;margin-bottom:8px;line-height:1.2;">' + emoji + '</div>'
-  h += '<div style="font-size:22px;font-weight:700;color:#1e3c5c;margin-bottom:4px;">练习完成</div>'
-  h += '<div style="font-size:14px;color:#909399;margin-bottom:18px;">' + comment + '</div>'
-  h += '<div style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;">'
-  h += '<div style="background:linear-gradient(135deg,#f0f9ff,#e8f4fd);border-radius:14px;padding:10px 18px;min-width:68px;box-shadow:0 2px 8px rgba(23,110,191,0.06);">'
-  h += '<div style="font-size:24px;font-weight:700;color:#1e3c5c;">' + totalAns + '</div>'
-  h += '<div style="font-size:11px;color:#7f8c8d;margin-top:2px;">共答</div></div>'
-  h += '<div style="background:linear-gradient(135deg,#f0fdf4,#e6f9ed);border-radius:14px;padding:10px 18px;min-width:68px;box-shadow:0 2px 8px rgba(23,110,191,0.06);">'
-  h += '<div style="font-size:24px;font-weight:700;color:#27ae60;">' + correctAns + '</div>'
-  h += '<div style="font-size:11px;color:#7f8c8d;margin-top:2px;">正确</div></div>'
-  h += '<div style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border-radius:14px;padding:10px 18px;min-width:68px;box-shadow:0 2px 8px rgba(23,110,191,0.06);">'
-  h += '<div style="font-size:24px;font-weight:700;color:' + rateColor + ';">' + rate + '%</div>'
-  h += '<div style="font-size:11px;color:#7f8c8d;margin-top:2px;">正确率</div></div></div>'
-  h += '<div style="margin-top:18px;padding-top:14px;border-top:1px solid #edf2f7;font-size:12px;color:#c0c4cc;">继续加油，每天进步一点点 &#127775;</div></div>'
-  return h
-}
+// ── 汇总弹窗 HTML 已抽到 utils/practiceSummary.js ──
 
 const practiceStore = usePracticeStore()
 const statsStore = useStatsStore()
@@ -712,7 +695,7 @@ const handlePracticeComplete = async () => {
   const rateColor = rate >= 80 ? "#27ae60" : rate >= 60 ? "#e6a23c" : "#e74c3c"
 
   try {
-    await ElMessageBox.confirm(genSummaryHtml(emoji, comment, totalAns, correctAns, rate, rateColor),
+    await ElMessageBox.confirm(genSummaryHtml(totalAns, correctAns),
       '🎉 本轮练习汇总',
       {
         confirmButtonText: '📊 分析',
@@ -735,13 +718,7 @@ const handlePracticeComplete = async () => {
       }
     )
   } catch {}
-
-  console.log('练习完成', { total: totalAns, correct: correctAns })
 }
-
-watch(currentQuestion, (newQ) => {
-  console.log('当前题目:', newQ)
-})
 
 watch(listPractices, (newPracticeList) => {
   if (newPracticeList.length > 0) {
