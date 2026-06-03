@@ -13,10 +13,10 @@
 |---|---|---|---|---|
 | **P0** | 4. 输入模式梯度：竖式作标准，重排梯度 | adaptiveEngine / displayStrategy | 中 | 待开始 |
 | **P1** | 6/7/8. 错题强化练习体系 | adaptiveBatch / database | 中-高 | 待开始 |
-| **P2** | 2. 用户画像/等级 UI 展示 | Practice.vue / components | 低 | 待开始 |
+| **P2** | 2. 用户画像/等级 UI 展示 | Practice.vue / components | 低 | ✅ 已完成 |
 | **P3** | 1. 难度等级新增 L2.5 | diagnostic / adaptiveEngine | 中 | 待开始 |
-| P4 | 3. FAST/SLOW/VERY_SLOW +2s | constants/practice.js | 低 | 待开始 |
-| P4 | 9. targetMin/Max 配置校验 | Generate.vue / formValidation | 低 | 待开始 |
+| P4 | 3. FAST/SLOW/VERY_SLOW +2s | constants/practice.js | 低 | ✅ 已完成 |
+| P4 | 9. targetMin/Max 配置校验 | Generate.vue / formValidation | 低 | ✅ 已完成 |
 | **→** | 5. 填空位置变换（同等级最高难度） | adaptiveEngine.js | 中 | P0 完成后启动 |
 
 ---
