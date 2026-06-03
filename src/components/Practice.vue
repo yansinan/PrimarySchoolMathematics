@@ -507,10 +507,11 @@ const handleAssessmentComplete = async () => {
   })
 
   // 创建自适应引擎，生成第 1 组
-  // 从配置中读取练习量范围，使用自适应专用配置（非 configSnapshot，避免污染）
-  const snapshot = practiceStore.session.configSnapshot || {}
-  const targetMin = Math.max(1, snapshot.targetMin ?? 10)
-  const targetMax = Math.min(TARGET_LIMITS.absoluteMax, snapshot.targetMax ?? 30)
+  // 使用固定默认值（targetMin=10, targetMax=30），
+  // 不读 configSnapshot（属于 Generate.vue，已被多次污染）。
+  // completeAssessment 会把这些默认值写入 adaptiveConfig，后续组从那读。
+  const targetMin = 10
+  const targetMax = 30
   const engine = createAdaptiveEngine(profile, targetMin, targetMax)
   adaptiveEngine.value = engine
   adaptiveGroupIndex.value = 1

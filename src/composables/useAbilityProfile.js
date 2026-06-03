@@ -46,6 +46,8 @@ export function useAbilityProfile() {
   const practiceStore = usePracticeStore()
   const { abilityProfile, session, currentDifficultyIdx, currentGroupIndex } = storeToRefs(practiceStore)
 
+  /** 自适应阶段累计答题（从 store 读取 */
+
   // 模拟 adaptiveEngine：基于 store 中的 currentDifficultyIdx
   // 真实 engine 在 useAdaptiveSession 内部（Practice.vue 中），这里只读 store 副本
   const adaptiveEngine = computed(() => {
@@ -53,16 +55,21 @@ export function useAbilityProfile() {
     return { difficultyIdx: currentDifficultyIdx.value }
   })
 
-  /** 整轮准确率（含诊断 + 自适应所有答题） */
+  /** 整轮准确率（诊断阶段 + 自适应阶段累计，含所有已答题） */
   const overallAccuracy = computed(() => {
-    const all = session.value.answers
+    const diag = abilityProfile.value?.diagAnswers || []
+    const adaptive = practiceStore.adaptiveAnswers || []
+    const all = [...diag, ...adaptive]
     if (!all.length) return 0
-    return all.filter(a => a.isCorrect).length / all.length
+    const correct = all.filter(a => a.isCorrect).length
+    return correct / all.length
   })
 
-  /** 整轮答题统计 */
+  /** 整轮答题统计（诊断 + 自适应累计） */
   const overallStats = computed(() => {
-    const all = session.value.answers
+    const diag = abilityProfile.value?.diagAnswers || []
+    const adaptive = practiceStore.adaptiveAnswers || []
+    const all = [...diag, ...adaptive]
     const correct = all.filter(a => a.isCorrect).length
     return {
       total: all.length,
@@ -71,20 +78,21 @@ export function useAbilityProfile() {
     }
   })
 
-  /** 强项（按诊断等级或自适应阶段表现） */
+  /** 强项（按诊断等级评估，数据源用 abilityProfile.diagAnswers） */
   const strongLevels = computed(() => {
-    // 诊断等级评估
+    const diagAnswers = abilityProfile.value?.diagAnswers || session.value.answers
     const diagStrong = DIAG_LEVELS.filter(level => {
-      const stats = evaluateLevel(level.id, session.value.answers)
+      const stats = evaluateLevel(level.id, diagAnswers)
       return stats.hasData && stats.accuracy >= STRONG_THRESHOLD
     })
     return diagStrong
   })
 
-  /** 薄弱项 */
+  /** 薄弱项（数据源同强项） */
   const weakLevels = computed(() => {
+    const diagAnswers = abilityProfile.value?.diagAnswers || session.value.answers
     const diagWeak = DIAG_LEVELS.filter(level => {
-      const stats = evaluateLevel(level.id, session.value.answers)
+      const stats = evaluateLevel(level.id, diagAnswers)
       return stats.hasData && stats.accuracy < WEAK_THRESHOLD
     })
     return diagWeak

@@ -4,7 +4,7 @@
  * 将练习分成小组，根据每组的答题效果自动调整下一组的题型、难度和题量。
  *
  * 三维调节：
- * 1. 输入模式: choice4(最简单) → choice2 → keypad(标准) — 辅助递减
+ * 1. 输入模式: choice2(最简单) → choice4 → vertical_keypad(标准) → horizontal_keypad(掌握验证) — 辅助递减
  * 2. 填空位置: result(标准) → mixed(等式不同位置填空，更难) — 思维挑战递增
  * 3. 难度阶梯: 12级数字/进退位微调
  *
@@ -14,7 +14,14 @@
  */
 
 import { generatePracticeConfig } from './diagnostic'
-import { ACCURACY_THRESHOLDS, SPEED_THRESHOLDS } from '../constants/practice'
+import {
+  ACCURACY_THRESHOLDS,
+  SPEED_THRESHOLDS,
+  ASSIST_LEVELS,
+  MASTERY_CHECK_CONFIG,
+  CONSECUTIVE_GOOD_TO_ADVANCE,
+  MIN_GROUPS_PER_DIMENSION,
+} from '../constants/practice'
 
 // ─── 精细难度分阶（16级，每步变化微小） ───
 //
@@ -49,15 +56,6 @@ export const DIFFICULTY_LEVELS = [
 // 小组题量阶梯（每个速度级别对应一个基数）
 // x 为速度等级(0~4)，公式 y = 2 + (4*x) ± (2*random)
 const GROUP_SIZES = [6, 10, 14, 18, 22]
-
-/* ============================================================
-   输入辅助模式 — 降低认知负荷，帮学生建立信心
-   ============================================================ */
-const ASSIST_LEVELS = [
-  { key: 'keypad',  label: '键盘',   optionCount: 0 },    // 标准：无选项，键盘输入
-  { key: 'choice2', label: '二选一',  optionCount: 2 },    // 2选1
-  { key: 'choice4', label: '四选一',  optionCount: 4 },    // 4选1
-]
 
 /* ============================================================
    填空位置模式
@@ -129,6 +127,11 @@ export function createAdaptiveEngine(profile, targetMin = 10, targetMax = 30) {
     consecutiveBad: 0,
     targetMin,
     targetMax,
+    masteryCheck: {
+      active: false,                // 当前是否处于横式验证中
+      horizontalGood: 0,            // 横式答对累计
+      consecutiveVerticalGood: 0,   // vertical 连续答对计数器
+    },
     lastGroupResult: null,  // 最后生成的组摘要
     lastEvaluation: null,   // 用户自评 1-5
     history: [],
@@ -165,41 +168,59 @@ export function getGroupSize(engine) {
 
 /**
  * 基于引擎的辅助级别，决定单题的输入模式
+ *
+ * 新梯度（从易→难）：
+ *   choice2(二选一) < choice4(四选一) < vertical_keypad(竖式标准) < horizontal_keypad(横式掌握验证)
+ * 概率表：
+ *   assistLevel 0 (标准，无辅助)：vertical_keypad 70% / choice4 20% / choice2 10%
+ *   assistLevel 1 (轻度辅助)：     vertical_keypad 50% / choice4 35% / choice2 15%
+ *   assistLevel 2 (重度辅助)：     vertical_keypad 30% / choice4 50% / choice2 20%
+ * 特殊：masteryCheck.active === true 时强制返回 horizontal_keypad（跳过概率表）
+ * @param {object} engine - 引擎实例
+ * @returns {string} ASSIST_LEVELS 中的 key
  */
 function pickInputMode(engine) {
+  // 横式掌握验证激活 → 强制横式
+  if (engine.masteryCheck && engine.masteryCheck.active) {
+    return 'horizontal_keypad'
+  }
+
   const r = Math.random()
-  const L = engine.assistLevel // 0=keypad, 1=choice2, 2=choice4
+  const L = engine.assistLevel // 0=standard, 1=light, 2=heavy
 
   if (L === 0) {
-    // keypad主导：70% keypad, 20% choice2, 10% choice4
-    if (r < 0.70) return 'keypad'
-    if (r < 0.90) return 'choice2'
-    return 'choice4'
+    // vertical_keypad 主导：70% vertical, 20% choice4, 10% choice2
+    if (r < 0.70) return 'vertical_keypad'
+    if (r < 0.90) return 'choice4'
+    return 'choice2'
   }
   if (L === 1) {
-    // choice2主导：20% keypad, 55% choice2, 25% choice4
-    if (r < 0.20) return 'keypad'
-    if (r < 0.75) return 'choice2'
-    return 'choice4'
+    // 轻度辅助：50% vertical, 35% choice4, 15% choice2
+    if (r < 0.50) return 'vertical_keypad'
+    if (r < 0.85) return 'choice4'
+    return 'choice2'
   }
-  // choice4主导：10% keypad, 25% choice2, 65% choice4
-  if (r < 0.10) return 'keypad'
-  if (r < 0.35) return 'choice2'
-  return 'choice4'
+  // 重度辅助：30% vertical, 50% choice4, 20% choice2
+  if (r < 0.30) return 'vertical_keypad'
+  if (r < 0.80) return 'choice4'
+  return 'choice2'
 }
 
 /**
- * 为一组题生成多样的题目形式
- * @param {Array<{equation:string,solution:number}>} baseEquations 基础算式（均为 result 填空）
+ * 为一组题生成多样的题目形式（仅支持 result 填空）
+ *
+ * 用 ASSIST_LEVELS 表统一决定 layout/input/options，输出中附加 inputMode 字段，
+ * 供 Practice.vue 直接消费（替代原 initPractice 的独立 decideDisplayMode 逻辑）。
+ *
+ * @param {Array<{equation:string,solution:number}>} baseEquations 基础算式
  * @param {object} engine 当前引擎
- * @returns {Array<{equation:string,solution:number,options?:number[]}>}
- */
-/**
- * 为一组题生成多样的题目形式（仅支持 result 填空，避免混合填空的复杂度）
+ * @returns {Array<{equation:string,solution:number,options?:number[],inputMode:string}>}
  */
 export function diversifyBatch(baseEquations, engine) {
   return baseEquations.map(q => {
-    const inputMode = pickInputMode(engine)
+    const modeKey = pickInputMode(engine)
+    // 从 ASSIST_LEVELS 表查 layout/input
+    const modeConfig = ASSIST_LEVELS.find(m => m.key === modeKey) || ASSIST_LEVELS[0]
     let equation = q.equation
     let solution = q.solution
     let options = undefined
@@ -208,14 +229,14 @@ export function diversifyBatch(baseEquations, engine) {
     const eqPart = equation.replace(/\=$/, '').split('=')[0]
     equation = `${eqPart}=__`
 
-    // 选择题选项
-    if (inputMode !== 'keypad') {
-      const count = inputMode === 'choice2' ? 2 : 4
+    // 选择题 → 生成干扰选项
+    if (modeConfig.input === 'options' && modeConfig.optionCount > 0) {
+      const count = modeConfig.optionCount
       const distractors = generateDistractors(solution, count - 1)
       options = [solution, ...distractors].sort(() => Math.random() - 0.5)
     }
 
-    return { ...q, equation, solution, options }
+    return { ...q, equation, solution, options, inputMode: modeKey }
   })
 }
 
@@ -251,7 +272,7 @@ export function evaluateGroup(engine, groupAnswers) {
   const VERY_SLOW = SPEED_THRESHOLDS[3].maxTime  // 14000（慢阈值）
   const GOOD = ACCURACY_THRESHOLDS.good       // 0.80
   const BAD = ACCURACY_THRESHOLDS.bad         // 0.50
-  const MIN_GROUPS = 6  // 同一三维组合至少练 6 组才考虑变动（2026-06-04 从 2 放宽到 6，详见 commit a01e031）
+  // MIN_GROUPS_PER_DIMENSION 从 constants 读（已与实际 6 组对齐，2026-06-04）
 
   // ─── 根据每道题平均用时计算速度等级 x ───
   // 阈值来自 SPEED_THRESHOLDS（已上调 +2s）
@@ -264,12 +285,15 @@ export function evaluateGroup(engine, groupAnswers) {
   }
 
   // ─── 根据表现决定如何调整 ───
+  // 互斥守卫：mastery check 期间冻结 3D 链的"进阶"分支（避免双触发覆盖 blankMode）
+  const masteryActive = engine.masteryCheck && engine.masteryCheck.active
+
   if (accuracy >= GOOD) {
     // 正确率好
     next.consecutiveGood = engine.consecutiveGood + 1
     next.consecutiveBad = 0
 
-    if (next.consecutiveGood >= 3 && next.groupsAtThisLevel >= MIN_GROUPS) {
+    if (!masteryActive && next.consecutiveGood >= CONSECUTIVE_GOOD_TO_ADVANCE && next.groupsAtThisLevel >= MIN_GROUPS_PER_DIMENSION) {
       // 1) 先解除辅助（有辅助 → 减少辅助）
       if (engine.assistLevel > 0) {
         next.assistLevel = engine.assistLevel - 1
@@ -298,6 +322,10 @@ export function evaluateGroup(engine, groupAnswers) {
     // 正确率差
     next.consecutiveBad = engine.consecutiveBad + 1
     next.consecutiveGood = 0
+    // 差组清除 mastery 触发累计，避免"好→差→好"误触发
+    if (next.masteryCheck) {
+      next.masteryCheck.consecutiveVerticalGood = 0
+    }
 
     if (next.consecutiveBad >= 2) {
       // 1) 先增加辅助
@@ -325,6 +353,48 @@ export function evaluateGroup(engine, groupAnswers) {
     next.consecutiveGood = 0
     next.consecutiveBad = 0
     next.groupSizeIdx = Math.max(0, engine.groupSizeIdx + speedAdjust - 1)
+  }
+
+  // ── Mastery check 状态机（横式掌握验证） ──
+  // 独立于上面的 3D 链（assistLevel / blankMode / difficulty），走额外路径。
+  // 只在 standard 模式（assistLevel=0）下触发，横式答对 N 道 = 直接升难度。
+  if (engine.masteryCheck) {
+    if (engine.masteryCheck.active) {
+      // ── 正在横式验证中 ──
+      // 遍历本组中横式答题，通过则累计，失败则取消
+      const hAnswers = groupAnswers.filter(a => a.inputMode === 'horizontal_keypad')
+      for (const a of hAnswers) {
+        if (a.isCorrect) {
+          next.masteryCheck.horizontalGood++
+        } else {
+          // 横式答错 → 验证失败，回 vertical
+          next.masteryCheck.active = false
+          next.masteryCheck.horizontalGood = 0
+          next.masteryCheck.consecutiveVerticalGood = 0
+          break
+        }
+      }
+      // 横式全部答对且达到通过数 → 直接升难度（跳过 blankMode 中间态）
+      if (next.masteryCheck.active && next.masteryCheck.horizontalGood >= MASTERY_CHECK_CONFIG.targetPasses) {
+        next.difficultyIdx = Math.min(DIFFICULTY_LEVELS.length - 1, engine.difficultyIdx + 1)
+        next.blankMode = 'result'
+        next.consecutiveGood = 0
+        next.groupsAtThisLevel = 0
+        next.masteryCheck.active = false
+        next.masteryCheck.horizontalGood = 0
+        next.masteryCheck.consecutiveVerticalGood = 0
+      }
+    } else if (accuracy >= GOOD && engine.assistLevel === MASTERY_CHECK_CONFIG.requiredAssistLevel) {
+      // ── 不在验证中，好的组表现 + 标准模式 → 尝试触发验证 ──
+      next.masteryCheck.consecutiveVerticalGood = (engine.masteryCheck.consecutiveVerticalGood || 0) + 1
+      if (next.masteryCheck.consecutiveVerticalGood >= MASTERY_CHECK_CONFIG.triggerThreshold) {
+        if (Math.random() < MASTERY_CHECK_CONFIG.triggerProbability) {
+          next.masteryCheck.active = true
+          next.masteryCheck.horizontalGood = 0
+        }
+        next.masteryCheck.consecutiveVerticalGood = 0
+      }
+    }
   }
 
   // ── 结束条件：基于 targetMin ~ targetMax ══

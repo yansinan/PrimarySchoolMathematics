@@ -81,7 +81,8 @@ export const ACCURACY_THRESHOLDS = {
 export const ASSESSMENT_ABORT_WRONG_STREAK = 2
 
 // 自适应引擎：同一维度至少练 N 组才考虑变动
-export const MIN_GROUPS_PER_DIMENSION = 2
+// 2026-06-04：从 2 放宽到 6（与引擎实际行为对齐）
+export const MIN_GROUPS_PER_DIMENSION = 6
 
 // 自适应引擎：连续答好多组才升阶
 export const CONSECUTIVE_GOOD_TO_ADVANCE = 3
@@ -120,4 +121,28 @@ export const GROUP_COMMENT_RULES = [
 export function getGroupComment(rate, time, count) {
   const rule = GROUP_COMMENT_RULES.find(r => r.check(rate, time, count))
   return rule ? rule.text : '继续努力！'
+}
+
+/* ============================================================
+   输入辅助模式 — 降低认知负荷，帮学生建立信心
+   ============================================================ */
+// 每个 level 同时携带 layout/input 字段，让 pickInputMode 单点决策后渲染直接消费。
+// 索引顺序=难度顺序：0=最难(无辅助) → 2=最易(最多辅助)。
+// horizontal_keypad 是特殊 key，不进入概率表，仅由 mastery check 触发。
+export const ASSIST_LEVELS = [
+  { key: 'vertical_keypad',   label: '竖式',   layout: 'vertical',   input: 'keypad',  optionCount: 0 },
+  { key: 'choice4',           label: '四选一', layout: 'horizontal', input: 'options', optionCount: 4 },
+  { key: 'choice2',           label: '二选一', layout: 'horizontal', input: 'options', optionCount: 2 },
+  { key: 'horizontal_keypad', label: '横式',   layout: 'horizontal', input: 'keypad',  optionCount: 0 },
+]
+
+/* ============================================================
+   横式掌握验证（Mastery Check）配置
+   ============================================================ */
+// 参数集中在 constants 中，不写死在引擎逻辑里，后续可随时微调。
+export const MASTERY_CHECK_CONFIG = {
+  triggerThreshold: 1,        // vertical 连续答对 N 道后才考虑触发；=1 表示每答对都有机会
+  triggerProbability: 0.5,    // 触发判定时的概率 (0.5 = 50%)
+  targetPasses: 2,            // 横式答对 N 道算通过 → 升难度
+  requiredAssistLevel: 0,     // 仅在 assistLevel=N 下触发 (0 = 标准模式)
 }
