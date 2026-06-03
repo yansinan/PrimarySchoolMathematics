@@ -2,15 +2,17 @@
  * 自适应会话管理 composable
  *
  * 拆分自 Practice.vue 的自适应会话逻辑（Phase 4 渐进式）。
- * 本文件只管理"启动/恢复新一轮"的部分，
- * 其余 handleAssessmentComplete / completeGroup 仍保留在 Practice.vue，
- * 后续 PR 继续迁移。
+ * 当前 PR 抽取了：
+ *  - 响应式状态：adaptiveEngine / adaptiveGroupIndex / groupAnswerOffset / nextLocked
+ *  - 方法：startNewAdaptiveSession
  *
- * 返回：
- *  - startNewAdaptiveSession(): 启动/恢复新一轮自适应练习
+ * handleAssessmentComplete / completeGroup 仍保留在 Practice.vue，
+ * 后续 PR 继续迁移（避免单 PR 改动过大）。
  */
 
+import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
+import { storeToRefs } from 'pinia'
 import { usePracticeStore } from '@/stores/practice'
 import { generateDiagnosticQuestions } from '@/utils/diagnostic'
 import { createAdaptiveEngine, getGroupSize } from '@/utils/adaptiveEngine'
@@ -18,6 +20,21 @@ import { generateAdaptiveBatch } from '@/utils/adaptiveBatch'
 
 export function useAdaptiveSession() {
   const practiceStore = usePracticeStore()
+  const { session } = storeToRefs(practiceStore)
+
+  // ── 响应式状态 ──
+  /** 自适应引擎实例（由 createAdaptiveEngine 创建） */
+  const adaptiveEngine = ref(null)
+  /** 当前组序号（从 1 开始） */
+  const adaptiveGroupIndex = ref(0)
+  /** 当前组之前累积的答案数，用于 ProgressSteps 截取本组 */
+  const groupAnswerOffset = ref(0)
+  /** 当前组内正确题数（只算本组） */
+  const groupCorrectCount = computed(() =>
+    session.value.answers.slice(groupAnswerOffset.value).filter(a => a.isCorrect).length
+  )
+  /** 防止 handleNext 重复调用（choice 模式 + setTimeout 同时触发） */
+  const nextLocked = ref(false)
 
   /**
    * 启动新一轮自适应练习
@@ -42,6 +59,8 @@ export function useAdaptiveSession() {
     const targetMin = snapshot.targetMin ?? 10
     const targetMax = snapshot.targetMax ?? 30
     const engine = createAdaptiveEngine(profile, targetMin, targetMax)
+    adaptiveEngine.value = engine
+    adaptiveGroupIndex.value = 1
 
     practiceStore.resetPracticeSession()
     practiceStore.session.sessionStartTime = Date.now()
@@ -59,5 +78,15 @@ export function useAdaptiveSession() {
     })
   }
 
-  return { startNewAdaptiveSession }
+  return {
+    // 状态（ref）
+    adaptiveEngine,
+    adaptiveGroupIndex,
+    groupAnswerOffset,
+    groupCorrectCount,
+    nextLocked,
+    // 方法
+    startNewAdaptiveSession,
+    // 注：handleAssessmentComplete / completeGroup 仍由 Practice.vue 内部实现
+  }
 }

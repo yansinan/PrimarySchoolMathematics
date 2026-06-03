@@ -68,12 +68,26 @@
       @click="statsStore.toggleDrawer()"
     />
   </el-tooltip>
+
+  <!-- ── 练习汇总弹窗（替代内联 HTML + ElMessageBox） ── -->
+  <PracticeSummaryDialog
+    v-model:visible="dialogs.summaryVisible.value"
+    v-bind="dialogs.summaryProps.value"
+    @select="dialogs.onSummarySelect"
+  />
+
+  <!-- ── 自我评价弹窗（替代 window.__evalSelect 桥） ── -->
+  <SelfEvaluationDialog
+    v-model:visible="dialogs.evalVisible.value"
+    v-bind="dialogs.evalProps.value"
+    @select="dialogs.onEvalSelect"
+  />
 </template>
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { TrendCharts } from '@element-plus/icons-vue'
 
 import ProgressSteps from '@/components/layout/ProgressSteps.vue'
@@ -81,15 +95,17 @@ import HorizontalLayout from '@/components/question/HorizontalLayout.vue'
 import VerticalLayout from '@/components/question/VerticalLayout.vue'
 import NumberKeypad from '@/components/input/NumberKeypad.vue'
 import OptionButtons from '@/components/input/OptionButtons.vue'
+import PracticeSummaryDialog from '@/components/PracticeSummaryDialog.vue'
+import SelfEvaluationDialog from '@/components/SelfEvaluationDialog.vue'
 import { getCarryType, parseEquation } from '@/utils/equationParser'
 import { generateDiagnosticQuestions, analyzeAbility, generatePracticeConfig } from '@/utils/diagnostic'
 import { createAdaptiveEngine, getGroupSize, evaluateGroup, getDifficultyLabel } from '@/utils/adaptiveEngine'
 import { formatDuration } from '@/utils/timeFormat'
 import { generateAdaptiveBatch } from '@/utils/adaptiveBatch'
-import { genSummaryHtml } from '@/utils/practiceSummary'
 import { decideDisplayMode, updateDisplayStats, createInitialStats } from '@/utils/displayStrategy'
 import { useAdaptiveSession } from '@/composables/useAdaptiveSession'
-import { FEEDBACK_DELAYS, ASSESSMENT_ABORT_WRONG_STREAK, getGroupComment } from '@/constants/practice'
+import { usePracticeDialogs } from '@/composables/usePracticeDialogs'
+import { FEEDBACK_DELAYS, ASSESSMENT_ABORT_WRONG_STREAK, getGroupComment, getCommentByRate } from '@/constants/practice'
 
 import { usePracticeStore } from '@/stores/practice'
 import { useStatsStore } from '@/stores/stats'
@@ -119,21 +135,24 @@ const {
 // 注意：原实现是模块级 mutable，改为 ref 化的响应式状态
 const displayStats = ref(createInitialStats())
 
-// ── 自适应会话 composable（Phase 4：仅 startNewAdaptiveSession） ──
-const { startNewAdaptiveSession } = useAdaptiveSession()
+// ── 自适应会话 composable ──
+// 响应式状态：adaptiveEngine / adaptiveGroupIndex / groupAnswerOffset / nextLocked
+// 方法：startNewAdaptiveSession
+// 注：handleAssessmentComplete / completeGroup 仍由本文件内 const 声明实现
+const {
+  adaptiveEngine,
+  adaptiveGroupIndex,
+  groupAnswerOffset,
+  groupCorrectCount,
+  nextLocked,
+  startNewAdaptiveSession,
+} = useAdaptiveSession()
 
-/** 当前组之前累积的答案数，用于 ProgressSteps 截取 */
-const groupAnswerOffset = ref(0)
-/** 当前组内正确题数（只算本组的答案） */
-const groupCorrectCount = computed(() =>
-  session.value.answers.slice(groupAnswerOffset.value).filter(a => a.isCorrect).length
-)
+// ── 弹窗 composable（替代 ElMessageBox 和 window.__evalSelect 桥） ──
+const dialogs = usePracticeDialogs()
 
-/** 自适应引擎状态 */
-const adaptiveEngine = ref(null)
-const adaptiveGroupIndex = ref(0)
-/** 避免 handleNext 重复调用（choice 模式下 下一题按钮 + setTimeout 同时触发）*/
-let nextLocked = false
+/** 自适应引擎状态（注：adaptiveEngine / adaptiveGroupIndex / groupAnswerOffset
+ *  / groupCorrectCount / nextLocked 等已抽到 useAdaptiveSession） */
 
 const currentStage = computed(() => {
   if (isAssessment.value) {
@@ -388,8 +407,8 @@ const handleSubmit = (answer) => {
 }
 
 const handleNext = () => {
-  if (nextLocked) return
-  nextLocked = true
+  if (nextLocked.value) return
+  nextLocked.value = true
 
   if (!isLastQuestion.value) {
     practiceStore.nextQuestion()
@@ -398,7 +417,7 @@ const handleNext = () => {
     digitFocusIdx.value = -1  // 重置点击焦点
 
     if (!currentQuestion.value) {
-      nextLocked = false
+      nextLocked.value = false
       return
     }
 
@@ -415,18 +434,18 @@ const handleNext = () => {
         generateOptions(currentQuestion.value.solution)
       }
     }
-    nextLocked = false
+    nextLocked.value = false
   } else {
     // ── Session complete — handle based on phase ──
     const fn = isAssessment.value ? handleAssessmentComplete :
-               adaptiveEngine.value ? completeAdaptiveGroup : handlePracticeComplete
+               adaptiveEngine.value ? completeGroup : handlePracticeComplete
     // reset nextLocked after the handler runs
     const result = fn()
     // If fn is async, give it a tick to unlock
     if (result instanceof Promise) {
-      result.finally(() => { nextLocked = false })
+      result.finally(() => { nextLocked.value = false })
     } else {
-      nextLocked = false
+      nextLocked.value = false
     }
   }
 }
@@ -476,80 +495,21 @@ const completeAdaptiveGroup = async () => {
   const label = getDifficultyLabel(engine)
   const correctRate = Math.round((groupCorrect / groupAnswers.length) * 100)
 
-  let groupComment = ''
-  if (correctRate === 100 && groupTime < groupAnswers.length * 5000) {
-    groupComment = '又快又准！👍'
-  } else if (correctRate >= 80) {
-    groupComment = '表现不错！💪'
-  } else if (correctRate >= 60) {
-    groupComment = '继续加油！📝'
-  } else {
-    groupComment = '别灰心，再来一组！'
-  }
+  // 小组评语（抽到 constants/practice.getGroupComment）
+  const groupComment = getGroupComment(correctRate, groupTime, groupAnswers.length)
 
-  // ── 强化小组反馈：弹出自我评价对话框 ──
-  let evaluationScore = 3
-
-  const scoreLabels = { 1: '有点难…', 2: '不太轻松', 3: '刚刚好', 4: '挺容易', 5: '太简单' }
-  const emojiList = ['&#128557;', '&#128543;', '&#128522;', '&#128514;', '&#128524;']
-  const facesHtml = [1,2,3,4,5].map(function(s) {
-    return '<div onclick="window.__evalSelect && window.__evalSelect(' + s + ')" data-s="' + s + '"' +
-      ' style="width:52px;height:52px;display:flex;align-items:center;justify-content:center;' +
-      'font-size:30px;cursor:pointer;border-radius:16px;border:2px solid transparent;' +
-      'background:#f7fbff;box-shadow:0 2px 8px rgba(23,110,191,0.06);' +
-      'transition:all .2s ease;"' +
-      ' onmouseover="this.style.background=\'#e9f4ff\';this.style.borderColor=\'#409eff\';this.style.transform=\'scale(1.1)\'"' +
-      ' onmouseout="this.style.background=\'#f7fbff\';this.style.borderColor=\'transparent\';this.style.transform=\'scale(1)\'">' +
-      emojiList[s-1] + '</div>'
-  }).join('')
-  const evalHtml = '' +
-    '<div style="text-align:center;">' +
-      '<div style="font-size:13px;color:#909399;margin-bottom:2px;">第' + groupIdx + '组 · ' + groupCorrect + '/' + groupAnswers.length + ' 正确 · ' + formatDuration(groupTime) + '</div>' +
-      '<div style="font-size:14px;font-weight:600;color:#1e3c5c;margin:10px 0 14px;">感觉怎么样？选一个表情吧</div>' +
-      '<div style="display:flex;justify-content:center;gap:8px;">' + facesHtml + '</div>' +
-      '<div style="margin-top:4px;font-size:11px;color:#c0c4cc;" id="eval-hint">点击表情打分 · 单击即继续</div>' +
-    '</div>'
-
-  // 设置全局选择函数（ElMessageBox 内 HTML 无法直接访问 Vue 作用域）
-  const evalKey = '__eval_result_' + Date.now()
-  window[evalKey] = null
-  window.__evalSelect = (score) => {
-    window[evalKey] = score
-    // 高亮选中
-    document.querySelectorAll('[data-s]').forEach(el => {
-      el.style.borderColor = parseInt(el.getAttribute('data-s')) === score ? '#409eff' : 'transparent'
-      el.style.background = parseInt(el.getAttribute('data-s')) === score ? '#d9ecff' : '#f7fbff'
-    })
-    document.getElementById('eval-hint').textContent = `已选「${scoreLabels[score] || ''}」`
-    // 延时关闭
-    setTimeout(() => {
-      const closeBtn = document.querySelector('.el-message-box__close')
-      if (closeBtn) closeBtn.click()
-    }, 400)
-  }
-
+  // ── 强化小组反馈：弹出自我评价对话框（改用 Vue 组件 + composable） ──
+  // 移除了原来的 window.__evalSelect 全局桥和内联 HTML 拼接
+  let evaluationScore = 3  // 默认 3 = 刚刚好
   try {
-    await ElMessageBox({
-      title: '💬 给这组题点个评',
-      message: evalHtml,
-      dangerouslyUseHTMLString: true,
-      showConfirmButton: false,
-      showCancelButton: false,
-      closeOnClickModal: true,
-      closeOnPressEscape: true,
-      customClass: 'eval-dialog',
-      beforeClose: (action, instance, done) => {
-        const score = window[evalKey]
-        if (score !== null && score !== undefined) {
-          evaluationScore = score
-        }
-        window[evalKey] = null
-        delete window[evalKey]
-        window.__evalSelect = null
-        done()
-      }
+    evaluationScore = await dialogs.showSelfEvaluationDialog({
+      groupIndex: groupIdx,
+      correctCount: groupCorrect,
+      totalCount: groupAnswers.length,
+      timeText: formatDuration(groupTime),
+      comment: groupComment,
     })
-  } catch { /* 关闭或超时 → 默认 3 */ }
+  } catch { /* 弹窗关闭异常 → 保持默认 3 */ }
 
   adaptiveEngine.value.lastEvaluation = evaluationScore
 
@@ -573,94 +533,49 @@ const completeAdaptiveGroup = async () => {
     const totalTime = finalAnswers.reduce((s, a) => s + (a.responseTime || 0), 0)
     const totalRate = Math.round((totalCorrect / finalAnswers.length) * 100)
 
-    // 计算评语
-    let comment = ''
-    let emoji = ''
-    if (totalRate >= 95) {
-      emoji = '🏆'
-      comment = '太棒了！你是数学小达人！'
-    } else if (totalRate >= 80) {
-      emoji = '🌟'
-      comment = '做得很好！继续保持！'
-    } else if (totalRate >= 60) {
-      emoji = '💪'
-      comment = '不错哦！每次练习都会进步！'
-    } else {
-      emoji = '🌱'
-      comment = '没关系，多练几次就能掌握！'
-    }
+    // 计算评语（抽到 constants/practice.getCommentByRate）
+    const { emoji, comment, color: rateColor2 } = getCommentByRate(totalRate)
 
-    const rateColor2 = totalRate >= 80 ? '#27ae60' : totalRate >= 60 ? '#e6a23c' : '#e74c3c'
-
+    // 全部完成 → 弹出练习汇总弹窗（改用 Vue 组件 + composable）
+    let action = 'close'
     try {
-      await ElMessageBox.confirm(
-        '<div style="text-align:center;padding:4px 0;">' +
-          '<div style="font-size:52px;margin-bottom:8px;line-height:1.2;">' + emoji + '</div>' +
-          '<div style="font-size:22px;font-weight:700;color:#1e3c5c;margin-bottom:4px;">练习完成</div>' +
-          '<div style="font-size:14px;color:#909399;margin-bottom:18px;">' + comment + '</div>' +
-          '<div style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;">' +
-            '<div style="background:linear-gradient(135deg,#f0f9ff,#e8f4fd);border-radius:14px;padding:10px 18px;min-width:68px;box-shadow:0 2px 8px rgba(23,110,191,0.06);">' +
-              '<div style="font-size:24px;font-weight:700;color:#1e3c5c;">' + finalAnswers.length + '</div>' +
-              '<div style="font-size:11px;color:#7f8c8d;margin-top:2px;">共答</div>' +
-            '</div>' +
-            '<div style="background:linear-gradient(135deg,#f0fdf4,#e6f9ed);border-radius:14px;padding:10px 18px;min-width:68px;box-shadow:0 2px 8px rgba(23,110,191,0.06);">' +
-              '<div style="font-size:24px;font-weight:700;color:#27ae60;">' + totalCorrect + '</div>' +
-              '<div style="font-size:11px;color:#7f8c8d;margin-top:2px;">正确</div>' +
-            '</div>' +
-            '<div style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border-radius:14px;padding:10px 18px;min-width:68px;box-shadow:0 2px 8px rgba(23,110,191,0.06);">' +
-              '<div style="font-size:24px;font-weight:700;color:' + rateColor2 + ';">' + totalRate + '%</div>' +
-              '<div style="font-size:11px;color:#7f8c8d;margin-top:2px;">正确率</div>' +
-            '</div>' +
-            '<div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);border-radius:14px;padding:10px 18px;min-width:68px;box-shadow:0 2px 8px rgba(23,110,191,0.06);">' +
-              '<div style="font-size:24px;font-weight:700;color:#1e3c5c;">' + formatDuration(totalTime) + '</div>' +
-              '<div style="font-size:11px;color:#7f8c8d;margin-top:2px;">用时</div>' +
-            '</div>' +
-          '</div>' +
-          '<div style="margin-top:18px;padding-top:14px;border-top:1px solid #edf2f7;font-size:12px;color:#c0c4cc;">继续加油，每天进步一点点 &#127775;</div>' +
-        '</div>',
-        '🎉 本轮练习汇总',
-        {
-          confirmButtonText: '开始新一轮',
-          cancelButtonText: '📊 分析',
-          showCancelButton: true,
-          confirmButtonClass: 'el-button--primary',
-          cancelButtonClass: 'el-button--default',
-          dangerouslyUseHTMLString: true,
-          customClass: 'eval-dialog',
-          callback: async (action) => {
-            // ── 先保存到数据库（无论选哪个按钮） ──
-            const evalRecs = ((result.engine && result.engine.history) || [])
-              .filter(h => h.evaluation != null)
-              .map(h => ({ group: h.groupIdx, score: h.evaluation }))
-            practiceStore.session.answers = finalAnswers
-            await practiceStore.saveSessionToDB(evalRecs.length ? JSON.stringify(evalRecs) : null)
-            await statsStore.refreshAll()
-            ElMessage.success({ message: '✅ 练习记录已保存', duration: 2000, offset: 100 })
+      action = await dialogs.showPracticeSummaryDialog({
+        emoji,
+        comment,
+        totalAnswers: finalAnswers.length,
+        correctAnswers: totalCorrect,
+        rate: totalRate,
+        rateColor: rateColor2,
+        totalTime: formatDuration(totalTime),
+        confirmText: '开始新一轮',
+        cancelText: '📊 分析',
+      })
+    } catch { /* 弹窗异常 → action 保持 'close' */ }
 
-            // ── 然后处理导航 ──
-            practiceStore.setListPractices([])
-            if (action === 'confirm') {
-              startNewAdaptiveSession()
-            } else {
-              adaptiveEngine.value = null
-              adaptiveGroupIndex.value = 0
-              groupAnswerOffset.value = 0
-              router.push('/home')
-              setTimeout(() => statsStore.openDrawer(), 300)
-            }
-            nextLocked = false
-          }
-        }
-      )
-    } catch {
-      // 用户关闭弹窗 → 保存并退出
-      const evalRecs = ((result.engine && result.engine.history) || [])
-        .filter(h => h.evaluation != null)
-        .map(h => ({ group: h.groupIdx, score: h.evaluation }))
-      practiceStore.session.answers = finalAnswers
-      await practiceStore.saveSessionToDB(evalRecs.length ? JSON.stringify(evalRecs) : null)
-      await statsStore.refreshAll()
+    // 无论 action 是什么，都先保存到数据库
+    const evalRecs = ((result.engine && result.engine.history) || [])
+      .filter(h => h.evaluation != null)
+      .map(h => ({ group: h.groupIdx, score: h.evaluation }))
+    practiceStore.session.answers = finalAnswers
+    await practiceStore.saveSessionToDB(evalRecs.length ? JSON.stringify(evalRecs) : null)
+    await statsStore.refreshAll()
+    ElMessage.success({ message: '✅ 练习记录已保存', duration: 2000, offset: 100 })
+
+    // 处理导航
+    practiceStore.setListPractices([])
+    if (action === 'confirm') {
+      startNewAdaptiveSession()
+    } else {
+      // 'cancel' 或 'close' 都视为查看分析或返回首页
+      adaptiveEngine.value = null
+      adaptiveGroupIndex.value = 0
+      groupAnswerOffset.value = 0
+      router.push('/home')
+      if (action === 'cancel') {
+        setTimeout(() => statsStore.openDrawer(), 300)
+      }
     }
+    nextLocked.value = false
     return
   }
 
@@ -684,40 +599,30 @@ const handlePracticeComplete = async () => {
   await practiceStore.saveSessionToDB()
   await statsStore.refreshAll()
 
-  // 汇总弹窗
-  let emoji = ''
-  let comment = ''
-  if (rate >= 95) { emoji = '🏆'; comment = '太棒了！你是数学小达人！' }
-  else if (rate >= 80) { emoji = '🌟'; comment = '做得很好！继续保持！' }
-  else if (rate >= 60) { emoji = '💪'; comment = '不错哦！每次练习都会进步！' }
-  else { emoji = '🌱'; comment = '没关系，多练几次就能掌握！' }
+  // 评语（抽到 constants/practice.getCommentByRate）
+  const { emoji, comment, color: rateColor } = getCommentByRate(rate)
 
-  const rateColor = rate >= 80 ? "#27ae60" : rate >= 60 ? "#e6a23c" : "#e74c3c"
-
+  // 弹出汇总弹窗（改用 Vue 组件 + composable）
+  let action = 'close'
   try {
-    await ElMessageBox.confirm(genSummaryHtml(totalAns, correctAns),
-      '🎉 本轮练习汇总',
-      {
-        confirmButtonText: '📊 分析',
-        cancelButtonText: '🏠 首页',
-        showCancelButton: true,
-        confirmButtonClass: 'el-button--primary',
-        cancelButtonClass: 'el-button--default',
-        dangerouslyUseHTMLString: true,
-        customClass: 'eval-dialog',
-        callback: (action) => {
-          // 先清理题目再跳转
-          practiceStore.setListPractices([])
-          if (action === 'confirm') {
-            router.push('/home')
-            setTimeout(() => statsStore.openDrawer(), 300)
-          } else {
-            router.push('/home')
-          }
-        }
-      }
-    )
-  } catch {}
+    action = await dialogs.showPracticeSummaryDialog({
+      emoji,
+      comment,
+      totalAnswers: totalAns,
+      correctAnswers: correctAns,
+      rate,
+      rateColor,
+      confirmText: '📊 分析',
+      cancelText: '🏠 首页',
+    })
+  } catch { /* 弹窗异常 → action 保持 'close' */ }
+
+  // 清理题目再跳转
+  practiceStore.setListPractices([])
+  router.push('/home')
+  if (action === 'confirm') {
+    setTimeout(() => statsStore.openDrawer(), 300)
+  }
 }
 
 watch(listPractices, (newPracticeList) => {
