@@ -35,6 +35,10 @@ export const usePracticeStore = defineStore('drawer', {
     phase: saved?.phase === 'practice' ? 'practice' : 'idle',
     /** @type {null|{levelScores:Object, weakLevels:string[], allCorrect:boolean}} */
     abilityProfile: saved?.profile || null,
+    /** 当前自适应难度索引（-1 表示无自适应进行中）。由 useAdaptiveSession 同步。*/
+    currentDifficultyIdx: -1,
+    /** 当前自适应组序号（0 表示无） */
+    currentGroupIndex: 0,
     session: {
       currentIndex: 0,
       answers: [],
@@ -126,7 +130,17 @@ export const usePracticeStore = defineStore('drawer', {
     completeAssessment(profile) {
       this.abilityProfile = profile
       this.phase = 'practice'
+      this.currentDifficultyIdx = 0  // 诊断完成，从难度 0 开始
+      this.currentGroupIndex = 1
       savePersistedProfile(profile, 'practice')
+    },
+    setCurrentDifficulty(idx, groupIdx) {
+      this.currentDifficultyIdx = idx
+      this.currentGroupIndex = groupIdx
+    },
+    clearAdaptiveEngine() {
+      this.currentDifficultyIdx = -1
+      this.currentGroupIndex = 0
     },
 
     nextQuestion() {

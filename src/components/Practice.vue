@@ -536,6 +536,8 @@ const completeAdaptiveGroup = async () => {
   const result = evaluateGroup(engine, groupAnswers)
   adaptiveEngine.value = result.engine
   adaptiveGroupIndex.value++
+  // 同步到 store（供 AbilityCard 读取）
+  practiceStore.setCurrentDifficulty(result.engine.difficultyIdx, adaptiveGroupIndex.value)
 
   // ── 实时保存检查点 ──
   // 每组完成后立即保存到数据库，防止中途数据丢失

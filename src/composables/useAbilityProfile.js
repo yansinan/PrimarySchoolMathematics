@@ -20,6 +20,7 @@
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { usePracticeStore } from '@/stores/practice'
+import { useAdaptiveSession } from '@/composables/useAdaptiveSession'
 import { DIAG_LEVELS } from '@/utils/diagnostic'
 import { DIFFICULTY_LEVELS, getDifficultyLabel } from '@/utils/adaptiveEngine'
 
@@ -44,7 +45,14 @@ function evaluateLevel(levelId, answers) {
 
 export function useAbilityProfile() {
   const practiceStore = usePracticeStore()
-  const { abilityProfile, session, adaptiveEngine } = storeToRefs(practiceStore)
+  const { abilityProfile, session, currentDifficultyIdx, currentGroupIndex } = storeToRefs(practiceStore)
+
+  // 模拟 adaptiveEngine：基于 store 中的 currentDifficultyIdx
+  // 真实 engine 在 useAdaptiveSession 内部（Practice.vue 中），这里只读 store 副本
+  const adaptiveEngine = computed(() => {
+    if (currentDifficultyIdx.value < 0) return null
+    return { difficultyIdx: currentDifficultyIdx.value }
+  })
 
   /** 整轮准确率（含诊断 + 自适应所有答题） */
   const overallAccuracy = computed(() => {

@@ -13,13 +13,13 @@
     <div class="ability-card__row">
       <div class="ability-card__level">
         <span class="ability-card__label">当前等级</span>
-        <span class="ability-card__value">{{ currentLevelLabel }}</span>
+        <span class="ability-card__value">{{ profile.currentLevelLabel }}</span>
       </div>
       <div class="ability-card__accuracy">
         <span class="ability-card__label">整体准确率</span>
         <span class="ability-card__value" :class="accuracyClass">
-          {{ overallStats.total > 0
-            ? `${Math.round(overallAccuracy * 100)}% (${overallStats.correct}/${overallStats.total})`
+          {{ profile.overallStats.total > 0
+            ? `${Math.round(profile.overallAccuracy * 100)}% (${profile.overallStats.correct}/${profile.overallStats.total})`
             : '—' }}
         </span>
       </div>
@@ -30,7 +30,7 @@
         <div class="ability-card__progress-label">
           <span>等级进度</span>
           <span class="ability-card__progress-text">
-            {{ levelProgress.current }} / {{ levelProgress.total }}
+            {{ profile.levelProgress.current }} / {{ profile.levelProgress.total }}
           </span>
         </div>
         <div class="ability-card__progress-bar">
@@ -43,19 +43,19 @@
     </div>
 
     <div class="ability-card__row ability-card__row--tags">
-      <div v-if="strongLevels.length" class="ability-card__tags ability-card__tags--strong">
+      <div v-if="profile.strongLevels.length" class="ability-card__tags ability-card__tags--strong">
         <span class="ability-card__tags-label">✓ 强项：</span>
-        <span v-for="lv in strongLevels" :key="lv.id" class="ability-card__tag">
+        <span v-for="lv in profile.strongLevels" :key="lv.id" class="ability-card__tag">
           {{ lv.label }}
         </span>
       </div>
-      <div v-if="weakLevels.length" class="ability-card__tags ability-card__tags--weak">
+      <div v-if="profile.weakLevels.length" class="ability-card__tags ability-card__tags--weak">
         <span class="ability-card__tags-label">⚠ 薄弱：</span>
-        <span v-for="lv in weakLevels" :key="lv.id" class="ability-card__tag">
+        <span v-for="lv in profile.weakLevels" :key="lv.id" class="ability-card__tag">
           {{ lv.label }}
         </span>
       </div>
-      <div v-if="!strongLevels.length && !weakLevels.length" class="ability-card__tags ability-card__tags--empty">
+      <div v-if="!profile.strongLevels.length && !profile.weakLevels.length" class="ability-card__tags ability-card__tags--empty">
         <span class="ability-card__tags-label">完成诊断后这里会显示你的强项/薄弱</span>
       </div>
     </div>
@@ -66,23 +66,19 @@
 import { computed } from 'vue'
 import { useAbilityProfile, STRONG_THRESHOLD, WEAK_THRESHOLD } from '@/composables/useAbilityProfile'
 
-const {
-  overallAccuracy,
-  overallStats,
-  strongLevels,
-  weakLevels,
-  currentLevelLabel,
-  levelProgress,
-} = useAbilityProfile()
+// 不解构：直接保留 composable 返回的整个对象
+// 这样在 script setup 中仍可通过 .value 访问 ref
+// 模板中自动解包，所以模板中仍能写 overallStats.total 等
+const profile = useAbilityProfile()
 
 const progressPercent = computed(() => {
-  const { current, total } = levelProgress.value
-  if (total <= 0) return 0
+  const { current, total } = profile.levelProgress.value || {}
+  if (!total || total <= 0) return 0
   return Math.min(100, Math.max(0, (current / total) * 100))
 })
 
 const accuracyClass = computed(() => {
-  const acc = overallAccuracy.value
+  const acc = profile.overallAccuracy.value
   if (acc >= STRONG_THRESHOLD) return 'ability-card__value--strong'
   if (acc < WEAK_THRESHOLD) return 'ability-card__value--weak'
   return 'ability-card__value--mid'

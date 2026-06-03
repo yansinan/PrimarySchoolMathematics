@@ -46,6 +46,7 @@ export function useAdaptiveSession() {
     if (!profile) {
       // 无画像 → 重新评估
       practiceStore.setPhase('idle')
+      practiceStore.clearAdaptiveEngine()
       practiceStore.setListPractices([])
       const questions = generateDiagnosticQuestions()
       if (questions.length > 0) {
@@ -61,6 +62,8 @@ export function useAdaptiveSession() {
     const engine = createAdaptiveEngine(profile, targetMin, targetMax)
     adaptiveEngine.value = engine
     adaptiveGroupIndex.value = 1
+    // 同步到 store（供 AbilityCard 等其他组件读取）
+    practiceStore.setCurrentDifficulty(engine.difficultyIdx, 1)
 
     practiceStore.resetPracticeSession()
     practiceStore.session.sessionStartTime = Date.now()
