@@ -252,25 +252,35 @@ const applyDisplayModeForCurrentQuestion = () => {
   }
 }
 
+/**
+ * 每题重置：重置输入/反馈状态 + 计时器 + displayMode
+ * 注意：不清空 session.answers（只在组边界才清空，见 resetGroupAnswers）
+ * 这样 handleNext 每题调此处时，当前组答案不丢失，
+ * completeAdaptiveGroup 中 allAnswers = [...session.answers] 能拿到完整组数据。
+ */
 const initPractice = () => {
   if (!currentQuestion.value) return
 
-  // 关键：重置输入/反馈状态，确保下一题不显示上一题答案
-  // 包括 feedbackType→null（键盘启用）、currentAnswer→''、selectedOption→null
+  // 重置输入/反馈状态（feedbackType→null、currentAnswer→''、selectedOption→null）
   practiceStore.resetQuestionInputState()
-  // 每组开始时清空 session.answers（之前组答题不应留在本组）
-  // 整轮所有组的累计存到 adaptiveAnswers（弹窗用）
-  practiceStore.session.answers = []
-  // 注意：currentIndex 不在这里重置，由调用方控制（handleNext 之前已 nextQuestion++）
   practiceStore.session.sessionStartTime = Date.now()
 
   displayStats.value = createInitialStats()
 
-  // P0 重构：从 currentQuestion.inputMode 查 ASSIST_LEVELS 表决定 layout/input
+  // 从 currentQuestion.inputMode 查 ASSIST_LEVELS 表决定 layout/input
   applyDisplayModeForCurrentQuestion()
 
   // Start the first question timer
   practiceStore.startQuestionTimer()
+}
+
+/**
+ * 组边界重置：清空当前组 session.answers（之前组答题不应留在本组）
+ * 整轮所有组的累计存到 adaptiveAnswers（弹窗用）
+ * 只在新组开始时调用，不在每题切换时调。
+ */
+const resetGroupAnswers = () => {
+  practiceStore.session.answers = []
 }
 
 const generateOptions = (correct) => {
@@ -615,11 +625,15 @@ const completeAdaptiveGroup = async () => {
   }
 
   // 生成下一组
+  // 先把本轮答案写回 session.answers（确保组边界数据完整），
+  // 再 setListPractices 触发 watch（watch 内 saved = [...session.answers] 拿到完整数据）。
+  // 之前顺序反了（先 setListPractices 再 session.answers = [...allAnswers]），
+  // 导致 watch 捕获到未写完的数据，组边界数据分裂。
   const nextQuestions = generateAdaptiveBatch(result.engine, result.nextGroupSize)
   groupAnswerOffset.value = allAnswers.length
+  session.value.answers = [...allAnswers]
   practiceStore.resetCurrentIndex()
   practiceStore.setListPractices(nextQuestions)
-  session.value.answers = [...allAnswers]
 }
 
 /** 开始新一轮自适应练习（已抽到 composables/useAdaptiveSession.js） */
@@ -666,6 +680,8 @@ watch(listPractices, (newPracticeList) => {
     // 关键：groupAnswerOffset 必须指向本组开始位置
     // - 组间切换（adaptive 第 2+ 组）：保留之前组的所有答案，offset = saved 长度
     // - 第一组（从诊断/普通练习切到自适应）：offset = 当前 answers 长度（含诊断 5 道）
+    // 每组开始时清空上一组答案（之前组答题已通过 adaptiveAnswers 累积）
+    resetGroupAnswers()
     groupAnswerOffset.value = saved.length
     practiceStore.resetCurrentIndex()
     digitFocusIdx.value = -1  // 新题重置焦点
