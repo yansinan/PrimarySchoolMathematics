@@ -2,8 +2,8 @@
 <template>
   <el-container class="practice-view">
     <el-main class="practice-shell">
-      <!-- P2: 用户能力画像卡片（仅在有答题数据时显示） -->
-      <AbilityCard v-if="overallStats.total > 0" />
+      <!-- P2: 用户能力画像卡片（仅在答题时显示弱化版，完整画像在汇总弹窗中） -->
+      <AbilityCard v-if="phase === 'practice' && overallStats.total > 0" compact />
 
       <el-card class="practice-card" shadow="never" v-if="currentQuestion !== null">
         <div class="practice-card__header">
@@ -161,7 +161,10 @@ const dialogs = usePracticeDialogs()
 const saver = usePracticeSaver()
 
 // ── 用户能力画像 composable（P2: UI 展示） ──
-const { overallStats } = useAbilityProfile()
+// 不解构，避免 ref 自动解包导致模板失去响应式
+const profile = useAbilityProfile()
+// 包装为 computed 让 Vue 追踪依赖（template 内的 overallStats.total 才能响应式更新）
+const overallStats = profile.overallStats
 
 /** 自适应引擎状态（注：adaptiveEngine / adaptiveGroupIndex / groupAnswerOffset
  *  / groupCorrectCount / nextLocked 等已抽到 useAdaptiveSession） */

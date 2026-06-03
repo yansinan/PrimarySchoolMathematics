@@ -38,6 +38,11 @@
         </div>
       </div>
 
+      <!-- P2: 汇总时显示完整用户能力画像 -->
+      <div class="summary-ability-card-wrapper">
+        <AbilityCard />
+      </div>
+
       <div class="summary-footer">继续加油，每天进步一点点 ✨</div>
     </div>
 
@@ -67,6 +72,7 @@
  *  - select (action: 'confirm' | 'cancel' | 'close')
  */
 import { computed } from 'vue'
+import AbilityCard from '@/components/profile/AbilityCard.vue'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },

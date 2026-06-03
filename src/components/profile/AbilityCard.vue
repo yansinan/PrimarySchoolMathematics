@@ -2,15 +2,26 @@
   AbilityCard.vue
   用户能力画像展示卡片
   显示：当前等级、整体准确率、强项、薄弱项、等级进度
+  支持 compact 模式：仅显示一行简版（不干扰答题）
 -->
 <template>
-  <div class="ability-card">
-    <div class="ability-card__header">
+  <div class="ability-card" :class="{ 'ability-card--compact': compact }">
+    <div v-if="!compact" class="ability-card__header">
       <span class="ability-card__title">📊 我的数学能力</span>
       <span class="ability-card__subtitle">真实水平 · 持续提升</span>
     </div>
+    <div v-else class="ability-card__compact-row">
+      <span class="ability-card__compact-label">📊</span>
+      <span class="ability-card__compact-level">{{ profile.currentLevelLabel }}</span>
+      <span class="ability-card__compact-divider">·</span>
+      <span class="ability-card__compact-acc" :class="accuracyClass">
+        {{ profile.overallStats.total > 0
+          ? `${Math.round(profile.overallAccuracy * 100)}%`
+          : '—' }}
+      </span>
+    </div>
 
-    <div class="ability-card__row">
+    <div v-if="!compact" class="ability-card__row">
       <div class="ability-card__level">
         <span class="ability-card__label">当前等级</span>
         <span class="ability-card__value">{{ profile.currentLevelLabel }}</span>
@@ -25,7 +36,7 @@
       </div>
     </div>
 
-    <div class="ability-card__row ability-card__row--detail">
+    <div v-if="!compact" class="ability-card__row ability-card__row--detail">
       <div class="ability-card__progress">
         <div class="ability-card__progress-label">
           <span>等级进度</span>
@@ -42,7 +53,7 @@
       </div>
     </div>
 
-    <div class="ability-card__row ability-card__row--tags">
+    <div v-if="!compact" class="ability-card__row ability-card__row--tags">
       <div v-if="profile.strongLevels.length" class="ability-card__tags ability-card__tags--strong">
         <span class="ability-card__tags-label">✓ 强项：</span>
         <span v-for="lv in profile.strongLevels" :key="lv.id" class="ability-card__tag">
@@ -65,6 +76,11 @@
 <script setup>
 import { computed } from 'vue'
 import { useAbilityProfile, STRONG_THRESHOLD, WEAK_THRESHOLD } from '@/composables/useAbilityProfile'
+
+// P2: 弹窗或常驻模式。compact=true: 答题时一行简版；compact=false: 弹窗中完整版
+const props = defineProps({
+  compact: { type: Boolean, default: false },
+})
 
 // 不解构：直接保留 composable 返回的整个对象
 // 这样在 script setup 中仍可通过 .value 访问 ref
@@ -112,6 +128,38 @@ const accuracyClass = computed(() => {
 .ability-card__subtitle {
   font-size: 11px;
   color: #909399;
+}
+
+/* ── Compact 模式：答题时一行简版，不占视觉空间 ── */
+.ability-card--compact {
+  padding: 6px 12px;
+  margin: 8px 16px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.ability-card__compact-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #5b6b7c;
+}
+
+.ability-card__compact-label {
+  font-size: 14px;
+}
+
+.ability-card__compact-level {
+  font-weight: 600;
+  color: #1e3c5c;
+}
+
+.ability-card__compact-divider {
+  color: #c0c4cc;
+}
+
+.ability-card__compact-acc {
+  font-weight: 600;
 }
 
 .ability-card__row {
