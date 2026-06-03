@@ -342,6 +342,8 @@ export function evaluateGroup(engine, groupAnswers) {
   // 原则：准确率高+速度快 → 提前结束（已掌握，够用了）
   //      准确率高但慢 → 继续练提速
   //      准确率低 → 需要更多练习巩固
+  // 注意：recentAllGood / recentAllFast 需要历史 ≥ 2 组，避免在第 1 组就误判
+  // 之前 history.length >= 2 在第 1 组就 false 没问题
   const recentGroups = next.history.slice(-2)
   const recentAllGood = recentGroups.length >= 2 && recentGroups.every(g => g.accuracy >= GOOD)
   const recentAllFast = recentGroups.length >= 2 && recentGroups.every(g => g.avgTime < FAST)
@@ -359,8 +361,10 @@ export function evaluateGroup(engine, groupAnswers) {
     }
   }
 
-  // 最多 5 组封顶
-  if (next.history.length >= 5) {
+  // 最多 8 组封顶（从 5 放宽），避免大组未答完就被强制结束
+  // 之前 5 组封顶在含 22 题大组的场景下会过早触发：做完 4 组 + 第 5 组 11/22 时
+  // next.history.length=5 → done=true，导致用户被强制结束未答完的大组
+  if (next.history.length >= 8) {
     return { engine: next, nextGroupSize: 0, done: true }
   }
 
