@@ -51,6 +51,8 @@ import { download } from "@/utils/download";
 import { generatePaper } from '@/apis/paper';
 import { useAppStore } from '@/stores/app';
 import { createFormulasGenerator } from '@/utils/paperGenerator';
+// 表单默认值（17 字段统一来源）
+import { DEFAULT_FORM_DATA, applyConfigToFormData } from '@/utils/formDefaults';
 // 解算式
 import { EquationSolver } from '@/utils/EquationSolver';
 
@@ -58,34 +60,7 @@ const { proxy } = getCurrentInstance()
 
 const refForm = ref(null)
 
-const formData = ref({
-  step: '1', // 几步运算
-  numberOfFormulas: 30, // 口算题数量
-  whereIsResult: '0', // 题型设置
-  enableBrackets: false, // 启用括号
-  carry: '1',
-  abdication: '1',
-  remainder: '2',
-  solution: '0', // 解题方式
-  numberOfPapers: 3, // 试卷数量
-  numberOfPagerColumns: 3, // 试卷列数
-  paperTitle: '小学生口算题', // 试卷标题
-  paperSubTitle: '姓名：__________ 日期：____月____日 时间：________ 对题：____道', // 试卷副标题
-  // 试题格式
-  // min 算数项最小值 max 算数项最大值 operators 与上一步算数项使用的运算符号
-  // 第一个算数项由于没有上一步故设置为null
-  formulaList: [
-    { min: 1, max: 9, operators: null },
-    { min: 1, max: 9, operators: [1] },
-  ],
-  resultMinValue: 1, // 试题运行结果最小值
-  resultMaxValue: 9, // 试题运行结果最大值
-  generateMode: '1',
-  customFormulaList: [
-    { formula: '' }
-  ],
-  fileNameGeneratedRule: fileNameGeneratedRuleEnum.baseOnTitleAndIndex.key
-})
+const formData = ref({ ...DEFAULT_FORM_DATA })
 
 const configurations = ref([])
 
@@ -96,22 +71,9 @@ onMounted(async () => {
   refreshConfiguration()
   const { data: config } = configurations.value[0] // todo
 
-  formData.value.step = config.step
-  formData.value.numberOfFormulas = config.numberOfFormulas
-  formData.value.whereIsResult = config.whereIsResult
-  formData.value.enableBrackets = config.enableBrackets
-  formData.value.carry = config.carry
-  formData.value.abdication = config.abdication
-  formData.value.remainder = config.remainder
-  formData.value.solution = config.solution
-  formData.value.numberOfPapers = config.numberOfPapers
-  formData.value.numberOfPagerColumns = config.numberOfPagerColumns
-  formData.value.paperTitle = config.paperTitle
-  formData.value.paperSubTitle = config.paperSubTitle
-  formData.value.formulaList = config.formulaList
-  formData.value.resultMinValue = config.resultMinValue
-  formData.value.resultMaxValue = config.resultMaxValue
-  formData.value.fileNameGeneratedRule = config.fileNameGeneratedRule
+  // 用 applyConfigToFormData 替代 17 行手写赋值
+  // Home.vue 旧版不应用自适应阈值（targetMin/Max）
+  applyConfigToFormData(formData.value, config, { includeAdaptive: false })
 })
 
 const paperList = ref([])
@@ -133,22 +95,8 @@ const selectedConfiguration = (configuration) => {
   console.log(configuration);
 
   const { data: config } = configuration
-  formData.value.step = config.step
-  formData.value.numberOfFormulas = config.numberOfFormulas
-  formData.value.whereIsResult = config.whereIsResult
-  formData.value.enableBrackets = config.enableBrackets
-  formData.value.carry = config.carry
-  formData.value.abdication = config.abdication
-  formData.value.remainder = config.remainder
-  formData.value.solution = config.solution
-  formData.value.numberOfPapers = config.numberOfPapers
-  formData.value.numberOfPagerColumns = config.numberOfPagerColumns
-  formData.value.paperTitle = config.paperTitle
-  formData.value.paperSubTitle = config.paperSubTitle
-  formData.value.formulaList = config.formulaList
-  formData.value.resultMinValue = config.resultMinValue
-  formData.value.resultMaxValue = config.resultMaxValue
-  formData.value.fileNameGeneratedRule = config.fileNameGeneratedRule
+  // 不含自适应阈值（Home.vue 旧版就没 targetMin/Max）
+  applyConfigToFormData(formData.value, config, { includeAdaptive: false })
 }
 
 const buttonLoading = ref(false)

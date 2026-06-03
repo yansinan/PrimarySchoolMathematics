@@ -1,4 +1,4 @@
-import { fileNameGeneratedRuleEnum } from "./enum"
+import { DEFAULT_CONFIG_ROW } from "./formDefaults"
 
 
 export default class {
@@ -17,6 +17,7 @@ export default class {
     localStorage.setItem(this.key, JSON.stringify(configurations))
   }
 
+  /** @deprecated 空方法，无任何调用 → 后续 PR 删除 */
   load() { }
 
   loadAll() {
@@ -24,36 +25,8 @@ export default class {
     if (configurations) {
       return configurations
     } else {
-      const initConfiguration = [{
-        id: '1',
-        name: '默认',
-        data: {
-          step: '1', // 几步运算
-          numberOfFormulas: 30, // 口算题数量
-          whereIsResult: '0', // 题型设置
-          enableBrackets: false, // 启用括号
-          carry: '1',
-          abdication: '1',
-          remainder: '2',
-          solution: '0', // 解题方式
-          numberOfPapers: 1, // 试卷数量
-          numberOfPagerColumns: 3, // 试卷列数
-          paperTitle: '小学生口算题', // 试卷标题
-          paperSubTitle: '姓名：__________ 日期：____月____日 时间：________ 对题：____道', // 试卷副标题
-          // 试题格式
-          // min 算数项最小值 max 算数项最大值 operators 与上一步算数项使用的运算符号
-          // 第一个算数项由于没有上一步故设置为null
-          formulaList: [
-            { min: 1, max: 9, operators: null },
-            { min: 1, max: 9, operators: [1] },
-          ],
-          resultMinValue: 1, // 试题运行结果最小值
-          resultMaxValue: 9, // 试题运行结果最大值
-          targetMin: 10, // 自适应最少答题数
-          targetMax: 30, // 自适应最多答题数
-          fileNameGeneratedRule: fileNameGeneratedRuleEnum.baseOnTitleAndIndex.key
-        }
-      }]
+      // 兜底配置统一从 formDefaults.DEFAULT_CONFIG_ROW 派生
+      const initConfiguration = [DEFAULT_CONFIG_ROW]
       this.#setConfigurations(initConfiguration)
       return initConfiguration
     }
