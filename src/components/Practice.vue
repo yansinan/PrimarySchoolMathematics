@@ -2,8 +2,8 @@
 <template>
   <el-container class="practice-view">
     <el-main class="practice-shell">
-      <!-- P2: 用户能力画像卡片（仅在答题时显示弱化版，完整画像在汇总弹窗中） -->
-      <AbilityCard v-if="phase === 'practice' && overallStats.total > 0" compact />
+      <!-- P2: 用户能力画像仅在汇总弹窗中显示完整版（PracticeSummaryDialog），
+           答题时不再常驻以避免分散注意力 -->
 
       <el-card class="practice-card" shadow="never" v-if="currentQuestion !== null">
         <div class="practice-card__header">
@@ -100,7 +100,6 @@ import NumberKeypad from '@/components/input/NumberKeypad.vue'
 import OptionButtons from '@/components/input/OptionButtons.vue'
 import PracticeSummaryDialog from '@/components/PracticeSummaryDialog.vue'
 import SelfEvaluationDialog from '@/components/SelfEvaluationDialog.vue'
-import AbilityCard from '@/components/profile/AbilityCard.vue'
 import { getCarryType, parseEquation } from '@/utils/equationParser'
 import { generateDiagnosticQuestions, analyzeAbility, generatePracticeConfig } from '@/utils/diagnostic'
 import { createAdaptiveEngine, getGroupSize, evaluateGroup, getDifficultyLabel } from '@/utils/adaptiveEngine'
@@ -110,7 +109,6 @@ import { decideDisplayMode, updateDisplayStats, createInitialStats } from '@/uti
 import { useAdaptiveSession } from '@/composables/useAdaptiveSession'
 import { usePracticeDialogs } from '@/composables/usePracticeDialogs'
 import { usePracticeSaver } from '@/composables/usePracticeSaver'
-import { useAbilityProfile } from '@/composables/useAbilityProfile'
 import { FEEDBACK_DELAYS, ASSESSMENT_ABORT_WRONG_STREAK, getGroupComment, getCommentByRate } from '@/constants/practice'
 
 import { usePracticeStore } from '@/stores/practice'
@@ -159,12 +157,6 @@ const dialogs = usePracticeDialogs()
 
 // ── 持久化 composable（封装 4 处 saveSessionToDB 调用） ──
 const saver = usePracticeSaver()
-
-// ── 用户能力画像 composable（P2: UI 展示） ──
-// 不解构，避免 ref 自动解包导致模板失去响应式
-const profile = useAbilityProfile()
-// 包装为 computed 让 Vue 追踪依赖（template 内的 overallStats.total 才能响应式更新）
-const overallStats = profile.overallStats
 
 /** 自适应引擎状态（注：adaptiveEngine / adaptiveGroupIndex / groupAnswerOffset
  *  / groupCorrectCount / nextLocked 等已抽到 useAdaptiveSession） */
@@ -539,7 +531,7 @@ const completeAdaptiveGroup = async () => {
   const result = evaluateGroup(engine, groupAnswers)
   adaptiveEngine.value = result.engine
   adaptiveGroupIndex.value++
-  // 同步到 store（供 AbilityCard 读取）
+  // 同步到 store（供 PracticeSummaryDialog 内嵌的 AbilityCard 读取）
   practiceStore.setCurrentDifficulty(result.engine.difficultyIdx, adaptiveGroupIndex.value)
 
   // ── 实时保存检查点 ──
