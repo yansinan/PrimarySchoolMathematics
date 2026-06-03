@@ -67,22 +67,48 @@
       </ElRow>
     </ElFormItem>
 
-    <ElFormItem label="自适应练习量">
+    <ElFormItem label="自适应练习量" :error="targetRangeError">
       <ElRow :gutter="12">
         <ElCol :xs="12" :sm="8">
-          <ElInput v-model.number="formData.targetMin" size="default" placeholder="最少">
-            <template #prepend>最少</template>
-            <template #append>题</template>
-          </ElInput>
+          <ElFormItem
+            prop="targetMin"
+            :rules="targetMinRule"
+            :error="targetMinError"
+          >
+            <ElInput
+              v-model.number="formData.targetMin"
+              size="default"
+              placeholder="最少"
+              :class="{ 'is-error': !!targetMinError }"
+              @blur="runValidation"
+            >
+              <template #prepend>最少</template>
+              <template #append>题</template>
+            </ElInput>
+          </ElFormItem>
         </ElCol>
         <ElCol :xs="12" :sm="8">
-          <ElInput v-model.number="formData.targetMax" size="default" placeholder="最多">
-            <template #prepend>最多</template>
-            <template #append>题</template>
-          </ElInput>
+          <ElFormItem
+            prop="targetMax"
+            :rules="targetMaxRule"
+            :error="targetMaxError"
+          >
+            <ElInput
+              v-model.number="formData.targetMax"
+              size="default"
+              placeholder="最多"
+              :class="{ 'is-error': !!targetMaxError }"
+              @blur="runValidation"
+            >
+              <template #prepend>最多</template>
+              <template #append>题</template>
+            </ElInput>
+          </ElFormItem>
         </ElCol>
         <ElCol :xs="24" :sm="8" class="target-hint-col">
-          <span class="target-hint">答好可提前结束</span>
+          <span class="target-hint" :class="{ 'target-hint--error': !!targetRangeError }">
+            {{ targetRangeError || '答好可提前结束' }}
+          </span>
         </ElCol>
       </ElRow>
     </ElFormItem>
@@ -98,11 +124,12 @@
 </template>
 
 <script setup>
-import { computed, ref, unref, toRaw, getCurrentInstance } from 'vue';
+import { computed, ref, unref, toRaw, getCurrentInstance, watch } from 'vue';
 import { v4 as uuidv4 } from "uuid";
 import { cloneDeep } from "lodash";
 import ConfigStorage from '@/utils/configStorage';
 import { OptionsDrawer } from "@/components/home";
+import { validateTargetRange, TARGET_LIMITS } from '@/utils/formDefaults';
 
 const { proxy } = getCurrentInstance()
 
@@ -119,7 +146,7 @@ const props = defineProps({
   configurations: Array
 })
 
-const emit = defineEmits(['update:formulasFormData', 'update:papers', 'add-configuration'])
+const emit = defineEmits(['update:formulasFormData', 'update:papers', 'add-configuration', 'valid-change'])
 
 const formData = computed({
   get() {
@@ -152,6 +179,93 @@ const requiredRule = [
 const requiredNumberRule = [
   { required: true, message: '此项为必填项' }, { type: 'number', message: '此项必须为数字' }
 ]
+
+/* ============================================================
+   targetMin/Max 实时校验（P4-2: 配置面板校验）
+   ============================================================ */
+// 校验失败时分别显示在 targetMin / targetMax 输入框下方
+const targetMinError = ref('')
+const targetMaxError = ref('')
+const targetRangeError = ref('')  // 整体错误（区间关系）
+
+/**
+ * Element Plus rules 校验器：targetMin >= 1 且为整数
+ */
+const targetMinRule = [
+  { required: true, message: '请填写最少答题数', trigger: 'blur' },
+  { type: 'number', message: '请填写数字', trigger: 'blur' },
+  {
+    validator: (rule, value, callback) => {
+      if (value < TARGET_LIMITS.min) {
+        callback(new Error(`不能少于 ${TARGET_LIMITS.min} 题`))
+      } else if (!Number.isInteger(value)) {
+        callback(new Error('请填写整数'))
+      } else {
+        callback()
+      }
+    },
+    trigger: 'blur',
+  },
+]
+
+/**
+ * Element Plus rules 校验器：targetMax <= 100 且为整数
+ */
+const targetMaxRule = [
+  { required: true, message: '请填写最多答题数', trigger: 'blur' },
+  { type: 'number', message: '请填写数字', trigger: 'blur' },
+  {
+    validator: (rule, value, callback) => {
+      if (value > TARGET_LIMITS.max) {
+        callback(new Error(`不能多于 ${TARGET_LIMITS.max} 题`))
+      } else if (!Number.isInteger(value)) {
+        callback(new Error('请填写整数'))
+      } else {
+        callback()
+      }
+    },
+    trigger: 'blur',
+  },
+]
+
+/**
+ * 实时校验（focus/blur/输入时）— 复用 utils/formDefaults.validateTargetRange
+ * 同时设置 targetMinError / targetMaxError / targetRangeError
+ * 重命名为 runValidation 以避免与 import 的 validateTargetRange 同名
+ */
+function runValidation() {
+  const result = validateTargetRange(formData.value.targetMin, formData.value.targetMax)
+  if (result.valid) {
+    targetMinError.value = ''
+    targetMaxError.value = ''
+    targetRangeError.value = ''
+  } else {
+    // 字段级错误优先显示在对应输入框
+    if (result.field === 'targetMin' || result.field === 'both') {
+      targetMinError.value = (formData.value.targetMin < TARGET_LIMITS.min) ? result.message : ''
+    }
+    if (result.field === 'targetMax' || result.field === 'both') {
+      targetMaxError.value = (formData.value.targetMax > TARGET_LIMITS.max) ? result.message : ''
+    }
+    // 区间关系错误显示在提示栏
+    if (result.field === 'both' && formData.value.targetMin >= TARGET_LIMITS.min && formData.value.targetMax <= TARGET_LIMITS.max) {
+      targetRangeError.value = result.message
+    } else {
+      targetRangeError.value = ''
+    }
+  }
+}
+
+// 监听输入实时校验（输入完失焦时也通过 @blur 触发）
+// 同时向上 emit valid-change 事件，让父组件禁用"生成"按钮
+watch(
+  () => [formData.value.targetMin, formData.value.targetMax],
+  () => {
+    runValidation()
+    emit('valid-change', !targetMinError.value && !targetMaxError.value && !targetRangeError.value)
+  },
+  { immediate: true }
+)
 
 
 const stepOptions = computed(() => {

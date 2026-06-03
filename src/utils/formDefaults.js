@@ -8,14 +8,80 @@
  *  - DEFAULT_FORM_DATA: 表单初始值（17 个字段）
  *  - DEFAULT_CONFIG_ROW: 配置存储中的默认行（带 targetMin/Max）
  *  - applyConfigToFormData(formData, config): 把选中配置应用到表单
+ *  - validateTargetRange(targetMin, targetMax): 校验自适应练习量范围
  *
  * 调用方：
  *  - Home.vue: formData 初值 + selectedConfiguration
  *  - Generate.vue: formData 初值 + selectedConfiguration + onMounted 加载
  *  - configStorage.js: loadAll() 的兜底配置
+ *  - AutoGenerateFormulas.vue: validateTargetRange 实时校验
  */
 
 import { fileNameGeneratedRuleEnum } from './enum'
+
+/* ============================================================
+   targetMin/Max 校验（P4-2: 配置面板校验）
+   ============================================================ */
+// 自适应练习量边界常量
+export const TARGET_LIMITS = {
+  min: 1,        // targetMin 下限
+  max: 100,      // targetMax 上限（防止刷题/单组过大）
+  stepMin: 5,    // UI 步进（可选）
+}
+
+/**
+ * 校验自适应练习量范围
+ * @param {number} targetMin - 最少答题数
+ * @param {number} targetMax - 最多答题数
+ * @returns {{ valid: boolean, message?: string, field?: 'targetMin'|'targetMax'|'both' }}
+ *
+ * 规则：
+ *  - targetMin >= 1
+ *  - targetMax <= 100
+ *  - targetMin <= targetMax
+ *  - targetMin/targetMax 都必须是正整数
+ */
+export function validateTargetRange(targetMin, targetMax) {
+  // 类型校验
+  if (typeof targetMin !== 'number' || isNaN(targetMin) ||
+      typeof targetMax !== 'number' || isNaN(targetMax)) {
+    return { valid: false, message: '请输入数字', field: 'both' }
+  }
+
+  // 整数校验
+  if (!Number.isInteger(targetMin) || !Number.isInteger(targetMax)) {
+    return { valid: false, message: '请输入整数', field: 'both' }
+  }
+
+  // 下限校验
+  if (targetMin < TARGET_LIMITS.min) {
+    return {
+      valid: false,
+      message: `最少答题数不能少于 ${TARGET_LIMITS.min}`,
+      field: 'targetMin',
+    }
+  }
+
+  // 上限校验
+  if (targetMax > TARGET_LIMITS.max) {
+    return {
+      valid: false,
+      message: `最多答题数不能多于 ${TARGET_LIMITS.max}`,
+      field: 'targetMax',
+    }
+  }
+
+  // 区间校验
+  if (targetMin > targetMax) {
+    return {
+      valid: false,
+      message: '最少答题数不能多于最多答题数',
+      field: 'both',
+    }
+  }
+
+  return { valid: true }
+}
 
 /** 标准表单初始值（17 字段） */
 export const DEFAULT_FORM_DATA = {

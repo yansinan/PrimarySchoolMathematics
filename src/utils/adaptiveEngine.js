@@ -14,6 +14,7 @@
  */
 
 import { generatePracticeConfig } from './diagnostic'
+import { ACCURACY_THRESHOLDS, SPEED_THRESHOLDS } from '../constants/practice'
 
 // ─── 精细难度分阶（16级，每步变化微小） ───
 //
@@ -244,21 +245,23 @@ export function evaluateGroup(engine, groupAnswers) {
     }],
   }
 
-  const FAST = 4000        // 反应快（更严格）
-  const SLOW = 10000       // 反应慢
-  const VERY_SLOW = 16000  // 非常慢
-  const GOOD = 0.80
-  const BAD = 0.50
-  const MIN_GROUPS = 2  // 同一三维组合至少练 2 组才考虑变动
+  // 阈值改用 constants/practice.js 中的常量（2026-06-04 整体上调 +2s）
+  const FAST = SPEED_THRESHOLDS[0].maxTime   // 5000（极快阈值）
+  const SLOW = SPEED_THRESHOLDS[2].maxTime   // 10000（正常阈值，作为"反应慢"分界）
+  const VERY_SLOW = SPEED_THRESHOLDS[3].maxTime  // 14000（慢阈值）
+  const GOOD = ACCURACY_THRESHOLDS.good       // 0.80
+  const BAD = ACCURACY_THRESHOLDS.bad         // 0.50
+  const MIN_GROUPS = 6  // 同一三维组合至少练 6 组才考虑变动（2026-06-04 从 2 放宽到 6，详见 commit a01e031）
 
   // ─── 根据每道题平均用时计算速度等级 x ───
-  // x 范围 0~4，用于 getGroupSize 公式
+  // 阈值来自 SPEED_THRESHOLDS（已上调 +2s）
   let speedAdjust = 0
-  if (avgTime < 3000) speedAdjust = 2         // 极快 +2
-  else if (avgTime < 5000) speedAdjust = 1     // 快 +1
-  else if (avgTime < 8000) speedAdjust = 0     // 正常 0
-  else if (avgTime < 12000) speedAdjust = -1   // 慢 -1
-  else speedAdjust = -2                         // 极慢 -2
+  for (const t of SPEED_THRESHOLDS) {
+    if (avgTime < t.maxTime) {
+      speedAdjust = t.adjust
+      break
+    }
+  }
 
   // ─── 根据表现决定如何调整 ───
   if (accuracy >= GOOD) {

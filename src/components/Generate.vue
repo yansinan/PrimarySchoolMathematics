@@ -43,7 +43,7 @@
           <!-- 自动生成 -->
           <template v-if="formData.generateMode == '1'">
             <AutoGenerateFormulas v-model:formulas-form-data="formData" v-model:papers="paperList" :ref-form="refForm"
-              :configurations="configurations" @add-configuration="addConfiguration" />
+              :configurations="configurations" @add-configuration="addConfiguration" @valid-change="(v) => formValid = v" />
           </template>
           <!-- 手动输入 -->
           <template v-if="formData.generateMode == '2'">
@@ -64,7 +64,7 @@
             @click="generate" class="action-btn">
             <el-icon><Document /></el-icon> 生成卷子
           </el-button>
-          <el-button :disabled="!paperList.length" type="primary" size="large" :loading="buttonLoading"
+          <el-button :disabled="!paperList.length || !formValid" type="primary" size="large" :loading="buttonLoading"
             @click="generateFormulas" class="action-btn action-btn--primary">
             <el-icon><CaretRight /></el-icon> 开始练习
           </el-button>
@@ -98,6 +98,9 @@ import {
 } from '@element-plus/icons-vue'
 // 界面操作参数
 const practiceStore = usePracticeStore()
+
+// P4-2: targetMin/Max 校验状态（从 AutoGenerateFormulas 接收）
+const formValid = ref(true)
 
 const refForm = ref(null)
 

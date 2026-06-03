@@ -55,11 +55,13 @@ export function getCommentByRate(rate) {
    ============================================================ */
 // 单题平均用时对应 speedAdjust 偏移量
 // speedAdjust 用于调整下一组的题数（getGroupSize 公式）
+// 2026-06-04 调整：整体阈值上调 +2s（原 3000/5000/8000/12000/Infinity）
+// 原因：原阈值偏严，难度提升概率低；上调后更能让学生"够得到"进阶。
 export const SPEED_THRESHOLDS = [
-  { maxTime: 3000,  adjust: 2,  label: '极快' },
-  { maxTime: 5000,  adjust: 1,  label: '快'   },
-  { maxTime: 8000,  adjust: 0,  label: '正常' },
-  { maxTime: 12000, adjust: -1, label: '慢'   },
+  { maxTime: 5000,  adjust: 2,  label: '极快' },        // 原 3000 → 5000
+  { maxTime: 7000,  adjust: 1,  label: '快'   },        // 原 5000 → 7000
+  { maxTime: 10000, adjust: 0,  label: '正常' },        // 原 8000 → 10000
+  { maxTime: 14000, adjust: -1, label: '慢'   },        // 原 12000 → 14000
   { maxTime: Infinity, adjust: -2, label: '极慢' },
 ]
 
