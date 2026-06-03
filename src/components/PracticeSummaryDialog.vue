@@ -38,8 +38,9 @@
         </div>
       </div>
 
-      <!-- P2: 汇总时显示完整用户能力画像 -->
-      <div class="summary-ability-card-wrapper">
+      <!-- P2: 汇总时显示完整用户能力画像
+           注意：用 v-if 保护，防止 AbilityCard 渲染异常导致整个弹窗无法挂载 -->
+      <div v-if="overallStats.total > 0" class="summary-ability-card-wrapper">
         <AbilityCard />
       </div>
 
@@ -73,6 +74,10 @@
  */
 import { computed } from 'vue'
 import AbilityCard from '@/components/profile/AbilityCard.vue'
+import { useAbilityProfile } from '@/composables/useAbilityProfile'
+
+const profile = useAbilityProfile()
+const overallStats = profile.overallStats
 
 const props = defineProps({
   visible: { type: Boolean, default: false },

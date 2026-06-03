@@ -59,6 +59,14 @@ export function usePracticeDialogs() {
     summaryVisible.value = true
     return new Promise((resolve) => {
       summaryResolver = resolve
+      // 安全兜底：弹窗超时仍未响应则自动关闭（防止 AbilityCard 渲染异常导致永久挂起）
+      setTimeout(() => {
+        if (summaryResolver) {
+          resolve('close')
+          summaryResolver = null
+          summaryVisible.value = false
+        }
+      }, 10000)
     })
   }
 
