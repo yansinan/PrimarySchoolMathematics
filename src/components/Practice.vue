@@ -105,6 +105,7 @@ import { generateAdaptiveBatch } from '@/utils/adaptiveBatch'
 import { decideDisplayMode, updateDisplayStats, createInitialStats } from '@/utils/displayStrategy'
 import { useAdaptiveSession } from '@/composables/useAdaptiveSession'
 import { usePracticeDialogs } from '@/composables/usePracticeDialogs'
+import { usePracticeSaver } from '@/composables/usePracticeSaver'
 import { FEEDBACK_DELAYS, ASSESSMENT_ABORT_WRONG_STREAK, getGroupComment, getCommentByRate } from '@/constants/practice'
 
 import { usePracticeStore } from '@/stores/practice'
@@ -150,6 +151,9 @@ const {
 
 // ── 弹窗 composable（替代 ElMessageBox 和 window.__evalSelect 桥） ──
 const dialogs = usePracticeDialogs()
+
+// ── 持久化 composable（封装 4 处 saveSessionToDB 调用） ──
+const saver = usePracticeSaver()
 
 /** 自适应引擎状态（注：adaptiveEngine / adaptiveGroupIndex / groupAnswerOffset
  *  / groupCorrectCount / nextLocked 等已抽到 useAdaptiveSession） */
@@ -348,7 +352,7 @@ const handleSubmit = (answer) => {
   // ── 每道题立即写入数据库（fire-and-forget）──
   // answerEntry 已在 session 中按 questionIndex 去重，
   // 多次写入同一题会自动覆盖，统计时以最新为准
-  practiceStore.saveSessionToDB()
+  saver.savePerQuestion()
 
   if (isCorrect) {
     session.value.streak++
@@ -521,10 +525,7 @@ const completeAdaptiveGroup = async () => {
   // ── 实时保存检查点 ──
   // 每组完成后立即保存到数据库，防止中途数据丢失
   session.value.answers = allAnswers
-  const evalRecs = (result.engine.history || [])
-    .filter(h => h.evaluation != null)
-    .map(h => ({ group: h.groupIdx, score: h.evaluation }))
-  practiceStore.saveSessionToDB(evalRecs.length ? JSON.stringify(evalRecs) : null)
+  saver.saveGroupCheckpoint(result.engine.history)
 
   if (result.done) {
     // ── 全部完成 → 显示精美的结束画面 ──
@@ -553,15 +554,7 @@ const completeAdaptiveGroup = async () => {
     } catch { /* 弹窗异常 → action 保持 'close' */ }
 
     // 无论 action 是什么，都先保存到数据库
-    const evalRecs = ((result.engine && result.engine.history) || [])
-      .filter(h => h.evaluation != null)
-      .map(h => ({ group: h.groupIdx, score: h.evaluation }))
-    practiceStore.session.answers = finalAnswers
-    await practiceStore.saveSessionToDB(evalRecs.length ? JSON.stringify(evalRecs) : null)
-    await statsStore.refreshAll()
-    ElMessage.success({ message: '✅ 练习记录已保存', duration: 2000, offset: 100 })
-
-    // 处理导航
+    await saver.saveAdaptiveFinal(finalAnswers, (result.engine && result.engine.history) || [])
     practiceStore.setListPractices([])
     if (action === 'confirm') {
       startNewAdaptiveSession()
@@ -596,13 +589,10 @@ const handlePracticeComplete = async () => {
   const rate = Math.round((correctAns / totalAns) * 100)
 
   // 保存到 DB
-  await practiceStore.saveSessionToDB()
-  await statsStore.refreshAll()
+  await saver.savePracticeFinal()
 
   // 评语（抽到 constants/practice.getCommentByRate）
   const { emoji, comment, color: rateColor } = getCommentByRate(rate)
-
-  // 弹出汇总弹窗（改用 Vue 组件 + composable）
   let action = 'close'
   try {
     action = await dialogs.showPracticeSummaryDialog({
