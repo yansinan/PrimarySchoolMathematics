@@ -41,11 +41,15 @@
       <div class="summary-footer">继续加油，每天进步一点点 ✨</div>
     </div>
 
-    <!-- 用 dialog props 传给 AbilityCard（不依赖 composable 内部追踪 adaptiveAnswers） -->
+    <!-- 全部数据通过 Props 传给 AbilityCard（避免 template 对嵌套 ref 的解包问题） -->
     <AbilityCard
       :stats-total="totalAnswers"
       :stats-correct="correctAnswers"
-      :stats-level-label="profile.currentLevelLabel"
+      :stats-strong="strongLevelsComputed"
+      :stats-weak="weakLevelsComputed"
+      :stats-level="totalAnswers > 0 ? levelCurrentDisplay : 0"
+      :stats-level-total="DIFFICULTY_LEVELS.length"
+      :stats-level-label="currentLevelLabel"
     />
 
     <template #footer>
@@ -74,9 +78,49 @@
  *  - select (action: 'confirm' | 'cancel' | 'close')
  */
 import { computed } from 'vue'
+import { storeToRefs } from 'pinia'
 import AbilityCard from '@/components/profile/AbilityCard.vue'
-import { useAbilityProfile } from '@/composables/useAbilityProfile'
-const profile = useAbilityProfile()
+import { usePracticeStore } from '@/stores/practice'
+import { DIAG_LEVELS } from '@/utils/diagnostic'
+import { DIFFICULTY_LEVELS } from '@/utils/adaptiveEngine'
+
+// ── 从 store 读取能力画像数据 ──
+const practiceStore = usePracticeStore()
+const { abilityProfile, currentDifficultyIdx, adaptiveAnswers } = storeToRefs(practiceStore)
+
+// ── 强项/薄弱评估（基于 diagAnswers） ──
+function evaluateLevel(levelId, answers) {
+  const la = answers.filter(a => a.level === levelId)
+  if (!la.length) return { correct: 0, total: 0, accuracy: 0, hasData: false }
+  const correct = la.filter(a => a.isCorrect).length
+  const total = la.length
+  return { correct, total, accuracy: correct / total, hasData: true }
+}
+
+const diagAnswers = computed(() => abilityProfile.value?.diagAnswers || [])
+
+const strongLevelsComputed = computed(() =>
+  DIAG_LEVELS.filter(l => {
+    const s = evaluateLevel(l.id, diagAnswers.value)
+    return s.hasData && s.accuracy >= 0.8
+  }).map(l => l.label)
+)
+
+const weakLevelsComputed = computed(() =>
+  DIAG_LEVELS.filter(l => {
+    const s = evaluateLevel(l.id, diagAnswers.value)
+    return s.hasData && s.accuracy < 0.5
+  }).map(l => l.label)
+)
+
+// ── 等级进度（基于 currentDifficultyIdx） ──
+const levelCurrentDisplay = computed(() => Math.max(1, currentDifficultyIdx.value + 1))
+
+// ── 当前等级标签 ──
+const currentLevelLabel = computed(() => {
+  const idx = Math.max(0, currentDifficultyIdx.value)
+  return DIFFICULTY_LEVELS[idx]?.label || '—'
+})
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
