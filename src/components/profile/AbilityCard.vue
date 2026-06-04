@@ -12,11 +12,11 @@
     </div>
     <div v-else class="ability-card__compact-row">
       <span class="ability-card__compact-label">📊</span>
-      <span class="ability-card__compact-level">{{ profile.currentLevelLabel }}</span>
+      <span class="ability-card__compact-level">{{ displayLevelLabel }}</span>
       <span class="ability-card__compact-divider">·</span>
       <span class="ability-card__compact-acc" :class="accuracyClass">
-        {{ profile.overallStats.total > 0
-          ? `${Math.round(profile.overallAccuracy * 100)}%`
+        {{ displayTotal > 0
+          ? `${Math.round(displayAccuracy * 100)}%`
           : '—' }}
       </span>
     </div>
@@ -24,13 +24,13 @@
     <div v-if="!compact" class="ability-card__row">
       <div class="ability-card__level">
         <span class="ability-card__label">当前等级</span>
-        <span class="ability-card__value">{{ profile.currentLevelLabel }}</span>
+        <span class="ability-card__value">{{ displayLevelLabel }}</span>
       </div>
       <div class="ability-card__accuracy">
         <span class="ability-card__label">整体准确率</span>
         <span class="ability-card__value" :class="accuracyClass">
-          {{ profile.overallStats.total > 0
-            ? `${Math.round(profile.overallAccuracy * 100)}% (${profile.overallStats.correct}/${profile.overallStats.total})`
+          {{ displayTotal > 0
+            ? `${Math.round(displayAccuracy * 100)}% (${displayCorrect}/${displayTotal})`
             : '—' }}
         </span>
       </div>
@@ -77,15 +77,24 @@
 import { computed } from 'vue'
 import { useAbilityProfile, STRONG_THRESHOLD, WEAK_THRESHOLD } from '@/composables/useAbilityProfile'
 
-// P2: 弹窗或常驻模式。compact=true: 答题时一行简版；compact=false: 弹窗中完整版
 const props = defineProps({
   compact: { type: Boolean, default: false },
+  // 可选：从父组件传入统计数据（避免 composable 内部追踪 store 的可靠性问题）
+  statsTotal: { type: Number, default: 0 },
+  statsCorrect: { type: Number, default: 0 },
+  statsLevelLabel: { type: String, default: '' },
 })
 
-// 不解构：直接保留 composable 返回的整个对象
-// 这样在 script setup 中仍可通过 .value 访问 ref
-// 模板中自动解包，所以模板中仍能写 overallStats.total 等
 const profile = useAbilityProfile()
+
+// 优先使用传入的 props，否则回退到 composable
+const displayTotal = computed(() => props.statsTotal > 0 ? props.statsTotal : profile.overallStats.total)
+const displayCorrect = computed(() => props.statsCorrect > 0 ? props.statsCorrect : profile.overallStats.correct)
+const displayLevelLabel = computed(() => props.statsLevelLabel || profile.currentLevelLabel)
+const displayAccuracy = computed(() => {
+  if (displayTotal.value > 0) return displayCorrect.value / displayTotal.value
+  return profile.overallAccuracy.value
+})
 
 const progressPercent = computed(() => {
   const { current, total } = profile.levelProgress.value || {}
@@ -94,7 +103,7 @@ const progressPercent = computed(() => {
 })
 
 const accuracyClass = computed(() => {
-  const acc = profile.overallAccuracy.value
+  const acc = displayAccuracy.value
   if (acc >= STRONG_THRESHOLD) return 'ability-card__value--strong'
   if (acc < WEAK_THRESHOLD) return 'ability-card__value--weak'
   return 'ability-card__value--mid'

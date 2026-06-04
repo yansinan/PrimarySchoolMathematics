@@ -38,13 +38,15 @@
         </div>
       </div>
 
-      <!-- P2: 汇总时显示完整用户能力画像 -->
-      <div class="summary-ability-card-wrapper">
-        <AbilityCard />
-      </div>
-
       <div class="summary-footer">继续加油，每天进步一点点 ✨</div>
     </div>
+
+    <!-- 用 dialog props 传给 AbilityCard（不依赖 composable 内部追踪 adaptiveAnswers） -->
+    <AbilityCard
+      :stats-total="totalAnswers"
+      :stats-correct="correctAnswers"
+      :stats-level-label="profile.currentLevelLabel"
+    />
 
     <template #footer>
       <el-button @click="handleSelect('cancel')">{{ cancelText }}</el-button>
@@ -73,6 +75,8 @@
  */
 import { computed } from 'vue'
 import AbilityCard from '@/components/profile/AbilityCard.vue'
+import { useAbilityProfile } from '@/composables/useAbilityProfile'
+const profile = useAbilityProfile()
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
