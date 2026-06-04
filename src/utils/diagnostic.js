@@ -271,5 +271,3 @@ export function generatePracticeConfig(profile) {
 
   return config
 }
-
-export { DIAG_TOTAL }

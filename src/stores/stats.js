@@ -20,7 +20,6 @@ export const useStatsStore = defineStore('stats', {
     selectedSession: null,
     aggregatedStats: null,
     drawerVisible: false,
-    importDrawerVisible: false,
     loading: false
   }),
 
