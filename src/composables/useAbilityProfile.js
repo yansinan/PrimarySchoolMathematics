@@ -44,7 +44,7 @@ function evaluateLevel(levelId, answers) {
 
 export function useAbilityProfile() {
   const practiceStore = usePracticeStore()
-  const { abilityProfile, session, currentDifficultyIdx, currentGroupIndex } = storeToRefs(practiceStore)
+  const { abilityProfile, session, currentDifficultyIdx, currentGroupIndex, adaptiveAnswers } = storeToRefs(practiceStore)
 
   /** 自适应阶段累计答题（从 store 读取 */
 
@@ -58,7 +58,7 @@ export function useAbilityProfile() {
   /** 整轮准确率（诊断阶段 + 自适应阶段累计，含所有已答题） */
   const overallAccuracy = computed(() => {
     const diag = abilityProfile.value?.diagAnswers || []
-    const adaptive = practiceStore.adaptiveAnswers || []
+    const adaptive = adaptiveAnswers.value || []
     const all = [...diag, ...adaptive]
     if (!all.length) return 0
     const correct = all.filter(a => a.isCorrect).length
@@ -68,7 +68,7 @@ export function useAbilityProfile() {
   /** 整轮答题统计（诊断 + 自适应累计） */
   const overallStats = computed(() => {
     const diag = abilityProfile.value?.diagAnswers || []
-    const adaptive = practiceStore.adaptiveAnswers || []
+    const adaptive = adaptiveAnswers.value || []
     const all = [...diag, ...adaptive]
     const correct = all.filter(a => a.isCorrect).length
     return {
