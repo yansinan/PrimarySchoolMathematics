@@ -20,6 +20,7 @@
 
 import { usePracticeStore } from '@/stores/practice'
 import { useStatsStore } from '@/stores/stats'
+import { computeAndSaveAbilityProfile } from '@/utils/abilityProfile'
 
 /**
  * 从 history 中提取 evaluations（{group, score}[]），转 JSON 字符串
@@ -41,8 +42,10 @@ export function usePracticeSaver() {
    * 1) 每题答完：fire-and-forget
    * - 不 await，不阻塞 UI
    * - 多次写同一题自动覆盖
+   * - 同步更新能力画像（fire‑and‑forget）
    */
   function savePerQuestion() {
+    computeAndSaveAbilityProfile()
     return practiceStore.saveSessionToDB()
   }
 
@@ -50,8 +53,10 @@ export function usePracticeSaver() {
    * 2) 自适应一组完成：checkpoint
    * - 含 evaluations（如果之前答过有自评的组）
    * - 不 await，让弹窗立即显示
+   * - 同步更新能力画像
    */
   async function saveGroupCheckpoint(history) {
+    computeAndSaveAbilityProfile()
     const evaluations = extractEvaluationsJSON(history)
     return await practiceStore.saveSessionToDB(evaluations)
   }
@@ -65,6 +70,7 @@ export function usePracticeSaver() {
    * @param {Array} history - 引擎 history（用于提取 evaluations）
    */
   async function saveAdaptiveFinal(answers, history) {
+    computeAndSaveAbilityProfile()
     const evaluations = extractEvaluationsJSON(history)
     practiceStore.session.answers = answers
     await practiceStore.saveSessionToDB(evaluations)
@@ -75,8 +81,10 @@ export function usePracticeSaver() {
    * 4) 普通练习完成：最终保存
    * - 不含 evaluations
    * - 触发 stats refresh
+   * - 同步更新能力画像
    */
   async function savePracticeFinal() {
+    computeAndSaveAbilityProfile()
     await practiceStore.saveSessionToDB()
     await statsStore.refreshAll()
   }

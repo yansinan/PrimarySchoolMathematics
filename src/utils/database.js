@@ -40,11 +40,35 @@ class PracticeDB extends Dexie {
 
     this.version(1).stores({
       practiceSessions: '++id, studentId, createdAt, synced, updatedAt',
-      answers: '++id, sessionId, synced, timestamp'
+      answers: '++id, sessionId, synced, timestamp',
+    })
+
+    this.version(2).stores({
+      practiceSessions: '++id, studentId, createdAt, synced, updatedAt',
+      answers: '++id, sessionId, synced, timestamp',
+      abilitySnapshots: '++id, studentId, computedAt, synced',
     })
 
     this.practiceSessions.mapToClass(PracticeSession)
     this.answers.mapToClass(Answer)
+  }
+}
+
+// ─── AbilitySnapshot helper ─────────────────────────────────────────────
+
+class AbilitySnapshot {
+  constructor() {
+    this.studentId = 'default'
+    this.totalQuestions = 0
+    this.correctCount = 0
+    this.accuracy = 0           // 0‑1
+    this.strong = []            // string[] 如 ['L1 个位数基础']
+    this.weak = []              // string[]
+    this.currentLevel = 0       // 1‑based
+    this.totalLevels = 0
+    this.currentLevelLabel = ''
+    this.computedAt = Date.now()
+    this.synced = 0
   }
 }
 
@@ -181,6 +205,38 @@ export async function deleteSession(sessionId) {
     await db.practiceSessions.delete(sessionId)
     await db.answers.where('sessionId').equals(sessionId).delete()
   })
+}
+
+// ─── Ability Snapshot CRUD ──────────────────────────────────────────────
+
+/**
+ * Save a user ability profile snapshot to DB for future retrieval.
+ * Called after each question answer or group checkpoint.
+ * @param {object} snapshot - Ability snapshot data
+ * @returns {Promise<number>} snapshot id
+ */
+export async function saveAbilitySnapshot(snapshot) {
+  const now = Date.now()
+  const record = {
+    ...snapshot,
+    computedAt: now,
+    synced: 0,
+  }
+  return await db.abilitySnapshots.add(record)
+}
+
+/**
+ * Get the most recent ability snapshot for a student.
+ * @param {string} studentId
+ * @returns {Promise<object|null>}
+ */
+export async function getLatestAbilitySnapshot(studentId = 'default') {
+  const snapshots = await db.abilitySnapshots
+    .where('studentId').equals(studentId)
+    .reverse()
+    .limit(1)
+    .toArray()
+  return snapshots[0] || null
 }
 
 // ─── Aggregated Statistics ──────────────────────────────────────────────
