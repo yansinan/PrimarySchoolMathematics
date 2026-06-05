@@ -14,6 +14,9 @@ import {
   findRelated,
   getMasteryByNumber,
   getMasteryByNumberFromAnswersBatch,
+  _getStrengthByNumberBatch,
+  _getMidByNumberBatch,
+  _getWeaknessByNumberBatch,
   getWrongAnswers,
   evaluateCorrectionEffect,
   prioritizeWrongAnswers,
@@ -256,13 +259,13 @@ describe('getMasteryByNumberFromAnswersBatch', () => {
     const batch = await getMasteryByNumberFromAnswersBatch(answers)
     // 数字 8 出现：Q1 (3 answers 涉及 8)
     const r8 = batch.find((r) => r.number === 8)
-    expect(r8).toEqual({ number: 8, total: 3, correct: 2, accuracy: 2 / 3, questionsCount: 1 })
+    expect(r8).toEqual({ number: 8, total: 3, correct: 2, score: 2 / 3, accuracy: 2 / 3, questionsCount: 1 })
     // 数字 3 出现：Q1 涉及
     const r3 = batch.find((r) => r.number === 3)
     expect(r3.total).toBe(3)
     // 数字 4 出现：Q3 1 次对
     const r4 = batch.find((r) => r.number === 4)
-    expect(r4).toEqual({ number: 4, total: 1, correct: 1, accuracy: 1, questionsCount: 1 })
+    expect(r4).toEqual({ number: 4, total: 1, correct: 1, score: 1, accuracy: 1, questionsCount: 1 })
     // 数字 7 未出现
     const r7 = batch.find((r) => r.number === 7)
     expect(r7.total).toBe(0)
@@ -274,7 +277,7 @@ describe('getMasteryByNumberFromAnswersBatch', () => {
     const groupBatch = await getMasteryByNumberFromAnswersBatch(groupAnswers)
     // 数字 8 只 1 次（错）
     const r8group = groupBatch.find((r) => r.number === 8)
-    expect(r8group).toEqual({ number: 8, total: 1, correct: 0, accuracy: 0, questionsCount: 1 })
+    expect(r8group).toEqual({ number: 8, total: 1, correct: 0, score: 0, accuracy: 0, questionsCount: 1 })
 
     // 模拟“本轮”含 3 个 answers
     const roundAnswers = [
@@ -287,6 +290,20 @@ describe('getMasteryByNumberFromAnswersBatch', () => {
     const r8round = roundBatch.find((r) => r.number === 8)
     expect(r8round.total).toBe(2)
     expect(r8round.correct).toBe(2)
+  })
+
+  it('treats score 0.5 as mid, not weakness', async () => {
+    const answers = [
+      mkAnswer({ questionId: 1, score: 0.5, isCorrect: true, sessionId: 1 }),
+      mkAnswer({ questionId: 1, score: 0.5, isCorrect: true, sessionId: 1 }),
+      mkAnswer({ questionId: 1, score: 0.5, isCorrect: true, sessionId: 1 }),
+    ]
+    const mid = await _getMidByNumberBatch(answers)
+    const weak = await _getWeaknessByNumberBatch(answers)
+    const strong = await _getStrengthByNumberBatch(answers)
+    expect(mid.some((r) => r.number === 8)).toBe(true)
+    expect(weak.some((r) => r.number === 8)).toBe(false)
+    expect(strong.some((r) => r.number === 8)).toBe(false)
   })
 })
 

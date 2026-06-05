@@ -11,6 +11,7 @@
  */
 
 import db from '@/utils/database'
+import { getAnswerScore, sumAnswerScores } from '@/utils/score'
 
 // ─── 辅助工具 ─────────────────────────────────────────────────────
 
@@ -194,13 +195,15 @@ export async function getMasteryByNumber(number, { days = 30 } = {}) {
 
   // 3. 统计
   const total = answers.length
-  const correct = answers.filter((a) => a.isCorrect).length
-  const accuracy = total > 0 ? correct / total : 0
+  const score = total > 0 ? sumAnswerScores(answers) / total : 0
+  const correct = answers.filter((a) => getAnswerScore(a) === 1).length
+  const accuracy = score
 
   return {
     number,
     total,
     correct,
+    score,
     accuracy,
     questionsCount: questions.length,
     days,
@@ -228,12 +231,15 @@ async function _getMasteryByNumberFromAnswers(answers, number) {
 
   let total = 0
   let correct = 0
+  let score = 0
   const qIdsWithNumber = new Set()
   for (const a of answers) {
     const q = qMap.get(a.questionId)
     if (!q || !_extractOperandDigits(q).includes(number)) continue
     total += 1
-    if (a.isCorrect === true) correct += 1
+    const attemptScore = getAnswerScore(a)
+    score += attemptScore
+    if (attemptScore === 1) correct += 1
     qIdsWithNumber.add(a.questionId)
   }
 
@@ -241,7 +247,8 @@ async function _getMasteryByNumberFromAnswers(answers, number) {
     number,
     total,
     correct,
-    accuracy: total > 0 ? correct / total : 0,
+    score: total > 0 ? score / total : 0,
+    accuracy: total > 0 ? score / total : 0,
     questionsCount: qIdsWithNumber.size,
   }
 }
@@ -286,6 +293,27 @@ export async function getMasteryByNumberFromAnswersBatch(answers) {
   return await Promise.all(
     numbers.map((n) => _getMasteryByNumberFromAnswers(answers || [], n))
   )
+}
+
+export async function _getStrengthByNumberBatch(answers, { minScore = 1, minTotal = 3 } = {}) {
+  const batch = await getMasteryByNumberFromAnswersBatch(answers)
+  return batch
+    .filter((r) => r.total >= minTotal && r.score >= minScore)
+    .sort((a, b) => b.score - a.score)
+}
+
+export async function _getMidByNumberBatch(answers, { minScore = 0.5, maxScore = 1, minTotal = 3 } = {}) {
+  const batch = await getMasteryByNumberFromAnswersBatch(answers)
+  return batch
+    .filter((r) => r.total >= minTotal && r.score >= minScore && r.score < maxScore)
+    .sort((a, b) => b.score - a.score)
+}
+
+export async function _getWeaknessByNumberBatch(answers, { maxScore = 0.5, minTotal = 1 } = {}) {
+  const batch = await getMasteryByNumberFromAnswersBatch(answers)
+  return batch
+    .filter((r) => r.total >= minTotal && r.score < maxScore)
+    .sort((a, b) => a.score - b.score)
 }
 
 /**
