@@ -4,25 +4,51 @@
  * 拆分自 Practice.vue 的自适应会话逻辑（Phase 4 渐进式）。
  * 当前 PR 抽取了：
  *  - 响应式状态：adaptiveEngine / adaptiveGroupIndex / groupAnswerOffset / nextLocked
- *  - 方法：startNewAdaptiveSession / completeAssessment
+ *  - 方法：startNewAdaptiveSession / completeAssessment / completeGroup
  *
- * handleAssessmentComplete 已在 PR-4.3 抽到 completeAssessment。
- * completeGroup 仍保留在 Practice.vue，后续 PR-4.4 继续迁移。
+ * ARCH § 1.3 业务编排下沉 composable:
+ *  - PR-4.3: 抽 handleAssessmentComplete -> completeAssessment (31 行)
+ *  - PR-4.4: 抽 completeAdaptiveGroup -> completeGroup (123 行, options 注入)
  *
- * ARCH § 1.3 业务编排下沉 composable。
+ * 外部依赖（router / statsStore / dialogs / saver）通过 useAdaptiveSession(options) 注入，
+ * 默认从 useXxx() 取；单测/Storybook 可显式覆盖。
  */
 
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { storeToRefs } from 'pinia'
+import { useRouter } from 'vue-router'
 import { usePracticeStore } from '@/stores/practice'
+import { useStatsStore } from '@/stores/stats'
+import { usePracticeDialogs } from '@/composables/usePracticeDialogs'
+import { usePracticeSaver } from '@/composables/usePracticeSaver'
 import { generateDiagnosticQuestions, analyzeAbility } from '@/utils/diagnostic'
-import { createAdaptiveEngine, getGroupSize } from '@/utils/adaptiveEngine'
+import { createAdaptiveEngine, getGroupSize, evaluateGroup, getDifficultyLabel } from '@/utils/adaptiveEngine'
 import { generateAdaptiveBatch } from '@/utils/adaptiveBatch'
+import { getGroupComment, getCommentByRate } from '@/constants/practice'
+import { sumAnswerScores } from '@/utils/score'
+import { TARGET_LIMITS } from '@/utils/formDefaults'
+import { formatDuration } from '@/utils/timeFormat'
 
-export function useAdaptiveSession() {
+/**
+ * 自适应会话 composable 工厂
+ *
+ * @param {object} [options] - 外部依赖注入 (单测/Storybook 覆盖用)
+ * @param {object} [options.router] - vue-router 实例
+ * @param {object} [options.statsStore] - stats store 实例
+ * @param {object} [options.dialogs] - 弹窗 composable 实例
+ * @param {object} [options.saver] - 持久化 composable 实例
+ * @returns {object} composable API
+ */
+export function useAdaptiveSession(options = {}) {
   const practiceStore = usePracticeStore()
   const { session, correctCount } = storeToRefs(practiceStore)
+
+  // 外部依赖（注入模式，默认从 useXxx() 取）
+  const router = options.router || useRouter()
+  const statsStore = options.statsStore || useStatsStore()
+  const dialogs = options.dialogs || usePracticeDialogs()
+  const saver = options.saver || usePracticeSaver()
 
   // ── 响应式状态 ──
   /** 自适应引擎实例（由 createAdaptiveEngine 创建） */
@@ -127,6 +153,122 @@ export function useAdaptiveSession() {
     practiceStore.setListPractices(firstQuestions)
   }
 
+  /**
+   * PR-4.4: 自适应一组完成 → 评估 → 生成下一组或结束
+   *
+   * 抽离自 Practice.vue L469-625 (157 行) completeAdaptiveGroup:
+   *   - 小组反馈 (correctRate / groupTime)
+   *   - 弹出自我评价对话框 (dialogs.showSelfEvaluationDialog)
+   *   - 评估下一步 (evaluateGroup)
+   *   - 实时保存检查点 (saver.saveGroupCheckpoint)
+   *   - 整轮完成 → 汇总弹窗 → 路由跳转
+   *
+   * 外部依赖通过 options 注入 (router / statsStore / dialogs / saver):
+   *   - 默认从 useXxx() 注入, 单测/Storybook 可覆盖
+   *
+   * @returns {Promise<'continue' | 'done' | 'restart'>}
+   *   - 'continue': 生成下一组
+   *   - 'done': 整轮完成, 弹窗已关, 路由已 push
+   *   - 'restart': 弹窗 'confirm' 触发了新一轮 (调用方应返回不跳页)
+   */
+  async function completeGroup() {
+    const allAnswers = [...session.value.answers]
+    const engine = adaptiveEngine.value
+    const size = getGroupSize(engine)
+    const groupAnswers = allAnswers.slice(-size)
+    const groupCorrect = groupAnswers.filter(a => a.isCorrect).length
+    const groupTime = groupAnswers.reduce((s, a) => s + (a.responseTime || 0), 0)
+
+    // ── 小组反馈 ──
+    const groupIdx = adaptiveGroupIndex.value
+    const label = getDifficultyLabel(engine)
+    const correctRate = Math.round((groupCorrect / groupAnswers.length) * 100)
+    const groupComment = getGroupComment(correctRate, groupTime, groupAnswers.length)
+
+    // ── 强化小组反馈: 弹出自我评价对话框 ──
+    let evaluationScore = 3  // 默认 3 = 刚刚好
+    try {
+      evaluationScore = await dialogs.showSelfEvaluationDialog({
+        groupIndex: groupIdx,
+        correctCount: groupCorrect,
+        totalCount: groupAnswers.length,
+        timeText: formatDuration(groupTime),
+        comment: groupComment,
+      })
+    } catch { /* 弹窗关闭异常 → 保持默认 3 */ }
+
+    adaptiveEngine.value.lastEvaluation = evaluationScore
+
+    // 评估并决定下一步
+    const result = evaluateGroup(engine, groupAnswers)
+    adaptiveEngine.value = result.engine
+    adaptiveGroupIndex.value++
+    practiceStore.setCurrentDifficulty(result.engine.difficultyIdx, adaptiveGroupIndex.value)
+
+    // ── 实时保存检查点 ──
+    practiceStore.adaptiveAnswers = [...practiceStore.adaptiveAnswers, ...allAnswers]
+    await saver.saveGroupCheckpoint(result.engine.history)
+
+    // ── 强制兜底: 累积答题超过硬上限 → 直接结束 ──
+    const forceDone = practiceStore.adaptiveAnswers.length >= TARGET_LIMITS.absoluteMax
+
+    if (result.done || forceDone) {
+      // ── 全部完成 → 弹汇总弹窗 ──
+      const finalAnswers = practiceStore.adaptiveAnswers
+      const totalCorrect = sumAnswerScores(finalAnswers)
+      const totalTime = finalAnswers.reduce((s, a) => s + (a.responseTime || 0), 0)
+      const totalRate = Math.round((totalCorrect / finalAnswers.length) * 100)
+      const { emoji, comment, color: rateColor2 } = getCommentByRate(totalRate)
+
+      let action = 'close'
+      try {
+        action = await dialogs.showPracticeSummaryDialog({
+          emoji,
+          comment,
+          totalAnswers: finalAnswers.length,
+          correctAnswers: totalCorrect,
+          rate: totalRate,
+          rateColor: rateColor2,
+          totalTime: formatDuration(totalTime),
+          confirmText: '开始新一轮',
+          cancelText: '📊 分析',
+        })
+      } catch { /* 弹窗异常 → action 保持 'close' */ }
+
+      // 无论 action 是什么, 都先保存到数据库
+      await saver.saveAdaptiveFinal(finalAnswers, (result.engine && result.engine.history) || [])
+      practiceStore.setListPractices([])
+
+      if (action === 'confirm') {
+        return 'restart'
+      } else {
+        // 'cancel' 或 'close' 都视为查看分析或返回首页
+        const shouldRestart = practiceStore.abilityProfile && action !== 'cancel'
+        adaptiveEngine.value = null
+        adaptiveGroupIndex.value = 0
+        groupAnswerOffset.value = 0
+        if (shouldRestart) {
+          return 'restart'
+        }
+        router.push('/home')
+        if (action === 'cancel') {
+          setTimeout(() => statsStore.openDrawer(), 300)
+        }
+        return 'done'
+      }
+    }
+
+    // ── 生成下一组 ──
+    // 关键: 先把本轮答案写回 session.answers (确保组边界数据完整),
+    // 再 setListPractices 触发 watch (watch 内 saved = [...session.answers] 拿到完整数据)。
+    const nextQuestions = generateAdaptiveBatch(result.engine, result.nextGroupSize)
+    groupAnswerOffset.value = allAnswers.length
+    session.value.answers = [...allAnswers]
+    practiceStore.resetCurrentIndex()
+    practiceStore.setListPractices(nextQuestions)
+    return 'continue'
+  }
+
   return {
     // 状态（ref）
     adaptiveEngine,
@@ -137,6 +279,6 @@ export function useAdaptiveSession() {
     // 方法
     startNewAdaptiveSession,
     completeAssessment,
-    // 注：completeGroup 仍由 Practice.vue 内部实现 (PR-4.4 续抽)
+    completeGroup,
   }
 }

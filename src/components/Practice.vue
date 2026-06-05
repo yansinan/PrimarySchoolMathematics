@@ -102,17 +102,13 @@ import PracticeSummaryDialog from '@/components/dialog/PracticeSummaryDialog.vue
 import SelfEvaluationDialog from '@/components/dialog/SelfEvaluationDialog.vue'
 import { extractQuestionMetadata } from '@/utils/equationParser'
 import { generateDiagnosticQuestions, generatePracticeConfig } from '@/utils/diagnostic'
-import { createAdaptiveEngine, getGroupSize, evaluateGroup, getDifficultyLabel } from '@/utils/adaptiveEngine'
-import { formatDuration } from '@/utils/timeFormat'
-import { generateAdaptiveBatch } from '@/utils/adaptiveBatch'
 import { decideDisplayMode, updateDisplayStats } from '@/utils/displayStrategy'  // decideDisplayMode / updateDisplayStats 仍在 V 层 (handleSubmit 用)
 import { useAdaptiveSession } from '@/composables/useAdaptiveSession'
 import { usePracticeDialogs } from '@/composables/usePracticeDialogs'
 import { usePracticeSaver } from '@/composables/usePracticeSaver'
 import { useDisplayStrategy } from '@/composables/useDisplayStrategy'  // 🆕 PR-4.2 抽离 displayStats + applyDisplayModeForCurrentQuestion + generateOptions
-import { buildAttemptScore, sumAnswerScores } from '@/utils/score'
-import { FEEDBACK_DELAYS, ASSESSMENT_ABORT_WRONG_STREAK, getGroupComment, getCommentByRate, ASSIST_LEVELS } from '@/constants/practice'
-import { TARGET_LIMITS } from '@/utils/formDefaults'
+import { buildAttemptScore } from '@/utils/score'
+import { FEEDBACK_DELAYS, ASSESSMENT_ABORT_WRONG_STREAK, getCommentByRate, ASSIST_LEVELS } from '@/constants/practice'
 
 import { usePracticeStore } from '@/stores/practice'
 import { useStatsStore } from '@/stores/stats'
@@ -149,8 +145,7 @@ const {
 
 // ── 自适应会话 composable ──
 // 响应式状态：adaptiveEngine / adaptiveGroupIndex / groupAnswerOffset / nextLocked
-// 方法：startNewAdaptiveSession / completeAssessment (PR-4.3 抽离)
-// 注：completeGroup 仍由本文件内 const 声明实现 (PR-4.4 续抽)
+// 方法：startNewAdaptiveSession / completeAssessment (PR-4.3) / completeGroup (PR-4.4)
 const {
   adaptiveEngine,
   adaptiveGroupIndex,
@@ -159,6 +154,7 @@ const {
   nextLocked,
   startNewAdaptiveSession,
   completeAssessment,
+  completeGroup,
 } = useAdaptiveSession()
 
 // ── 弹窗 composable（替代 ElMessageBox 和 window.__evalSelect 桥） ──
@@ -225,7 +221,7 @@ const inputProps = computed(() => {
  * 每题重置：重置输入/反馈状态 + 计时器 + displayMode
  * 注意：不清空 session.answers（只在组边界才清空，见 resetGroupAnswers）
  * 这样 handleNext 每题调此处时，当前组答案不丢失，
- * completeAdaptiveGroup 中 allAnswers = [...session.answers] 能拿到完整组数据。
+ * completeGroup 中 allAnswers = [...session.answers] 能拿到完整组数据。
  */
 const initPractice = () => {
   if (!currentQuestion.value) return
@@ -420,8 +416,14 @@ const handleNext = () => {
     nextLocked.value = false
   } else {
     // ── Session complete — handle based on phase ──
-    const fn = isAssessment.value ? completeAssessment :
-               adaptiveEngine.value ? completeAdaptiveGroup : handlePracticeComplete
+    let fn
+    if (isAssessment.value) {
+      fn = completeAssessment
+    } else if (adaptiveEngine.value) {
+      fn = completeGroup
+    } else {
+      fn = handlePracticeComplete
+    }
     // reset nextLocked after the handler runs
     const result = fn()
     // If fn is async, give it a tick to unlock
@@ -437,119 +439,7 @@ const handleNext = () => {
 
 /** handleAssessmentComplete 已抽到 useAdaptiveSession.completeAssessment (PR-4.3) */
 
-/** 自适应一组完成 → 评估 → 生成下一组或结束 */
-const completeAdaptiveGroup = async () => {
-  const allAnswers = [...session.value.answers]
-  const engine = adaptiveEngine.value
-  const size = getGroupSize(engine)
-  const groupAnswers = allAnswers.slice(-size)
-  const groupCorrect = groupAnswers.filter(a => a.isCorrect).length
-  const groupTime = groupAnswers.reduce((s, a) => s + (a.responseTime || 0), 0)
-
-  // ── 小组反馈 ──
-  const groupIdx = adaptiveGroupIndex.value
-  const label = getDifficultyLabel(engine)
-  const correctRate = Math.round((groupCorrect / groupAnswers.length) * 100)
-
-  // 小组评语（抽到 constants/practice.getGroupComment）
-  const groupComment = getGroupComment(correctRate, groupTime, groupAnswers.length)
-
-  // ── 强化小组反馈：弹出自我评价对话框（改用 Vue 组件 + composable） ──
-  // 移除了原来的 window.__evalSelect 全局桥和内联 HTML 拼接
-  let evaluationScore = 3  // 默认 3 = 刚刚好
-  try {
-    evaluationScore = await dialogs.showSelfEvaluationDialog({
-      groupIndex: groupIdx,
-      correctCount: groupCorrect,
-      totalCount: groupAnswers.length,
-      timeText: formatDuration(groupTime),
-      comment: groupComment,
-    })
-  } catch { /* 弹窗关闭异常 → 保持默认 3 */ }
-
-  adaptiveEngine.value.lastEvaluation = evaluationScore
-
-  // 评估并决定下一步
-  const result = evaluateGroup(engine, groupAnswers)
-  adaptiveEngine.value = result.engine
-  adaptiveGroupIndex.value++
-  // 同步到 store（供 PracticeSummaryDialog 内嵌的 AbilityCard 读取）
-  practiceStore.setCurrentDifficulty(result.engine.difficultyIdx, adaptiveGroupIndex.value)
-
-  // ── 实时保存检查点 ──
-  // 每组完成后立即保存到数据库，防止中途数据丢失
-  // 关键修复：session.answers 维持"本组"边界（不累加多组）
-  // 整轮所有组的累计存到 adaptiveAnswers
-  practiceStore.adaptiveAnswers = [...practiceStore.adaptiveAnswers, ...allAnswers]
-  saver.saveGroupCheckpoint(result.engine.history)
-
-  // ── 强制兜底：累积答题超过硬上限 → 直接结束（不管引擎当前结果如何）──
-  // 修复"configSnapshot 污染导致 targetMax 过大、练习永远不结束"的 bug
-  const forceDone = practiceStore.adaptiveAnswers.length >= TARGET_LIMITS.absoluteMax
-
-  if (result.done || forceDone) {
-    // ── 全部完成 → 显示精美的结束画面 ──
-    // finalAnswers 现在用 adaptiveAnswers（整轮所有组），不是 allAnswers（最后一组）
-    const finalAnswers = practiceStore.adaptiveAnswers
-    const totalCorrect = sumAnswerScores(finalAnswers)
-    const totalTime = finalAnswers.reduce((s, a) => s + (a.responseTime || 0), 0)
-    const totalRate = Math.round((totalCorrect / finalAnswers.length) * 100)
-
-    // 计算评语（抽到 constants/practice.getCommentByRate）
-    const { emoji, comment, color: rateColor2 } = getCommentByRate(totalRate)
-
-    // 全部完成 → 弹出练习汇总弹窗（改用 Vue 组件 + composable）
-    let action = 'close'
-    try {
-      action = await dialogs.showPracticeSummaryDialog({
-        emoji,
-        comment,
-        totalAnswers: finalAnswers.length,
-        correctAnswers: totalCorrect,
-        rate: totalRate,
-        rateColor: rateColor2,
-        totalTime: formatDuration(totalTime),
-        confirmText: '开始新一轮',
-        cancelText: '📊 分析',
-      })
-    } catch { /* 弹窗异常 → action 保持 'close' */ }
-
-    // 无论 action 是什么，都先保存到数据库
-    await saver.saveAdaptiveFinal(finalAnswers, (result.engine && result.engine.history) || [])
-    practiceStore.setListPractices([])
-    if (action === 'confirm') {
-      startNewAdaptiveSession()
-    } else {
-      // 'cancel' 或 'close' 都视为查看分析或返回首页
-      // 注意：setListPractices([]) 已在上面执行，watch 触发时 adaptiveEngine 还非 null，
-      // 所以 watch 不会执行 startNewAdaptiveSession。需要在此处显式处理。
-      const shouldRestart = abilityProfile.value && action !== 'cancel'
-      adaptiveEngine.value = null
-      adaptiveGroupIndex.value = 0
-      groupAnswerOffset.value = 0
-      if (shouldRestart) {
-        startNewAdaptiveSession()
-      }
-      router.push('/home')
-      if (action === 'cancel') {
-        setTimeout(() => statsStore.openDrawer(), 300)
-      }
-    }
-    nextLocked.value = false
-    return
-  }
-
-  // 生成下一组
-  // 先把本轮答案写回 session.answers（确保组边界数据完整），
-  // 再 setListPractices 触发 watch（watch 内 saved = [...session.answers] 拿到完整数据）。
-  // 之前顺序反了（先 setListPractices 再 session.answers = [...allAnswers]），
-  // 导致 watch 捕获到未写完的数据，组边界数据分裂。
-  const nextQuestions = generateAdaptiveBatch(result.engine, result.nextGroupSize)
-  groupAnswerOffset.value = allAnswers.length
-  session.value.answers = [...allAnswers]
-  practiceStore.resetCurrentIndex()
-  practiceStore.setListPractices(nextQuestions)
-}
+/** completeAdaptiveGroup 已抽到 useAdaptiveSession.completeGroup (PR-4.4) */
 
 /** 开始新一轮自适应练习（已抽到 composables/useAdaptiveSession.js） */
 
@@ -609,7 +499,7 @@ watch(listPractices, (newPracticeList) => {
 
   // 防御性修复：listPractices 变空时（用户完成全部练习关闭弹窗后）
   // 卡 loading 的两个常见场景：
-  //  1) 自适应完成（completeAdaptiveGroup）→ 弹窗关闭 → setListPractices([])
+  //  1) 自适应完成（completeGroup）→ 弹窗关闭 → setListPractices([])
   //     abilityProfile 存在 → 启动新一轮自适应
   //  2) 普通练习完成（handlePracticeComplete）→ 弹窗关闭 → setListPractices([])
   //     abilityProfile=null，但 phase=practice（Generate.vue 调用 setAbilityProfile(null)）
