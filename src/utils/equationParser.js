@@ -131,3 +131,33 @@ export const getCarryType = (parsedEquation) => {
 
   return ''
 }
+
+/**
+ * 提取算式元数据(用于答案记录的入参元数据)
+ *
+ * 抽离自 Practice.vue handleSubmit (L378-388):
+ *   - 9 行重复的 operator / isCarry / isBorrow / operandMin / operandMax 提取
+ *
+ * @param {string} equation - 算式字符串, 如 "23+47="
+ * @param {object} [currentQuestion] - 当前题目对象(用于 stepCount 兜底)
+ * @returns {{
+ *   operator: string,
+ *   isCarry: boolean,
+ *   isBorrow: boolean,
+ *   stepCount: number,
+ *   operandMin: number,
+ *   operandMax: number,
+ * }}
+ */
+export function extractQuestionMetadata(equation, currentQuestion = null) {
+  const parsed = parseEquation(equation)
+  const operator = parsed?.operator || ''
+  const isCarry = getCarryType(parsed) === 'carry'
+  const isBorrow = getCarryType(parsed) === 'borrow'
+  const leftVal = parseInt(parsed?.leftOperand) || 0
+  const rightVal = parseInt(parsed?.rightOperand) || 0
+  const operandMin = Math.min(leftVal, rightVal)
+  const operandMax = Math.max(leftVal, rightVal)
+  const stepCount = currentQuestion?.stepCount || 1
+  return { operator, isCarry, isBorrow, stepCount, operandMin, operandMax }
+}

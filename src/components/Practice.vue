@@ -100,7 +100,7 @@ import NumberKeypad from '@/components/input/NumberKeypad.vue'
 import OptionButtons from '@/components/input/OptionButtons.vue'
 import PracticeSummaryDialog from '@/components/dialog/PracticeSummaryDialog.vue'
 import SelfEvaluationDialog from '@/components/dialog/SelfEvaluationDialog.vue'
-import { getCarryType, parseEquation } from '@/utils/equationParser'
+import { extractQuestionMetadata } from '@/utils/equationParser'
 import { generateDiagnosticQuestions, analyzeAbility, generatePracticeConfig } from '@/utils/diagnostic'
 import { createAdaptiveEngine, getGroupSize, evaluateGroup, getDifficultyLabel } from '@/utils/adaptiveEngine'
 import { formatDuration } from '@/utils/timeFormat'
@@ -304,16 +304,10 @@ const handleSubmit = (answer) => {
   const responseTime = practiceStore.endQuestionTimer()
 
   // Extract metadata from the equation
-  const parsed = parseEquation(currentQuestion.value.equation)
-  const operator = parsed?.operator || ''
-  const isCarry = getCarryType(parsed) === 'carry'
-  const isBorrow = getCarryType(parsed) === 'borrow'
-  const leftVal = parseInt(parsed?.leftOperand) || 0
-  const rightVal = parseInt(parsed?.rightOperand) || 0
-  const operandMin = Math.min(leftVal, rightVal)
-  const operandMax = Math.max(leftVal, rightVal)
-  // Determine stepCount — check the current configSnapshot or use heuristics
-  const stepCount = currentQuestion.value.stepCount || 1
+  const { operator, isCarry, isBorrow, stepCount, operandMin, operandMax } = extractQuestionMetadata(
+    currentQuestion.value.equation,
+    currentQuestion.value
+  )
 
   // ── / metadata ──
 
