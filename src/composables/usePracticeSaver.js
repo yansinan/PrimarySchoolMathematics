@@ -39,13 +39,25 @@ export function usePracticeSaver() {
   const statsStore = useStatsStore()
 
   /**
+   * 拿 store 画像数据，传入 abilityProfile 纯函数
+   * 避免 U 层 abilityProfile.js 反向依赖 M 层 store（ARCHITECTURE § 1.2）
+   */
+  function buildProfileContext() {
+    return {
+      diagAnswers: practiceStore.abilityProfile?.diagAnswers || [],
+      adaptiveAnswers: practiceStore.adaptiveAnswers || [],
+      currentDifficultyIdx: practiceStore.currentDifficultyIdx ?? -1,
+    }
+  }
+
+  /**
    * 1) 每题答完：fire-and-forget
    * - 不 await，不阻塞 UI
    * - 多次写同一题自动覆盖
    * - 同步更新能力画像（fire‑and‑forget）
    */
   function savePerQuestion() {
-    computeAndSaveAbilityProfile()
+    computeAndSaveAbilityProfile(buildProfileContext())
     return practiceStore.saveSessionToDB()
   }
 
@@ -56,7 +68,7 @@ export function usePracticeSaver() {
    * - 不 await，让弹窗立即显示
    */
   async function saveGroupCheckpoint(history) {
-    computeAndSaveAbilityProfile()
+    computeAndSaveAbilityProfile(buildProfileContext())
     void history
   }
 
@@ -69,7 +81,7 @@ export function usePracticeSaver() {
    * @param {Array} history - 引擎 history（用于提取 evaluations）
    */
   async function saveAdaptiveFinal(answers, history) {
-    computeAndSaveAbilityProfile()
+    computeAndSaveAbilityProfile(buildProfileContext())
     const evaluations = extractEvaluationsJSON(history)
     practiceStore.session.answers = answers
     await practiceStore.saveSessionToDB(evaluations)
@@ -83,7 +95,7 @@ export function usePracticeSaver() {
    * - 同步更新能力画像
    */
   async function savePracticeFinal() {
-    computeAndSaveAbilityProfile()
+    computeAndSaveAbilityProfile(buildProfileContext())
     await practiceStore.saveSessionToDB()
     await statsStore.refreshAll()
   }

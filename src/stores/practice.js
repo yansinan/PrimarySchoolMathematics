@@ -28,7 +28,7 @@ function clearPersistedProfile() {
 
 const saved = loadPersistedProfile()
 
-export const usePracticeStore = defineStore('drawer', {
+export const usePracticeStore = defineStore('practice', {
   state: () => ({
     generateDrawerVisible: false,
     listPractices: [],
