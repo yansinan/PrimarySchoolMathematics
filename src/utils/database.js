@@ -49,8 +49,62 @@ class PracticeDB extends Dexie {
       abilitySnapshots: '++id, studentId, computedAt, synced',
     })
 
+    this.version(3).stores({
+      practiceSessions: '++id, studentId, createdAt, synced, updatedAt',
+      answers: '++id, sessionId, questionId, isCorrect, startedAt, synced, timestamp',
+      abilitySnapshots: '++id, studentId, computedAt, synced',
+      questions: '++id, &equation, operator, difficulty, createdAt, *operands',
+    }).upgrade(async (tx) => {
+      // 1. Backfill answers 缺字段
+      await tx.table('answers').toCollection().modify((a) => {
+        if (a.questionId === undefined) a.questionId = null
+        if (!a.inputMode) a.inputMode = a.options ? 'options' : 'keypad'
+        if (!a.layout) a.layout = 'horizontal'
+        if (a.assistLevel === undefined) a.assistLevel = 0
+        if (!a.startedAt) a.startedAt = a.timestamp - (a.responseTime || 0)
+        if (!a.endedAt) a.endedAt = a.timestamp
+      })
+
+      // 2. 从 answers 反向建 questions（去重）
+      const seen = new Map()
+      await tx.table('answers').each((a) => {
+        if (!a.equation || seen.has(a.equation)) return
+        seen.set(a.equation, {
+          equation: a.equation,
+          solution: a.solution,
+          operator: a.operator,
+          operandMin: a.operandMin,
+          operandMax: a.operandMax,
+          operands: [a.operandMin, a.operandMax].filter(x => x > 0),
+          isCarry: !!a.isCarry,
+          isBorrow: !!a.isBorrow,
+          difficulty: a.difficulty ?? 0,
+          inputMode: a.inputMode,
+          layout: a.layout,
+          assistLevel: a.assistLevel ?? 0,
+          blankMode: 'result',
+          createdAt: a.timestamp,
+        })
+      })
+      if (seen.size > 0) {
+        await tx.table('questions').bulkAdd([...seen.values()])
+        // 3. 回填 answers.questionId
+        const eqToId = new Map()
+        await tx.table('questions').each((q) => eqToId.set(q.equation, q.id))
+        await tx.table('answers').toCollection().modify((a) => {
+          if (!a.questionId && a.equation) a.questionId = eqToId.get(a.equation) ?? null
+        })
+      }
+
+      // 4. 记录迁移完成
+      try {
+        localStorage.setItem('psm_v2_to_v3_migration', new Date().toISOString())
+      } catch {}
+    })
+
     this.practiceSessions.mapToClass(PracticeSession)
     this.answers.mapToClass(Answer)
+    this.questions.mapToClass(Question)
   }
 }
 
@@ -104,6 +158,28 @@ class Answer {
     this.operandMin = 0
     this.operandMax = 0
     this.timestamp = Date.now()
+    this.synced = 0
+  }
+}
+
+// ─── Question helper (v3) ──────────────────────────────────────────────
+
+class Question {
+  constructor() {
+    this.equation = ''         // unique key, "23+47="
+    this.solution = 0
+    this.operator = ''         // '+' '-' '×' '÷'
+    this.operandMin = 0
+    this.operandMax = 0
+    this.operands = []         // 涉及所有数字
+    this.isCarry = false
+    this.isBorrow = false
+    this.difficulty = 0        // 0-12
+    this.inputMode = ''        // 'keypad' / 'options'
+    this.layout = ''           // 'horizontal' / 'vertical'
+    this.assistLevel = 0       // 0-3
+    this.blankMode = 'result'  // 'result' / 'mixed'
+    this.createdAt = Date.now()
     this.synced = 0
   }
 }
@@ -543,6 +619,58 @@ export async function clearAllData() {
     await db.answers.clear()
   })
   try { localStorage.removeItem('psm_profile') } catch {}
+}
+
+// ─── Question CRUD ──────────────────────────────────────────────────────
+
+/**
+ * Upsert a question by equation. Returns { id, isNew }.
+ * - 题目已存在 → 返回原 id, isNew=false
+ * - 题目不存在 → 创建, isNew=true
+ *
+ * @param {object} questionData
+ * @returns {Promise<{id:number, isNew:boolean}>}
+ */
+export async function saveQuestion(questionData) {
+  const existing = await db.questions.where('equation').equals(questionData.equation).first()
+  if (existing) return { id: existing.id, isNew: false }
+
+  const id = await db.questions.add({
+    equation: questionData.equation,
+    solution: questionData.solution ?? 0,
+    operator: questionData.operator || '',
+    operandMin: questionData.operandMin ?? 0,
+    operandMax: questionData.operandMax ?? 0,
+    operands: questionData.operands || [],
+    isCarry: !!questionData.isCarry,
+    isBorrow: !!questionData.isBorrow,
+    difficulty: questionData.difficulty ?? 0,
+    inputMode: questionData.inputMode || '',
+    layout: questionData.layout || '',
+    assistLevel: questionData.assistLevel ?? 0,
+    blankMode: questionData.blankMode || 'result',
+    createdAt: Date.now(),
+    synced: 0,
+  })
+  return { id, isNew: true }
+}
+
+/**
+ * Get a question by id.
+ * @param {number} id
+ * @returns {Promise<object|null>}
+ */
+export async function getQuestion(id) {
+  return db.questions.get(id) ?? null
+}
+
+/**
+ * Get a question by equation string.
+ * @param {string} equation
+ * @returns {Promise<object|null>}
+ */
+export async function getQuestionByEquation(equation) {
+  return db.questions.where('equation').equals(equation).first() ?? null
 }
 
 export default db
