@@ -52,13 +52,12 @@ export function usePracticeSaver() {
   /**
    * 2) 自适应一组完成：checkpoint
    * - 含 evaluations（如果之前答过有自评的组）
+   * - 只更新能力画像，不存 session；整轮完成时才落最终 session
    * - 不 await，让弹窗立即显示
-   * - 同步更新能力画像
    */
   async function saveGroupCheckpoint(history) {
     computeAndSaveAbilityProfile()
-    const evaluations = extractEvaluationsJSON(history)
-    return await practiceStore.saveSessionToDB(evaluations)
+    void history
   }
 
   /**
