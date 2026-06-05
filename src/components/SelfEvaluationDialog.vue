@@ -43,22 +43,22 @@
         </template>
       </div>
 
-      <!-- P2 阶段 11：本组 v2 弱项/强项（compact 模式，与 StatsDrawer/AbilityCard 同一组件） -->
+      <!-- P2 阶段 14：本组 v2 弱项/强项（孩子友好的简洁文案） -->
       <div v-if="analysis.weaknessByNumber.value.length || analysis.strengthByNumber.value.length" class="eval-v2-cards">
         <StrengthV2Card
           v-if="analysis.strengthByNumber.value.length"
           :data="analysis.strengthByNumber.value"
           :limit="3"
-          :title="'✓ 本组强项'"
-          :empty-text="'💪 继续练习'"
+          :title="'🌟 这组拿手'"
+          :empty-text="''"
           compact
         />
         <WeaknessV2Card
           v-if="analysis.weaknessByNumber.value.length"
           :data="analysis.weaknessByNumber.value"
           :limit="3"
-          :title="'⚠ 本组弱项'"
-          :empty-text="'🎉 没有弱项'"
+          :title="'📒 多练练'"
+          :empty-text="''"
           compact
         />
       </div>

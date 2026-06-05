@@ -81,23 +81,23 @@
       </div>
     </div>
 
-    <!-- ── P2 阶段 11：弱项 v2 top 3（单数字聚合，与 StatsDrawer 同源） ── -->
+    <!-- ── P2 阶段 14：弱项 v2 top 3（孩子友好的简洁文案） ── -->
     <div v-if="!compact && statsWeaknessByNumber.length" class="ability-card__row ability-card__row--v2-weak">
       <WeaknessV2Card
         :data="statsWeaknessByNumber"
         :limit="3"
-        :title="`⚠ 数字弱项 v2（top 3）`"
-        :empty-text="'🎉 没有数字弱项'"
+        :title="`📒 多练习`"
+        :empty-text="''"
       />
     </div>
 
-    <!-- ── P2 阶段 11：强项 v2 top 3（单数字聚合，与 StatsDrawer 同源） ── -->
+    <!-- ── P2 阶段 14：强项 v2 top 3（孩子友好的简洁文案） ── -->
     <div v-if="!compact && statsStrengthByNumber.length" class="ability-card__row ability-card__row--v2-strong">
       <StrengthV2Card
         :data="statsStrengthByNumber"
         :limit="3"
-        :title="`✓ 数字强项 v2（top 3）`"
-        :empty-text="'💪 继续练习'"
+        :title="`🌟 你最拿手`"
+        :empty-text="''"
       />
     </div>
 

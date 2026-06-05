@@ -61,24 +61,23 @@
           </div>
         </div>
 
-        <!-- ── Number weakness analysis (v2 复用：与 AbilityCard 数字 0-9 掌握度同源) ── -->
+        <!-- ── P2 阶段 14：数字弱项 / 强项（孩子友好的简洁文案） ── -->
         <div v-if="weakNumbersV2.length || strengthNumbersV2.length" class="weak-section">
-          <h3 class="section-title">数字弱项 / 强项分析（v2）</h3>
+          <h3 class="section-title">你掌握得怎么 样</h3>
           <StrengthV2Card
             v-if="strengthNumbersV2.length"
             :data="strengthNumbersV2"
-            :title="`✓ 数字强项（${strengthNumbersV2.length} 个）`"
-            :empty-text="'💪 继续练习，数字强项马上出现'"
+            :title="`🌟 你最拿手`"
+            :empty-text="''"
             class="weak-section__v2-card"
           />
           <WeaknessV2Card
             v-if="weakNumbersV2.length"
             :data="weakNumbersV2"
-            :title="`⚠ 数字弱项（${weakNumbersV2.length} 个）`"
-            :empty-text="'🎉 没有数字弱项，继续保持！'"
+            :title="`📒 多练习`"
+            :empty-text="''"
             class="weak-section__v2-card"
           />
-          <div class="weak-tip">💡 数据源与练习汇总弹窗的「数字掌握度」同步，accuracy &lt; 70% 视为弱项，≥ 80% 且 ≥ 3 题视为强项</div>
         </div>
 
         <!-- ── Recent sessions list ── -->

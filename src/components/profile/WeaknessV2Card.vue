@@ -45,8 +45,8 @@ import { computed } from 'vue'
 const props = defineProps({
   data: { type: Array, default: () => [] },
   limit: { type: Number, default: null },
-  title: { type: String, default: '⚠ 数字弱项（v2 单数字聚合）' },
-  emptyText: { type: String, default: '🎉 没有数字弱项，继续保持！' },
+  title: { type: String, default: '📒 多练习' },
+  emptyText: { type: String, default: '' },
   compact: { type: Boolean, default: false },
 })
 

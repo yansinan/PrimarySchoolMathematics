@@ -150,7 +150,7 @@ const currentLevelLabel = computed(() => {
   return DIFFICULTY_LEVELS[idx]?.label || '—'
 })
 
-// ── P2 阶段 11：强项 v2 鼓励文案（top 3 数字 → "4、5、9 的运算是你最拿手的！"） ──
+// ── P2 阶段 14：强项 v2 鼓励文案（top 3 数字 → "4、5、9 的运算是你最拿手的！"） ──
 const strengthEncouragement = computed(() => {
   const list = analysis.strengthByNumber.value
   if (!list || list.length === 0) return ''
