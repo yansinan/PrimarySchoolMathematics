@@ -81,6 +81,26 @@
       </div>
     </div>
 
+    <!-- ── P2 阶段 11：弱项 v2 top 3（单数字聚合，与 StatsDrawer 同源） ── -->
+    <div v-if="!compact && statsWeaknessByNumber.length" class="ability-card__row ability-card__row--v2-weak">
+      <WeaknessV2Card
+        :data="statsWeaknessByNumber"
+        :limit="3"
+        :title="`⚠ 数字弱项 v2（top 3）`"
+        :empty-text="'🎉 没有数字弱项'"
+      />
+    </div>
+
+    <!-- ── P2 阶段 11：强项 v2 top 3（单数字聚合，与 StatsDrawer 同源） ── -->
+    <div v-if="!compact && statsStrengthByNumber.length" class="ability-card__row ability-card__row--v2-strong">
+      <StrengthV2Card
+        :data="statsStrengthByNumber"
+        :limit="3"
+        :title="`✓ 数字强项 v2（top 3）`"
+        :empty-text="'💪 继续练习'"
+      />
+    </div>
+
     <!-- 错题优先级 top 5：按 priority 降序 + 改正状态 -->
     <div v-if="!compact && statsWrongPriority.length" class="ability-card__row ability-card__row--wrong-priority">
       <div class="ability-card__wrong-label">📌 需重点关注（前 5）</div>
@@ -106,6 +126,8 @@
 
 <script setup>
 import { computed } from 'vue'
+import WeaknessV2Card from './WeaknessV2Card.vue'
+import StrengthV2Card from './StrengthV2Card.vue'
 
 const props = defineProps({
   compact:         { type: Boolean,   default: false },
@@ -146,6 +168,21 @@ const props = defineProps({
    * @type {Array<Object>}
    */
   statsWrongPriority:   { type: Array,   default: () => [] },
+  // ── P2 阶段 11：弱项 v2 / 强项 v2（单数字聚合） ──
+  /**
+   * 弱项 v2 数字列表（accuracy < 0.7）
+   * 来源：useAbilityAnalysis.weaknessByNumber
+   * 形状：[{ number, accuracy, total, correct, questionsCount }, ...]
+   * @type {Array<Object>}
+   */
+  statsWeaknessByNumber: { type: Array, default: () => [] },
+  /**
+   * 强项 v2 数字列表（accuracy >= 0.8 且 total >= 3）
+   * 来源：useAbilityAnalysis.strengthByNumber
+   * 形状：[{ number, accuracy, total, correct, questionsCount }, ...]
+   * @type {Array<Object>}
+   */
+  statsStrengthByNumber: { type: Array, default: () => [] },
 })
 
 const hasData = computed(() => props.statsTotal > 0)
@@ -444,6 +481,14 @@ function masteryCellClass(n) {
 }
 .ability-card__mastery-cell--empty .ability-card__mastery-bar {
   background: transparent;
+}
+
+/* ── P2 阶段 11：弱项 v2 / 强项 v2 块（嵌入 WeaknessV2Card / StrengthV2Card） ── */
+.ability-card__row--v2-weak,
+.ability-card__row--v2-strong {
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
 }
 
 /* ── P2 阶段 10：错题优先级 top 5 ── */

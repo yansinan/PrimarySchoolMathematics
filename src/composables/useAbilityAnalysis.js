@@ -46,10 +46,30 @@ export function useAbilityAnalysis() {
   const masteryByNumber = ref({})
 
   /**
+   * P2 阶段 11：数字掌握度完整详情（用于派生弱项/强项）
+   * - 形状：{ 0: { accuracy, total, correct, questionsCount, days }, ... }
+   * - 保留与 masteryByNumber 同时刷新（同一函数调一次）
+   */
+  const masteryByNumberFull = ref({})
+
+  /**
    * 错题优先级（综合错误频率 / 未改正 / 最近出错，priority 降序）
    * 类型: Array<{ questionId, equation, operator, difficulty, wrongCount, totalAttempts, lastWrongAt, lastCorrectAt, isResolved, priority }>
    */
   const wrongAnswersPriority = ref([])
+
+  // ── P2 阶段 11：单数字维度派生（弱项 v2 / 强项 v2） ──
+  /**
+   * 弱项 v2（单数字）：accuracy < 0.7 且 total > 0
+   * 形状: Array<{ number, accuracy, total, correct, questionsCount }>
+   */
+  const weaknessByNumber = ref([])
+
+  /**
+   * 强项 v2（单数字）：accuracy >= 0.8 且 total >= 3
+   * 形状: Array<{ number, accuracy, total, correct, questionsCount }>
+   */
+  const strengthByNumber = ref([])
 
   /**
    * 学习曲线缓存：{ [questionId]: curve[] }
@@ -129,19 +149,45 @@ export function useAbilityAnalysis() {
     lastError.value = null
     try {
       const numbers = Array.from({ length: 10 }, (_, i) => i)
-      const results = await Promise.all(
+      const details = await Promise.all(
         numbers.map(async (n) => {
           const r = await analysis.getMasteryByNumber(n, { days: DEFAULT_DAYS })
-          return [n, r.accuracy]
+          return [n, r]
         })
       )
-      masteryByNumber.value = Object.fromEntries(results)
+      // 简版：只 accuracy（保持 v2.2.0 兼容）
+      masteryByNumber.value = Object.fromEntries(
+        details.map(([n, r]) => [n, r.accuracy])
+      )
+      // 完整版：含 total / correct / questionsCount（阶段 11 派生弱项/强项用）
+      masteryByNumberFull.value = Object.fromEntries(details)
+      // 派生弱项/强项（单数字维度）
+      _deriveWeaknessAndStrength()
     } catch (err) {
       lastError.value = err
       console.error('[useAbilityAnalysis] refreshMastery failed:', err)
     } finally {
       loading.value = false
     }
+  }
+
+  /**
+   * @internal
+   * 从 masteryByNumberFull 派生 weaknessByNumber / strengthByNumber
+   * - 弱项: accuracy < 0.7 且 total > 0
+   * - 强项: accuracy >= 0.8 且 total >= 3
+   * - 弱项按 accuracy 升序，强项按 accuracy 降序
+   */
+  function _deriveWeaknessAndStrength() {
+    const entries = Object.entries(masteryByNumberFull.value)
+    weaknessByNumber.value = entries
+      .filter(([, r]) => r.total > 0 && r.accuracy < 0.7)
+      .map(([n, r]) => ({ number: Number(n), ...r }))
+      .sort((a, b) => a.accuracy - b.accuracy)
+    strengthByNumber.value = entries
+      .filter(([, r]) => r.total >= 3 && r.accuracy >= 0.8)
+      .map(([n, r]) => ({ number: Number(n), ...r }))
+      .sort((a, b) => b.accuracy - a.accuracy)
   }
 
   /**
@@ -204,6 +250,9 @@ export function useAbilityAnalysis() {
     weaknessV2,
     strengthV2,
     masteryByNumber,
+    masteryByNumberFull,
+    weaknessByNumber,
+    strengthByNumber,
     wrongAnswersPriority,
     learningCurves,
     loading,

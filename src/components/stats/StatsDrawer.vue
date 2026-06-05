@@ -62,28 +62,23 @@
         </div>
 
         <!-- ── Number weakness analysis (v2 复用：与 AbilityCard 数字 0-9 掌握度同源) ── -->
-        <div v-if="weakNumbersV2.length" class="weak-section">
-          <h3 class="section-title">数字弱项分析</h3>
-          <div class="weak-list">
-            <div
-              v-for="item in weakNumbersV2"
-              :key="item.number"
-              class="weak-item"
-            >
-              <div class="weak-item__header">
-                <span class="weak-item__number">{{ item.number }}</span>
-                <el-tag
-                  :type="item.accuracy >= 0.5 ? 'warning' : 'danger'"
-                  size="small"
-                  effect="dark"
-                  class="weak-item__tag"
-                >
-                  {{ Math.round(item.accuracy * 100) }}% ({{ item.correct }}/{{ item.total }})
-                </el-tag>
-              </div>
-            </div>
-          </div>
-          <div class="weak-tip">💡 数据源与练习汇总弹窗的「数字掌握度」同步，accuracy &lt; 70% 视为弱项</div>
+        <div v-if="weakNumbersV2.length || strengthNumbersV2.length" class="weak-section">
+          <h3 class="section-title">数字弱项 / 强项分析（v2）</h3>
+          <StrengthV2Card
+            v-if="strengthNumbersV2.length"
+            :data="strengthNumbersV2"
+            :title="`✓ 数字强项（${strengthNumbersV2.length} 个）`"
+            :empty-text="'💪 继续练习，数字强项马上出现'"
+            class="weak-section__v2-card"
+          />
+          <WeaknessV2Card
+            v-if="weakNumbersV2.length"
+            :data="weakNumbersV2"
+            :title="`⚠ 数字弱项（${weakNumbersV2.length} 个）`"
+            :empty-text="'🎉 没有数字弱项，继续保持！'"
+            class="weak-section__v2-card"
+          />
+          <div class="weak-tip">💡 数据源与练习汇总弹窗的「数字掌握度」同步，accuracy &lt; 70% 视为弱项，≥ 80% 且 ≥ 3 题视为强项</div>
         </div>
 
         <!-- ── Recent sessions list ── -->
@@ -152,6 +147,8 @@ import { Chart, registerables } from 'chart.js'
 import { useStatsStore } from '@/stores/stats'
 import { getMasteryByNumber } from '@/utils/services/analysis'
 import { formatDuration } from '@/utils/timeFormat'
+import WeaknessV2Card from '@/components/profile/WeaknessV2Card.vue'
+import StrengthV2Card from '@/components/profile/StrengthV2Card.vue'
 import SessionDetail from './SessionDetail.vue'
 
 Chart.register(...registerables)
@@ -175,18 +172,24 @@ const weakNumbers = computed(() => {
   return statsStore.aggregatedStats?.weakNumbers || []
 })
 
-// ── P2 阶段 11：v2 数字弱项（与 AbilityCard 数字 0-9 掌握度同源） ──
+// ── P2 阶段 11：v2 数字弱项 / 强项（与 AbilityCard 数字 0-9 掌握度同源） ──
 const weakNumbersV2 = ref([])
+const strengthNumbersV2 = ref([])
 
-async function loadWeakNumbersV2() {
+async function loadV2WeaknessAndStrength() {
   // 0-9 并发查 getMasteryByNumber，与 AbilityCard.refreshMastery 同一函数
   const numbers = Array.from({ length: 10 }, (_, i) => i)
-  const results = await Promise.all(
+  const details = await Promise.all(
     numbers.map((n) => getMasteryByNumber(n, { days: 30 }))
   )
-  weakNumbersV2.value = results
+  // 弱项：accuracy < 0.7 且 total > 0
+  weakNumbersV2.value = details
     .filter((r) => r.total > 0 && r.accuracy < 0.7)
     .sort((a, b) => a.accuracy - b.accuracy)
+  // 强项：accuracy >= 0.8 且 total >= 3
+  strengthNumbersV2.value = details
+    .filter((r) => r.total >= 3 && r.accuracy >= 0.8)
+    .sort((a, b) => b.accuracy - a.accuracy)
 }
 
 const weakNumberSuggestion = computed(() => {
@@ -310,8 +313,8 @@ function buildOperatorChart() {
 
 async function handleOpen() {
   await statsStore.refreshAll()
-  // P2 阶段 11：v2 数字弱项查询（与 AbilityCard 数字 0-9 掌握度同源）
-  await loadWeakNumbersV2()
+  // P2 阶段 11：v2 数字弱项/强项查询（与 AbilityCard 数字 0-9 掌握度同源）
+  await loadV2WeaknessAndStrength()
   await nextTick()
   buildTrendChart()
   buildOperatorChart()

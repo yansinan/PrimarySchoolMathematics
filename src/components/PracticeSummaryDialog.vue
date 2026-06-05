@@ -38,6 +38,11 @@
         </div>
       </div>
 
+      <!-- P2 阶段 11：强项 v2 鼓励文案（组题完成弹窗） -->
+      <div v-if="strengthEncouragement" class="summary-encourage">
+        {{ strengthEncouragement }}
+      </div>
+
       <div class="summary-footer">继续加油，每天进步一点点 ✨</div>
     </div>
 
@@ -54,6 +59,8 @@
       :stats-weakness-v2="analysis.weaknessV2.value"
       :stats-strength-v2="analysis.strengthV2.value"
       :stats-wrong-priority="analysis.wrongAnswersPriority.value"
+      :stats-weakness-by-number="analysis.weaknessByNumber.value"
+      :stats-strength-by-number="analysis.strengthByNumber.value"
     />
 
     <template #footer>
@@ -139,6 +146,17 @@ const levelCurrentDisplay = computed(() => Math.max(1, currentDifficultyIdx.valu
 const currentLevelLabel = computed(() => {
   const idx = Math.max(0, currentDifficultyIdx.value)
   return DIFFICULTY_LEVELS[idx]?.label || '—'
+})
+
+// ── P2 阶段 11：强项 v2 鼓励文案（top 3 数字 → "4、5、9 的运算是你最拿手的！"） ──
+const strengthEncouragement = computed(() => {
+  const list = analysis.strengthByNumber.value
+  if (!list || list.length === 0) return ''
+  const top3 = list.slice(0, 3).map((s) => s.number)
+  if (top3.length === 0) return ''
+  if (top3.length === 1) return `${top3[0]} 的运算是你最拿手的！`
+  if (top3.length === 2) return `${top3[0]}、${top3[1]} 的运算是你最拿手的！`
+  return `${top3[0]}、${top3[1]}、${top3[2]} 的运算是你最拿手的！`
 })
 
 const props = defineProps({
@@ -237,5 +255,23 @@ function handleUpdate(val) {
   border-top: 1px solid #edf2f7;
   font-size: 12px;
   color: #c0c4cc;
+}
+
+/* P2 阶段 11：强项 v2 鼓励文案 */
+.summary-encourage {
+  font-size: 15px;
+  font-weight: 600;
+  color: #27ae60;
+  background: linear-gradient(135deg, #f0fdf4, #e6f9ed);
+  border: 1px solid rgba(39, 174, 96, 0.2);
+  border-radius: 12px;
+  padding: 8px 16px;
+  margin: 12px 0 4px;
+  animation: encourage-pop 0.4s ease-out;
+}
+
+@keyframes encourage-pop {
+  0% { transform: scale(0.9); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
 }
 </style>
