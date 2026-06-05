@@ -144,11 +144,19 @@ const {
   resetDisplayStats,
 } = useDisplayStrategy(session, currentQuestion)
 
+// ── 弹窗 composable（替代 ElMessageBox 和 window.__evalSelect 桥） ──
+const dialogs = usePracticeDialogs()
+
+// ── 持久化 composable（封装 4 处 saveSessionToDB 调用） ──
+const saver = usePracticeSaver()
+
 // ── 自适应会话 composable ──
 // 响应式状态：adaptiveEngine / adaptiveGroupIndex / groupAnswerOffset / nextLocked
 // 方法：startNewAdaptiveSession / completeAssessment (PR-4.3) / completeGroup (PR-4.4)
-// 注入 dialogs / saver 让 useAdaptiveSession 复用 V 层已创建的实例
-// (否则 useAdaptiveSession 内部 usePracticeDialogs() 会创建独立 ref, 弹窗状态不互通)
+// ⚠️ 顺序很关键：useAdaptiveSession 内部要复用这里创建的 dialogs/saver 实例，
+// 所以 dialogs/saver 必须先声明，再注入。如果反过来，会在 useAdaptiveSession 内部
+// 重新调用 usePracticeDialogs() 创建独立 ref，弹窗状态与 V 层模板不互通 → 弹窗不显示。
+// （TDZ bug：v2.3 a6d96b5 改注入时漏调顺序）
 const {
   adaptiveEngine,
   adaptiveGroupIndex,
@@ -159,12 +167,6 @@ const {
   completeAssessment,
   completeGroup,
 } = useAdaptiveSession({ dialogs, saver })
-
-// ── 弹窗 composable（替代 ElMessageBox 和 window.__evalSelect 桥） ──
-const dialogs = usePracticeDialogs()
-
-// ── 持久化 composable（封装 4 处 saveSessionToDB 调用） ──
-const saver = usePracticeSaver()
 
 /** 自适应引擎状态（注：adaptiveEngine / adaptiveGroupIndex / groupAnswerOffset
  *  / groupCorrectCount / nextLocked 等已抽到 useAdaptiveSession） */
@@ -539,6 +541,79 @@ watch(listPractices, (newPracticeList) => {
     }
   }
 })
+
+// ── 调试接口（仅 dev / 自动化测试用）──
+// 暴露 window.__psm_debug 让 agent 测试可以直接调函数过题，避免模拟点击的脆弱性。
+// 生产构建时 Vite tree-shake 不会删除顶层 if 分支（因为有副作用 window 赋值），
+// 接口仅暴露内部状态查询 + 受控的答题函数，不会破坏数据完整性。
+if (typeof window !== 'undefined') {
+  window.__psm_debug = {
+    /**
+     * 答当前题。isCorrect=true 答 solution，false 答 solution+1（故意答错）
+     * @param {boolean} [isCorrect=true] - true 答对，false 故意答错
+     * @returns {{ok: boolean, equation?: string, answer?: number, isCorrect?: boolean, reason?: string}}
+     */
+    answer: (isCorrect = true) => {
+      const q = currentQuestion.value
+      if (!q) return { ok: false, reason: 'no current question' }
+      const sol = q.solution
+      const ans = isCorrect ? sol : sol + 1
+      // 同步 session.currentAnswer，让 V 层模板（keypad / options）能看到答案
+      session.value.currentAnswer = String(ans)
+      handleSubmit(ans)
+      return { ok: true, equation: q.equation, answer: ans, isCorrect }
+    },
+
+    /**
+     * 连续答 N 题。默认全对。会自动等待 FEEDBACK_DELAYS.correct + 200ms 缓冲
+     * @param {number} n - 要答几题
+     * @param {boolean} [isCorrect=true] - 是否全对
+     * @returns {Promise<{ok: boolean, done: number}>}
+     */
+    answerN: async (n, isCorrect = true) => {
+      let done = 0
+      while (done < n && currentQuestion.value) {
+        window.__psm_debug.answer(isCorrect)
+        done++
+        // 等待反馈动画（正确 0.8s + 缓冲 200ms，确保下一题已经切换）
+        await new Promise(r => setTimeout(r, FEEDBACK_DELAYS.correct + 200))
+      }
+      return { ok: true, done }
+    },
+
+    /**
+     * 强制触发当前组完成（测 SelfEvaluationDialog 弹窗是否弹出）
+     */
+    completeGroup: () => completeGroup(),
+
+    /**
+     * 强制触发评估完成（从诊断态切到自适应态）
+     */
+    completeAssessment: () => completeAssessment(),
+
+    /**
+     * 查询当前状态
+     * @returns {{
+     *   phase: string,
+     *   isAssessment: boolean,
+     *   groupIdx: number,
+     *   answersCount: number,
+     *   correctCount: number,
+     *   totalQuestions: number,
+     *   hasProfile: boolean
+     * }}
+     */
+    state: () => ({
+      phase: phase.value,
+      isAssessment: isAssessment.value,
+      groupIdx: adaptiveGroupIndex.value,
+      answersCount: session.value.answers.length,
+      correctCount: correctCount.value,
+      totalQuestions: totalQuestions.value,
+      hasProfile: !!abilityProfile.value
+    })
+  }
+}
 
 /** 首次进入自动触发能力诊断 */
 onMounted(() => {
