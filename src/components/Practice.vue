@@ -109,7 +109,7 @@ import { usePracticeDialogs } from '@/composables/usePracticeDialogs'
 import { usePracticeSaver } from '@/composables/usePracticeSaver'
 import { useDisplayStrategy } from '@/composables/useDisplayStrategy'  // 🆕 PR-4.2 抽离 displayStats + applyDisplayModeForCurrentQuestion + generateOptions
 import { buildAttemptScore } from '@/utils/score'
-import { FEEDBACK_DELAYS, ASSESSMENT_ABORT_WRONG_STREAK, getCommentByRate, ASSIST_LEVELS } from '@/constants/practice'
+import { FEEDBACK_DELAYS, ASSESSMENT_ABORT_WRONG_STREAK, getCommentByRate, ASSIST_LEVELS, MAX_ATTEMPT_PER_QUESTION } from '@/constants/practice'
 
 import { usePracticeStore } from '@/stores/practice'
 import { useStatsStore } from '@/stores/stats'
@@ -371,6 +371,26 @@ const handleSubmit = (answer) => {
     // 评估模式下连续错 N 次 → 提前结束评估
     displayStats.value = updateDisplayStats(displayStats.value, isCorrect)
     const shouldAbortAssessment = isAssessment.value && displayStats.value.consecutiveWrong >= ASSESSMENT_ABORT_WRONG_STREAK
+
+    // ── 错题重试上限 (PR-fix-7.1 新增) ──
+    // attemptCount 已经在 answerEntry 中更新 (见 L318-325)。
+    // 如果 attemptCount >= MAX_ATTEMPT_PER_QUESTION + 1 = 4, 强制跳下一题。
+    // (注意: buildAttemptScore 的 score 公式 attemptCount=4+ 已为 0, 语义一致)
+    if (attemptCount >= MAX_ATTEMPT_PER_QUESTION + 1) {
+      ElMessage.warning({
+        message: `本题已重试 ${MAX_ATTEMPT_PER_QUESTION} 次, 跳过`,
+        duration: FEEDBACK_DELAYS.wrong,
+        offset: 100,
+        customClass: 'feedback-message'
+      })
+      setTimeout(() => {
+        session.value.feedbackType = null
+        session.value.currentAnswer = ''
+        digitFocusIdx.value = -1
+        handleNext()  // 强制跳下一题
+      }, FEEDBACK_DELAYS.wrong)
+      return
+    }
 
     if (shouldAbortAssessment) {
       const nextFn = () => {

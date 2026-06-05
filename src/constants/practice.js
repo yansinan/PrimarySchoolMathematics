@@ -146,3 +146,21 @@ export const MASTERY_CHECK_CONFIG = {
   targetPasses: 2,            // 横式答对 N 道算通过 → 升难度
   requiredAssistLevel: 0,     // 仅在 assistLevel=N 下触发 (0 = 标准模式)
 }
+
+/* ============================================================
+   题目最大重试次数 (PR-fix-7.1 新增)
+   ============================================================ */
+/**
+ * 题目最大重试次数 (PR-fix-7.1 新增)
+ *
+ * 设计:
+ *   - attemptCount 1: 首次答题
+ *   - attemptCount 2-3: 重试机会
+ *   - attemptCount 4+: 强制跳过 (P2-15 阶段 score 已衰减为 0)
+ *
+ * UI 行为:
+ *   - 第 1 次答错: 留当前题, 清空输入让用户重答
+ *   - 第 2-3 次答错: 留当前题, 提示已重试 N 次
+ *   - 第 4 次答错 (attemptCount >= 4): 强制跳下一题, ElMessage 提示
+ */
+export const MAX_ATTEMPT_PER_QUESTION = 3
