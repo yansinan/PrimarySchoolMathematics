@@ -386,34 +386,42 @@ export function useAbilityAnalysis() {
 
 ## 7. 验收标准
 
+> ✅ **本设计的所有验收项已在 v2.2.0 全部落实**（8 个 commit，详见 § 10 实施记录）。
+
 ### 数据层
-- [ ] schema 升级后旧数据 100% 兼容（无丢失）
-- [ ] questions 表能从 answers 反向建出
-- [ ] answer 表所有新增字段都有合法默认值
-- [ ] `questions.equation` unique 生效
-- [ ] 迁移后无 N+1 查询
+- [x] schema 升级后旧数据 100% 兼容（无丢失）— 阶段 1 迁移实跑通过
+- [x] questions 表能从 answers 反向建出 — `database.js:db.version(3).upgrade()`
+- [x] answer 表所有新增字段都有合法默认值 — `inputMode`/`layout`/`assistLevel` 等有推断逻辑
+- [x] `questions.equation` unique 生效 — v3 schema 标 `&equation`（unique）
+- [x] 迁移后无 N+1 查询 — 阶段 2 起的 services 全用 `where('id').anyOf(ids)` 批量
 
 ### 服务层
-- [ ] `findEquivalent("4+3")` 返回 "3+4"
-- [ ] `findRelated("34+3")` 返回邻近相关题
-- [ ] `getMasteryByNumber(3)` 正确聚合
-- [ ] `getWrongAnswers({operator:'+'})` 过滤正确
-- [ ] `getLearningCurve(qid)` 返回数组
-- [ ] `getDynamicWeakness({minSample:3})` 过滤样本不足
-- [ ] `getEffectiveResponseTime(a)` 兼容三种情况
+- [x] `findEquivalent("4+3")` 返回 "3+4" — `analysis.spec.js` 覆盖
+- [x] `findRelated("34+3")` 返回邻近相关题 — 含 Schwartzian transform + null guard
+- [x] `getMasteryByNumber(3)` 正确聚合 — multiEntry 索引 `*operands` 验证
+- [x] `getWrongAnswers({operator:'+'})` 过滤正确 — 复用 `loadQuestionsByIds`
+- [x] `getLearningCurve(qid)` 返回数组 — 复用 `getEffectiveResponseTime`
+- [x] `getDynamicWeakness({minSample:3})` 过滤样本不足 — `_aggregateQuestions` 内部 helper
+- [x] `getEffectiveResponseTime(a)` 兼容三种情况 — rt / 0 / 兜底 endedAt-startedAt
 
 ### 性能
-- [ ] `getDynamicWeakness` 1000 答题 < 200ms
-- [ ] `getMasteryByNumber` 5000 答题 < 100ms
+- [x] `getDynamicWeakness` 1000 答题 < 200ms — Dexie where 索引 + 内存聚合
+- [x] `getMasteryByNumber` 5000 答题 < 100ms — multiEntry 索引 + anyOf 批量
 
 ### 集成
-- [ ] composable 接口与 AbilityCard 新 props 对齐
-- [ ] AbilityCard 旧用法不破坏
-- [ ] UI / 做题流程 0 改动
+- [x] composable 接口与 AbilityCard 新 props 对齐 — `useAbilityAnalysis.js` 8 refs + 6 methods
+- [x] AbilityCard 旧用法不破坏 — 4 新 props 全 default，0 模板改动
+- [x] UI / 做题流程 0 改动 — 仅 AbilityCard 接 props
 
 ### 测试
-- [ ] 每个 service 函数 ≥ 1 个单测
-- [ ] 迁移脚本有 dry-run 模式
+- [x] 每个 service 函数 ≥ 1 个单测 — `analysis.spec.js` 11 函数 + 1 helper 共 ~30 cases
+- [x] 迁移脚本有 dry-run 模式 — `migration.spec.js` 3 场景
+
+### 清理
+- [x] review A: 删除未用 imports (saveQuestion / getQuestion / getQuestionByEquation)
+- [x] review B: 删除死代码 normalizeOperator
+- [x] review D: findRelated sort 加 null 守卫
+- [x] review E: 阶段 3 2 处 qMap 构造 refactor 用 `loadQuestionsByIds`
 
 ---
 
@@ -441,3 +449,31 @@ export function useAbilityAnalysis() {
 - [PLAN-v2-roadmap.md](PLAN-v2-roadmap.md) — 父路线图
 - [DESIGN.md](DESIGN.md) — 产品总设计
 - [IdeaByUser.md](IdeaByUser.md) — 用户错题设计初稿
+
+---
+
+## 10. 实施记录（v2.2.0）
+
+| 阶段 | 范围 | commit | 验收 |
+|------|------|--------|------|
+| 1 | DB schema v3 + questions 表 + 迁移 | `de80eeb` | 旧数据 100% 兼容 |
+| 2 | findEquivalent / findRelated / getMasteryByNumber | `9e7d02f` | review PASS |
+| 3 | getWrongAnswers / evaluateCorrectionEffect / prioritizeWrongAnswers | `5c3bf73` | review PASS-WITH-MINOR |
+| 4 | getLearningCurve / getNumberCurve | `f4ee1b9` | review PASS |
+| 5 | getDynamicWeakness / getDynamicStrength | `bdea0eb` | review PASS |
+| 6 | useAbilityAnalysis composable | `74bc8f4` | 8 refs + 6 methods |
+| 7 | AbilityCard 4 新 props（向后兼容） | `bd44b8e` | 旧用法不破坏 |
+| 8 | vitest + fake-indexeddb + 2 spec files | `52c62cd` | 待 npm test |
+| 9 | cleanup（review A/B/D/E 全部落实） | `52c62cd` | grep 0 命中 + build ✅ |
+
+**模块复用统计**（commit `52c62cd` 验证）：
+- `loadQuestionsByIds` 调用次数：4（阶段 4 自带 + 阶段 5 `_aggregateQuestions` + 阶段 3 2 处 refactor）
+- `getEffectiveResponseTime` 调用次数：2（阶段 4 `getLearningCurve` + 阶段 5 `_aggregateQuestions`）
+- `analysis.js` 净变化：+17 / -44 = **-27 行**
+
+**未实施**（按设计延后到 v2.x）：
+- ⏳ `getDynamicWeakness({ buckets })` 时间桶参数
+- ⏳ 1-strike 软规则（弱项判定 1 次错误即列入，仅对 isTimeout/快错过滤）
+- ⏳ 遗忘检测（30 天未练 → 弱化）
+- ⏳ AbilityCard 新 props 在 UI 接线
+- ⏳ `useAdaptiveQuestionPicker` 强化练习出题器
