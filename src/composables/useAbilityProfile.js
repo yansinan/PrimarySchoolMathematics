@@ -134,6 +134,24 @@ export function useAbilityProfile(options = {}) {
   const weaknessV2Flat = computed(() => analysis.weaknessV2.value)
   const strengthV2Flat = computed(() => analysis.strengthV2.value)
 
+  // 顶层包 weaknessByNumber / strengthByNumber, V 模板不用写 .value
+  // SelfEvaluationDialog 模板用: <div v-if="weaknessByNumberFlat.length || ...">
+  // 防止模板误写 .value 导致运行期崩 (P0-1 修复)
+  const weaknessByNumberFlat = computed(() => {
+    const v = weaknessByNumber.value
+    return Array.isArray(v) ? v : []
+  })
+  const strengthByNumberFlat = computed(() => {
+    const v = strengthByNumber.value
+    return Array.isArray(v) ? v : []
+  })
+
+  // V 层委托: 用指定 answers 刷新 mastery (V 层不直连 analysis)
+  // SelfEvaluationDialog 弹窗打开时调 1 行
+  async function refreshMasteryFromAnswers(answers) {
+    await analysis.refreshMasteryFromAnswers(answers || [])
+  }
+
   /**
    * 弹窗打开时的"刷新汇总数据"方法
    * 封装: 答案源选择 → refresh() → refreshMasteryFromAnswers()
@@ -185,7 +203,12 @@ export function useAbilityProfile(options = {}) {
     // 新增: V 模板不用 .value
     weaknessV2Flat,
     strengthV2Flat,
+    // 新增 (arch-v2.3-2): V 模板不用 .value (单数字维度)
+    weaknessByNumberFlat,
+    strengthByNumberFlat,
     // 新增: 弹窗打开时一键刷新
     refreshForSummary,
+    // 新增 (arch-v2.3-2): 用指定 answers 刷新 mastery (SelfEvaluationDialog 委托)
+    refreshMasteryFromAnswers,
   }
 }

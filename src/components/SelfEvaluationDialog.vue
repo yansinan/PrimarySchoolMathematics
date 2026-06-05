@@ -44,18 +44,18 @@
       </div>
 
       <!-- P2 阶段 14：本组 v2 弱项/强项（孩子友好的简洁文案） -->
-      <div v-if="weaknessByNumber.value.length || strengthByNumber.value.length" class="eval-v2-cards">
+      <div v-if="weaknessByNumberFlat.length || strengthByNumberFlat.length" class="eval-v2-cards">
         <StrengthV2Card
-          v-if="strengthByNumber.value.length"
-          :data="strengthByNumber.value"
+          v-if="strengthByNumberFlat.length"
+          :data="strengthByNumberFlat"
           :limit="3"
           :title="'🌟 这组拿手'"
           :empty-text="''"
           compact
         />
         <WeaknessV2Card
-          v-if="weaknessByNumber.value.length"
-          :data="weaknessByNumber.value"
+          v-if="weaknessByNumberFlat.length"
+          :data="weaknessByNumberFlat"
           :limit="3"
           :title="'📒 多练练'"
           :empty-text="''"
@@ -85,6 +85,7 @@ import { ref, watch } from 'vue'
 import { useAbilityProfile } from '@/composables/useAbilityProfile'
 import WeaknessV2Card from '@/components/profile/WeaknessV2Card.vue'
 import StrengthV2Card from '@/components/profile/StrengthV2Card.vue'
+import { EVAL_FACES, EVAL_SCORE_LABELS, DEFAULT_EVAL_SCORE, SELECT_CONFIRM_DELAY_MS } from '@/constants'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -99,49 +100,37 @@ const props = defineProps({
 
 const emit = defineEmits(['update:visible', 'select'])
 
-const selectedScore = ref(3)  // 默认 3 = 刚刚好
+const selectedScore = ref(DEFAULT_EVAL_SCORE)  // 默认 = 刚刚好
 const hoveredScore = ref(null)
 
 // ── P2 阶段 11：v2 数字弱项/强项（与 StatsDrawer / AbilityCard UI 统一组件） ──
 // 数据范围：本组 answers（每组完成时调 refresh）
+// arch-v2.3-2 整改: V 层不直连 analysis, 走 composable 委托
 const profile = useAbilityProfile()
-const analysis = profile.analysis
-const weaknessByNumber = profile.weaknessByNumber
-const strengthByNumber = profile.strengthByNumber
+const { weaknessByNumberFlat, strengthByNumberFlat, refreshMasteryFromAnswers } = profile
 watch(() => props.visible, (v) => {
   if (v) {
-    selectedScore.value = 3
+    selectedScore.value = DEFAULT_EVAL_SCORE
     hoveredScore.value = null
-    // 弹窗打开时从本组 answers 算 mastery
-    analysis.refreshMasteryFromAnswers(props.groupAnswers || [])
+    // 弹窗打开时从本组 answers 算 mastery (经 composable 委托)
+    refreshMasteryFromAnswers(props.groupAnswers)
   }
 })
 
-// 5 个表情（Unicode 表情字符，直接渲染）
-const faces = [
-  { score: 1, emoji: '😩' },
-  { score: 2, emoji: '😟' },
-  { score: 3, emoji: '🙂' },
-  { score: 4, emoji: '😄' },
-  { score: 5, emoji: '😌' },
-]
+// 5 个表情（Unicode 表情字符，直接渲染）— 来自 constants/evaluation.js
+const faces = EVAL_FACES
 
-const scoreLabels = {
-  1: '有点难…',
-  2: '不太轻松',
-  3: '刚刚好',
-  4: '挺容易',
-  5: '太简单',
-}
+// 评分标签 — 来自 constants/evaluation.js
+const scoreLabels = EVAL_SCORE_LABELS
 
 function selectScore(score) {
   selectedScore.value = score
-  // 单击即继续：800ms 后自动关闭（原版 400ms 太快，延长到 800ms 让用户看清选择）
-  // 注意：此处是唯一 emit select 的地方，handleUpdate 不再重复 emit
+  // 唯一 emit select 入口: handleUpdate 不再 emit
+  // 延迟常量来自 constants/evaluation.js (原 400ms → 800ms 让用户看清选择)
   setTimeout(() => {
     emit('select', score)
     emit('update:visible', false)
-  }, 800)
+  }, SELECT_CONFIRM_DELAY_MS)
 }
 
 function handleUpdate(val) {
