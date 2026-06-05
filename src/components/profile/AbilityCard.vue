@@ -57,6 +57,50 @@
         <span class="ability-card__tags-label">完成诊断后这里会显示你的强项/薄弱</span>
       </div>
     </div>
+
+    <!-- ── P2 阶段 10：v2 数据块（数字掌握度 + 错题优先级） ── -->
+    <!-- 数字 0-9 掌握度：紧凑 10 个条形，0=未学过的留灰 -->
+    <div v-if="!compact && hasMasteryData" class="ability-card__row ability-card__row--mastery">
+      <div class="ability-card__mastery-label">数字掌握度（近 30 天）</div>
+      <div class="ability-card__mastery-grid">
+        <div
+          v-for="n in 10"
+          :key="n - 1"
+          class="ability-card__mastery-cell"
+          :class="masteryCellClass(n - 1)"
+          :title="`${n - 1}: ${masteryPercent(n - 1)}%`"
+        >
+          <span class="ability-card__mastery-num">{{ n - 1 }}</span>
+          <div class="ability-card__mastery-bar">
+            <div
+              class="ability-card__mastery-fill"
+              :style="{ width: masteryPercent(n - 1) + '%' }"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 错题优先级 top 5：按 priority 降序 + 改正状态 -->
+    <div v-if="!compact && statsWrongPriority.length" class="ability-card__row ability-card__row--wrong-priority">
+      <div class="ability-card__wrong-label">📌 需重点关注（前 5）</div>
+      <ol class="ability-card__wrong-list">
+        <li
+          v-for="(item, idx) in statsWrongPriority.slice(0, 5)"
+          :key="item.questionId"
+          class="ability-card__wrong-item"
+          :class="{ 'ability-card__wrong-item--resolved': item.isResolved }"
+        >
+          <span class="ability-card__wrong-rank">{{ idx + 1 }}</span>
+          <span class="ability-card__wrong-equation">{{ item.equation }}</span>
+          <span class="ability-card__wrong-meta">
+            错 {{ item.wrongCount }} 次 · P{{ item.priority }}
+            <span v-if="item.isResolved" class="ability-card__wrong-resolved">已改正</span>
+            <span v-else class="ability-card__wrong-unresolved">未改正</span>
+          </span>
+        </li>
+      </ol>
+    </div>
   </div>
 </template>
 
@@ -122,6 +166,31 @@ const accuracyClass = computed(() => {
   if (acc < 0.5)   return 'ability-card__value--weak'
   return 'ability-card__value--mid'
 })
+
+// ── P2 阶段 10：v2 数据 computeds ──
+
+/** 数字掌握度是否有数据（任一数字有 total>0） */
+const hasMasteryData = computed(() => {
+  const m = props.statsMasteryByNumber || {}
+  return Object.values(m).some((acc) => acc > 0)
+})
+
+/** 单个数字的掌握度百分比（0-100），无数据返 0 */
+function masteryPercent(n) {
+  const m = props.statsMasteryByNumber || {}
+  const acc = m[n]
+  if (acc == null) return 0
+  return Math.round(acc * 100)
+}
+
+/** 单个数字的 cell class：未学过 / 弱 / 中 / 强 */
+function masteryCellClass(n) {
+  const pct = masteryPercent(n)
+  if (pct === 0) return 'ability-card__mastery-cell--empty'
+  if (pct < 50) return 'ability-card__mastery-cell--weak'
+  if (pct < 80) return 'ability-card__mastery-cell--mid'
+  return 'ability-card__mastery-cell--strong'
+}
 </script>
 
 <style scoped lang="scss">
@@ -309,5 +378,139 @@ const accuracyClass = computed(() => {
 .ability-card__tags--weak .ability-card__tag {
   background: rgba(230, 162, 60, 0.1);
   color: #e6a23c;
+}
+
+/* ── P2 阶段 10：数字 0-9 掌握度（紧凑 10 格） ── */
+.ability-card__row--mastery {
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.ability-card__mastery-label {
+  font-size: 11px;
+  color: #909399;
+  font-weight: 600;
+}
+
+.ability-card__mastery-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+}
+
+.ability-card__mastery-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  border-radius: 6px;
+  background: #f5f7fa;
+}
+
+.ability-card__mastery-num {
+  font-size: 10px;
+  font-weight: 700;
+  color: #1e3c5c;
+  min-width: 8px;
+  text-align: center;
+}
+
+.ability-card__mastery-bar {
+  flex: 1;
+  height: 4px;
+  background: #e8edf3;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.ability-card__mastery-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+
+.ability-card__mastery-cell--strong .ability-card__mastery-fill {
+  background: #27ae60;
+}
+.ability-card__mastery-cell--mid .ability-card__mastery-fill {
+  background: #e6a23c;
+}
+.ability-card__mastery-cell--weak .ability-card__mastery-fill {
+  background: #e74c3c;
+}
+.ability-card__mastery-cell--empty {
+  opacity: 0.5;
+}
+.ability-card__mastery-cell--empty .ability-card__mastery-bar {
+  background: transparent;
+}
+
+/* ── P2 阶段 10：错题优先级 top 5 ── */
+.ability-card__row--wrong-priority {
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.ability-card__wrong-label {
+  font-size: 11px;
+  color: #909399;
+  font-weight: 600;
+}
+
+.ability-card__wrong-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ability-card__wrong-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #fdf6ec;
+}
+
+.ability-card__wrong-item--resolved {
+  background: #f0f9f4;
+  opacity: 0.7;
+}
+
+.ability-card__wrong-rank {
+  font-weight: 700;
+  color: #e6a23c;
+  min-width: 14px;
+}
+
+.ability-card__wrong-equation {
+  font-family: 'Menlo', 'Consolas', monospace;
+  font-weight: 600;
+  color: #1e3c5c;
+  min-width: 60px;
+}
+
+.ability-card__wrong-meta {
+  font-size: 10px;
+  color: #909399;
+  margin-left: auto;
+}
+
+.ability-card__wrong-resolved {
+  color: #27ae60;
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+.ability-card__wrong-unresolved {
+  color: #e74c3c;
+  font-weight: 600;
+  margin-left: 4px;
 }
 </style>

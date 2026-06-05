@@ -50,6 +50,10 @@
       :stats-level="totalAnswers > 0 ? levelCurrentDisplay : 0"
       :stats-level-total="DIFFICULTY_LEVELS.length"
       :stats-level-label="currentLevelLabel"
+      :stats-mastery-by-number="analysis.masteryByNumber.value"
+      :stats-weakness-v2="analysis.weaknessV2.value"
+      :stats-strength-v2="analysis.strengthV2.value"
+      :stats-wrong-priority="analysis.wrongAnswersPriority.value"
     />
 
     <template #footer>
@@ -77,16 +81,31 @@
  *  - update:visible (boolean)
  *  - select (action: 'confirm' | 'cancel' | 'close')
  */
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import AbilityCard from '@/components/profile/AbilityCard.vue'
 import { usePracticeStore } from '@/stores/practice'
+import { useAbilityAnalysis } from '@/composables/useAbilityAnalysis'
 import { DIAG_LEVELS } from '@/utils/diagnostic'
 import { DIFFICULTY_LEVELS } from '@/utils/adaptiveEngine'
 
 // ── 从 store 读取能力画像数据 ──
 const practiceStore = usePracticeStore()
 const { abilityProfile, currentDifficultyIdx, adaptiveAnswers } = storeToRefs(practiceStore)
+
+// ── P2 阶段 10：用户能力分析 composable（11 函数响应式数据层） ──
+// 弹窗打开时才触发查询，避免常驻计算 + 页面污染
+const analysis = useAbilityAnalysis()
+watch(
+  () => props.visible,
+  (v) => {
+    if (v) {
+      // 全量 + 数字掌握度并发查询（refresh 内已用 Promise.all 串并行）
+      analysis.refresh()
+      analysis.refreshMastery()
+    }
+  }
+)
 
 // ── 强项/薄弱评估（基于 diagAnswers） ──
 function evaluateLevel(levelId, answers) {
