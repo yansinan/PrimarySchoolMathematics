@@ -103,6 +103,7 @@ import SelfEvaluationDialog from '@/components/dialog/SelfEvaluationDialog.vue'
 import { extractQuestionMetadata } from '@/utils/equationParser'
 import { generateDiagnosticQuestions, generatePracticeConfig } from '@/utils/diagnostic'
 import { decideDisplayMode, updateDisplayStats } from '@/utils/displayStrategy'  // decideDisplayMode / updateDisplayStats 仍在 V 层 (handleSubmit 用)
+import { getDifficultyLabel } from '@/utils/adaptiveEngine'  // ⚠️ PR-4.3 漏改修复: currentStage (L174) 仍用此函数, 后续应下沉到 useAdaptiveSession
 import { useAdaptiveSession } from '@/composables/useAdaptiveSession'
 import { usePracticeDialogs } from '@/composables/usePracticeDialogs'
 import { usePracticeSaver } from '@/composables/usePracticeSaver'
