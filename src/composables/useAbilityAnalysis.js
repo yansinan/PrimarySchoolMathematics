@@ -172,6 +172,37 @@ export function useAbilityAnalysis() {
   }
 
   /**
+   * P2 阶段 12：从 caller 传入的 answers 算 masteryByNumber（不查 db.answers）
+   * - 用于"本轮" / "本组" 等上下文相关数据源
+   * - 三个调用方不同范围：
+   *   - StatsDrawer：全量历史（传 db.answers.toArray()，暂由原 refreshMastery 处理）
+   *   - PracticeSummaryDialog：传 adaptiveAnswers（本轮）
+   *   - SelfEvaluationDialog：传 session.answers（本组）
+   *
+   * @param {Array} answers - caller 传入的 answer 数组
+   * @returns {Promise<void>}
+   */
+  async function refreshMasteryFromAnswers(answers) {
+    loading.value = true
+    lastError.value = null
+    try {
+      const details = await analysis.getMasteryByNumberFromAnswersBatch(answers || [])
+      masteryByNumber.value = Object.fromEntries(
+        details.map((r) => [r.number, r.accuracy])
+      )
+      masteryByNumberFull.value = Object.fromEntries(
+        details.map((r) => [r.number, r])
+      )
+      _deriveWeaknessAndStrength()
+    } catch (err) {
+      lastError.value = err
+      console.error('[useAbilityAnalysis] refreshMasteryFromAnswers failed:', err)
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /**
    * @internal
    * 从 masteryByNumberFull 派生 weaknessByNumber / strengthByNumber
    * - 弱项: accuracy < 0.7 且 total > 0
