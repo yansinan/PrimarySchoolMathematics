@@ -61,39 +61,29 @@
           </div>
         </div>
 
-        <!-- ── Number weakness analysis ── -->
-        <div v-if="weakNumbers.length" class="weak-section">
+        <!-- ── Number weakness analysis (v2 复用：与 AbilityCard 数字 0-9 掌握度同源) ── -->
+        <div v-if="weakNumbersV2.length" class="weak-section">
           <h3 class="section-title">数字弱项分析</h3>
           <div class="weak-list">
             <div
-              v-for="item in weakNumbers"
-              :key="`${item.number}_${item.operator}`"
+              v-for="item in weakNumbersV2"
+              :key="item.number"
               class="weak-item"
             >
               <div class="weak-item__header">
                 <span class="weak-item__number">{{ item.number }}</span>
-                <span class="weak-item__op">{{ operatorLabel(item.operator) }}</span>
                 <el-tag
                   :type="item.accuracy >= 0.5 ? 'warning' : 'danger'"
                   size="small"
                   effect="dark"
                   class="weak-item__tag"
                 >
-                  {{ Math.round(item.accuracy * 100) }}% ({{ item.correct }}/{{ item.count }})
+                  {{ Math.round(item.accuracy * 100) }}% ({{ item.correct }}/{{ item.total }})
                 </el-tag>
-              </div>
-              <div class="weak-item__desc" v-if="item.wrongEquations.length">
-                <span class="weak-item__desc-label">错误题目：</span>
-                <span class="weak-item__equations">
-                  <template v-for="(we, wi) in item.wrongEquations" :key="wi">
-                    <code class="wrong-eq">{{ we.equation }}{{ we.userAnswer }}</code>
-                    <span v-if="wi < item.wrongEquations.length - 1">、</span>
-                  </template>
-                </span>
               </div>
             </div>
           </div>
-          <div class="weak-tip">💡 建议加强这些数字的{{ weakNumberSuggestion }}练习</div>
+          <div class="weak-tip">💡 数据源与练习汇总弹窗的「数字掌握度」同步，accuracy &lt; 70% 视为弱项</div>
         </div>
 
         <!-- ── Recent sessions list ── -->
@@ -160,6 +150,7 @@ import {
 } from '@element-plus/icons-vue'
 import { Chart, registerables } from 'chart.js'
 import { useStatsStore } from '@/stores/stats'
+import { getMasteryByNumber } from '@/utils/services/analysis'
 import { formatDuration } from '@/utils/timeFormat'
 import SessionDetail from './SessionDetail.vue'
 
@@ -183,6 +174,20 @@ const accuracyClass = computed(() => {
 const weakNumbers = computed(() => {
   return statsStore.aggregatedStats?.weakNumbers || []
 })
+
+// ── P2 阶段 11：v2 数字弱项（与 AbilityCard 数字 0-9 掌握度同源） ──
+const weakNumbersV2 = ref([])
+
+async function loadWeakNumbersV2() {
+  // 0-9 并发查 getMasteryByNumber，与 AbilityCard.refreshMastery 同一函数
+  const numbers = Array.from({ length: 10 }, (_, i) => i)
+  const results = await Promise.all(
+    numbers.map((n) => getMasteryByNumber(n, { days: 30 }))
+  )
+  weakNumbersV2.value = results
+    .filter((r) => r.total > 0 && r.accuracy < 0.7)
+    .sort((a, b) => a.accuracy - b.accuracy)
+}
 
 const weakNumberSuggestion = computed(() => {
   const items = weakNumbers.value
@@ -305,6 +310,8 @@ function buildOperatorChart() {
 
 async function handleOpen() {
   await statsStore.refreshAll()
+  // P2 阶段 11：v2 数字弱项查询（与 AbilityCard 数字 0-9 掌握度同源）
+  await loadWeakNumbersV2()
   await nextTick()
   buildTrendChart()
   buildOperatorChart()
