@@ -101,7 +101,7 @@ import OptionButtons from '@/components/input/OptionButtons.vue'
 import PracticeSummaryDialog from '@/components/dialog/PracticeSummaryDialog.vue'
 import SelfEvaluationDialog from '@/components/dialog/SelfEvaluationDialog.vue'
 import { extractQuestionMetadata } from '@/utils/equationParser'
-import { generateDiagnosticQuestions, analyzeAbility, generatePracticeConfig } from '@/utils/diagnostic'
+import { generateDiagnosticQuestions, generatePracticeConfig } from '@/utils/diagnostic'
 import { createAdaptiveEngine, getGroupSize, evaluateGroup, getDifficultyLabel } from '@/utils/adaptiveEngine'
 import { formatDuration } from '@/utils/timeFormat'
 import { generateAdaptiveBatch } from '@/utils/adaptiveBatch'
@@ -149,8 +149,8 @@ const {
 
 // ── 自适应会话 composable ──
 // 响应式状态：adaptiveEngine / adaptiveGroupIndex / groupAnswerOffset / nextLocked
-// 方法：startNewAdaptiveSession
-// 注：handleAssessmentComplete / completeGroup 仍由本文件内 const 声明实现
+// 方法：startNewAdaptiveSession / completeAssessment (PR-4.3 抽离)
+// 注：completeGroup 仍由本文件内 const 声明实现 (PR-4.4 续抽)
 const {
   adaptiveEngine,
   adaptiveGroupIndex,
@@ -158,6 +158,7 @@ const {
   groupCorrectCount,
   nextLocked,
   startNewAdaptiveSession,
+  completeAssessment,
 } = useAdaptiveSession()
 
 // ── 弹窗 composable（替代 ElMessageBox 和 window.__evalSelect 桥） ──
@@ -379,7 +380,7 @@ const handleSubmit = (answer) => {
         session.value.feedbackType = null
         session.value.currentAnswer = ''
         digitFocusIdx.value = -1
-        handleAssessmentComplete()
+        completeAssessment()
       }
 
       if (session.value.displayMode.input === 'keypad') {
@@ -419,7 +420,7 @@ const handleNext = () => {
     nextLocked.value = false
   } else {
     // ── Session complete — handle based on phase ──
-    const fn = isAssessment.value ? handleAssessmentComplete :
+    const fn = isAssessment.value ? completeAssessment :
                adaptiveEngine.value ? completeAdaptiveGroup : handlePracticeComplete
     // reset nextLocked after the handler runs
     const result = fn()
@@ -434,36 +435,7 @@ const handleNext = () => {
 
 /** 生成一组题目已抽到 utils/adaptiveBatch.js 的 generateAdaptiveBatch */
 
-/** 诊断完成 → 分析能力 → 启动自适应练习 */
-const handleAssessmentComplete = async () => {
-  const answers = session.value.answers
-  const profile = analyzeAbility(answers)
-  const answeredCount = answers.length
-
-  ElMessage({
-    message: `📊 评估完成！共 ${answeredCount} 题，正确 ${correctCount.value} 题`,
-    duration: 3000,
-    offset: 100,
-    customClass: 'feedback-message'
-  })
-
-  // 创建自适应引擎，生成第 1 组
-  // 使用固定默认值（targetMin=10, targetMax=30），
-  // 不读 configSnapshot（属于 Generate.vue，已被多次污染）。
-  // completeAssessment 会把这些默认值写入 adaptiveConfig，后续组从那读。
-  const targetMin = 10
-  const targetMax = 30
-  const engine = createAdaptiveEngine(profile, targetMin, targetMax)
-  adaptiveEngine.value = engine
-  adaptiveGroupIndex.value = 1
-
-  const size = getGroupSize(engine)
-  const firstQuestions = generateAdaptiveBatch(engine, size)
-
-  // 传入 targetMin/targetMax 到 adaptiveConfig（之后 startNewAdaptiveSession 从这读）
-  practiceStore.completeAssessment(profile, { targetMin, targetMax })
-  practiceStore.setListPractices(firstQuestions)
-}
+/** handleAssessmentComplete 已抽到 useAdaptiveSession.completeAssessment (PR-4.3) */
 
 /** 自适应一组完成 → 评估 → 生成下一组或结束 */
 const completeAdaptiveGroup = async () => {

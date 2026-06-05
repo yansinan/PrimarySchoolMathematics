@@ -4,23 +4,25 @@
  * 拆分自 Practice.vue 的自适应会话逻辑（Phase 4 渐进式）。
  * 当前 PR 抽取了：
  *  - 响应式状态：adaptiveEngine / adaptiveGroupIndex / groupAnswerOffset / nextLocked
- *  - 方法：startNewAdaptiveSession
+ *  - 方法：startNewAdaptiveSession / completeAssessment
  *
- * handleAssessmentComplete / completeGroup 仍保留在 Practice.vue，
- * 后续 PR 继续迁移（避免单 PR 改动过大）。
+ * handleAssessmentComplete 已在 PR-4.3 抽到 completeAssessment。
+ * completeGroup 仍保留在 Practice.vue，后续 PR-4.4 继续迁移。
+ *
+ * ARCH § 1.3 业务编排下沉 composable。
  */
 
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { storeToRefs } from 'pinia'
 import { usePracticeStore } from '@/stores/practice'
-import { generateDiagnosticQuestions } from '@/utils/diagnostic'
+import { generateDiagnosticQuestions, analyzeAbility } from '@/utils/diagnostic'
 import { createAdaptiveEngine, getGroupSize } from '@/utils/adaptiveEngine'
 import { generateAdaptiveBatch } from '@/utils/adaptiveBatch'
 
 export function useAdaptiveSession() {
   const practiceStore = usePracticeStore()
-  const { session } = storeToRefs(practiceStore)
+  const { session, correctCount } = storeToRefs(practiceStore)
 
   // ── 响应式状态 ──
   /** 自适应引擎实例（由 createAdaptiveEngine 创建） */
@@ -84,6 +86,47 @@ export function useAdaptiveSession() {
     })
   }
 
+  /**
+   * PR-4.3: 诊断完成 → 分析能力 → 启动自适应练习
+   *
+   * 抽离自 Practice.vue L438-468 (31 行) handleAssessmentComplete:
+   *   - 分析能力 (analyzeAbility)
+   *   - ElMessage 评估完成提示
+   *   - 创建自适应引擎 (固定 targetMin=10, targetMax=30 默认值)
+   *   - 同步到 store (setListPractices / completeAssessment)
+   *
+   * @returns {Promise<void>}
+   */
+  async function completeAssessment() {
+    const answers = session.value.answers
+    const profile = analyzeAbility(answers)
+    const answeredCount = answers.length
+
+    ElMessage({
+      message: `📊 评估完成！共 ${answeredCount} 题，正确 ${correctCount.value} 题`,
+      duration: 3000,
+      offset: 100,
+      customClass: 'feedback-message'
+    })
+
+    // 创建自适应引擎, 生成第 1 组
+    // 使用固定默认值 (targetMin=10, targetMax=30),
+    // 不读 configSnapshot (属于 Generate.vue, 已被多次污染)。
+    // completeAssessment 会把这些默认值写入 adaptiveConfig, 后续组从那读。
+    const targetMin = 10
+    const targetMax = 30
+    const engine = createAdaptiveEngine(profile, targetMin, targetMax)
+    adaptiveEngine.value = engine
+    adaptiveGroupIndex.value = 1
+
+    const size = getGroupSize(engine)
+    const firstQuestions = generateAdaptiveBatch(engine, size)
+
+    // 传入 targetMin/targetMax 到 adaptiveConfig (之后 startNewAdaptiveSession 从这读)
+    practiceStore.completeAssessment(profile, { targetMin, targetMax })
+    practiceStore.setListPractices(firstQuestions)
+  }
+
   return {
     // 状态（ref）
     adaptiveEngine,
@@ -93,6 +136,7 @@ export function useAdaptiveSession() {
     nextLocked,
     // 方法
     startNewAdaptiveSession,
-    // 注：handleAssessmentComplete / completeGroup 仍由 Practice.vue 内部实现
+    completeAssessment,
+    // 注：completeGroup 仍由 Practice.vue 内部实现 (PR-4.4 续抽)
   }
 }
