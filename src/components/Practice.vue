@@ -542,10 +542,157 @@ watch(listPractices, (newPracticeList) => {
   }
 })
 
-// ── 调试接口（仅 dev / 自动化测试用）──
-// 暴露 window.__psm_debug 让 agent 测试可以直接调函数过题，避免模拟点击的脆弱性。
-// 生产构建时 Vite tree-shake 不会删除顶层 if 分支（因为有副作用 window 赋值），
-// 接口仅暴露内部状态查询 + 受控的答题函数，不会破坏数据完整性。
+// ─────────────────────────────────────────────────────────────
+// 调试接口（window.__psm_debug）
+// ─────────────────────────────────────────────────────────────
+//
+// ## 用途
+// 给自动化 agent / e2e 测试 / 调试脚本一个稳定的入口，
+// 直接调函数过题 / 触发组完成 / 查状态，
+// 避免依赖 DOM 模拟点击（脆弱、易碎、对 UI 改动敏感）。
+//
+// ## 在浏览器中调用
+// 打开 DevTools Console 或 Playwright `page.evaluate(() => ...)` 即可。
+// 最常用的 6 个调用：
+//   // 1) 答当前题（默认答对 = 用 solution 答）
+//   window.__psm_debug.answer()
+//   // 2) 故意答错当前题（用 solution+1 答）
+//   window.__psm_debug.answer(false)
+//   // 3) 连续答 5 题（全对），串行等待每题反馈动画结束
+//   await window.__psm_debug.answerN(5)
+//   // 4) 连续答 5 对 + 5 错（交替），用于生成混合数据
+//   for (let i = 0; i < 5; i++) {
+//     await window.__psm_debug.answer(true)
+//     await window.__psm_debug.answer(false)
+//   }
+//   // 5) 强制弹 SelfEvaluationDialog（模拟"本组答完"）
+//   window.__psm_debug.completeGroup()
+//   // 6) 强制从评估态切到自适应态（模拟"评估完成"）
+//   window.__psm_debug.completeAssessment()
+//
+// ## API 完整列表
+//
+// ### answer(isCorrect = true) → 同步
+// 答当前题。同步修改 `session.currentAnswer` 后调用本组件内的 `handleSubmit(ans)`。
+// @param {boolean} [isCorrect=true] - true 用 solution 答（对）；false 用 solution+1（故意错）
+// @returns {{ ok: boolean, equation?: string, answer?: number, isCorrect?: boolean, reason?: string }}
+//   - 成功: `{ ok: true, equation, answer, isCorrect }`
+//   - 失败: `{ ok: false, reason: 'no current question' }`（无 currentQuestion 时）
+// @side-effects
+//   - 写入 `session.answers`（按 `questionIndex` 去重，重试时替换旧记录）
+//   - 触发 `ElMessage` 提示（成功 ✓ / 失败 ✗）
+//   - 答对：`FEEDBACK_DELAYS.correct` (800ms) 后自动 `handleNext`
+//   - 答错：`FEEDBACK_DELAYS.wrong` (1500ms) 后清空输入；
+//           若 `attemptCount >= MAX_ATTEMPT_PER_QUESTION + 1` (4) 则强制跳下一题
+// @boundary `currentQuestion` 为 null 时（无题 / 答完 / 评估被中断）立即返回失败
+//
+// ### answerN(n, isCorrect = true) → 异步
+// 连续答 N 题。内部循环 `answer()` + `setTimeout` 等待反馈动画。
+// @param {number} n - 要答几题
+// @param {boolean} [isCorrect=true] - 是否全对
+// @returns {Promise<{ ok: boolean, done: number }>}
+//   - `done` 是实际答完的题数（若 `currentQuestion` 提前变 null 会提前结束）
+// @side-effects 同 `answer()`，但串行 N 次
+// @timing 每次答题后等 `FEEDBACK_DELAYS.correct + 200ms`（1000ms），确保下一题已切换
+// @boundary
+//   - 不要并行调用多个 `answerN`（共享全局 `currentQuestion` 会冲突）
+//   - 不要在 `answerN` 未完成时调用 `state()`，可能拿到中间态
+//
+// ### completeGroup() → 同步
+// 强制调用 `useAdaptiveSession.completeGroup()`，模拟"本组答完"。
+// @returns void
+// @side-effects
+//   - 触发 `dialogs.showSelfEvaluationDialog()` 弹窗（用户选"更难/稍难/一样/稍易/更易"）
+//   - 用户选择后，自适应引擎根据难度档位决定下一组题
+// @usage 主要用于 agent 测试：不用真答完一组，直接调这个就能弹 SelfEvaluationDialog
+//
+// ### completeAssessment() → 同步
+// 强制调用 `useAdaptiveSession.completeAssessment()`，模拟"评估阶段答完"。
+// @returns void
+// @side-effects
+//   - 调用 `saver.saveAssessmentFinal()` 把诊断结果写入 DB
+//   - 触发 `dialogs.showAssessmentSummaryDialog()` 弹窗（展示评估结果）
+//   - 关闭弹窗后自动进入自适应第 1 组
+// @usage 主要用于 agent 测试：不用真答完 5 道诊断题，直接调这个就能切到自适应
+//
+// ### state() → 同步，纯查询
+// 查询当前状态，无副作用。
+// @returns {{
+//   phase: 'idle'|'assessment'|'practice',   // 当前阶段
+//   isAssessment: boolean,                    // 是否评估阶段（等价于 phase === 'assessment'）
+//   groupIdx: number,                         // 当前自适应组序号（0 = 第 1 组；评估阶段固定 0）
+//   answersCount: number,                     // session.answers 长度（按 questionIndex 去重）
+//   correctCount: number,                     // session.answers 分数求和（不是"答对题数"，是 score 累计）
+//   totalQuestions: number,                   // listPractices 总题数
+//   hasProfile: boolean                       // 是否有能力画像（评估完成才有，诊断阶段为 false）
+// }}
+// @usage 配合上面所有 API 做断言（"答完 5 题后 phase 应该 === 'assessment' 结束"）
+//
+// ## 典型测试场景
+//
+// 场景 1: 走完整个评估（5 道诊断题全对 → 自动进自适应第 1 组）
+//   await window.__psm_debug.answerN(5, true)
+//   // 评估完成 → 弹 AssessmentSummaryDialog → 关弹窗 → 自动进自适应第 1 组
+//
+// 场景 2: 测答错 3 次强制跳（MAX_ATTEMPT_PER_QUESTION=3，attemptCount=4 强制跳）
+//   await window.__psm_debug.answer(false)  // 第 1 次答错：留题，提示 ✗
+//   await window.__psm_debug.answer(false)  // 第 2 次答错：留题，提示"已重试 1 次"
+//   await window.__psm_debug.answer(false)  // 第 3 次答错：留题，提示"已重试 2 次"
+//   await window.__psm_debug.answer(false)  // 第 4 次答错：attemptCount=4 → 强制跳下一题
+//
+// 场景 3: 测评估阶段连续错 2 次提前结束（ASSESSMENT_ABORT_WRONG_STREAK=2）
+//   await window.__psm_debug.answer(false)
+//   await window.__psm_debug.answer(false)  // 触发 completeAssessment（弹评估结束弹窗）
+//
+// 场景 4: 测 SelfEvaluationDialog 弹窗（自适应模式下"本组答完"会弹）
+//   await window.__psm_debug.answerN(5, true)  // 评估完成 → 进自适应
+//   window.__psm_debug.completeGroup()         // 强制弹 SelfEvaluationDialog
+//
+// 场景 5: 测 PracticeSummaryDialog（整轮完成时弹）
+//   await window.__psm_debug.answerN(5, true)   // 评估完成 → 进自适应第 1 组
+//   // 接下来要"完成所有自适应组"才会弹 PracticeSummaryDialog
+//   // 真实路径：要循环 "答一组 → completeGroup → 选难度 → 再答一组" 若干次
+//   // agent 测试通常只测弹窗能否弹出，可直接调 dialogs.showPracticeSummaryDialog(...)
+//
+// 场景 6: 测 StatsDrawer 3 section（先用 answerN 答题生成数据）
+//   await window.__psm_debug.answerN(20, true)
+//   // 然后通过 Vue Devtools / 直接 import statsStore 调 openDrawer()
+//   // StatsDrawer 内部从 store 读数据，__psm_debug 暂不暴露 statsStore
+//
+// ## 注意事项
+// - 接口仅在浏览器环境挂载（`typeof window !== 'undefined'`）
+//   → SSR / Node 测试环境下访问会 ReferenceError
+// - **不影响 production 行为**：仅暴露 state 查询 + 受控的答题函数，不暴露 store mutation
+// - `answer()` 是同步调，但答题后的 setTimeout/动画是异步的
+//   → `answer()` 返回 ≠ 下一题就绪，要等 800ms~1500ms
+// - `answerN` 内部用 setTimeout 串行等待 `FEEDBACK_DELAYS.correct + 200ms` (1000ms)
+//   → 不要并行调用多个 `answerN`（共享 `currentQuestion` 会乱）
+// - 答错时 `isCorrect=false` 会走 `attemptCount` 累加重试逻辑
+//   → 连答 4 次错才会强制跳题（见 `handleSubmit` 的 `attemptCount >= MAX_ATTEMPT_PER_QUESTION + 1`）
+// - `completeGroup()` / `completeAssessment()` 弹窗是异步的
+//   → agent 测试要用 `dialogs` 自己的 API 接续（或等待弹窗出现），不要靠 `sleep`
+// - 测错路径前先 `await window.__psm_debug.state()` 看 `phase`、`groupIdx` 等
+//
+// ## 相关常量（来自 src/constants/practice.js）
+// - FEEDBACK_DELAYS.correct = 800ms         (答对后自动跳下一题的等待)
+// - FEEDBACK_DELAYS.wrong = 1500ms          (答错后清空输入的等待)
+// - FEEDBACK_DELAYS.assessmentAbort = 1500ms (评估提前结束的等待)
+// - MAX_ATTEMPT_PER_QUESTION = 3            (单题最多重试 3 次，attemptCount=4 强制跳)
+// - ASSESSMENT_ABORT_WRONG_STREAK = 2       (评估阶段连续错 2 次提前结束)
+// - MIN_GROUPS_PER_DIMENSION = 6            (同维度至少练 6 组才考虑变动)
+// - CONSECUTIVE_GOOD_TO_ADVANCE = 3         (连续答好多组才升阶)
+// - ACCURACY_THRESHOLDS = { good: 0.80, bad: 0.50 }
+// - SPEED_THRESHOLDS = [5000/7000/10000/14000/Infinity] ms (单题平均用时分档)
+//
+// ## 相关 composable / store
+// - handleSubmit            → 本组件内（L294），包装 session.answers 写入 + ElMessage + setTimeout
+// - useAdaptiveSession      → 提供 completeGroup / completeAssessment / startNewAdaptiveSession
+// - usePracticeDialogs      → 提供 showSelfEvaluationDialog / showAssessmentSummaryDialog / showPracticeSummaryDialog
+// - usePracticeSaver        → 提供 saveAssessmentFinal / savePerQuestion / savePracticeFinal
+// - useDisplayStrategy      → 提供 applyDisplayModeForCurrentQuestion / generateOptions
+// - stores/practice.js      → 内部状态（phase / abilityProfile / session / listPractices / adaptiveAnswers）
+// - stores/stats.js         → StatsDrawer 数据源（暂未通过 __psm_debug 暴露）
+// ─────────────────────────────────────────────────────────────
 if (typeof window !== 'undefined') {
   window.__psm_debug = {
     /**
