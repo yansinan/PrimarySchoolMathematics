@@ -105,10 +105,11 @@ import { generateDiagnosticQuestions, analyzeAbility, generatePracticeConfig } f
 import { createAdaptiveEngine, getGroupSize, evaluateGroup, getDifficultyLabel } from '@/utils/adaptiveEngine'
 import { formatDuration } from '@/utils/timeFormat'
 import { generateAdaptiveBatch } from '@/utils/adaptiveBatch'
-import { decideDisplayMode, updateDisplayStats, createInitialStats } from '@/utils/displayStrategy'
+import { decideDisplayMode, updateDisplayStats } from '@/utils/displayStrategy'  // decideDisplayMode / updateDisplayStats 仍在 V 层 (handleSubmit 用)
 import { useAdaptiveSession } from '@/composables/useAdaptiveSession'
 import { usePracticeDialogs } from '@/composables/usePracticeDialogs'
 import { usePracticeSaver } from '@/composables/usePracticeSaver'
+import { useDisplayStrategy } from '@/composables/useDisplayStrategy'  // 🆕 PR-4.2 抽离 displayStats + applyDisplayModeForCurrentQuestion + generateOptions
 import { buildAttemptScore, sumAnswerScores } from '@/utils/score'
 import { FEEDBACK_DELAYS, ASSESSMENT_ABORT_WRONG_STREAK, getGroupComment, getCommentByRate, ASSIST_LEVELS } from '@/constants/practice'
 import { TARGET_LIMITS } from '@/utils/formDefaults'
@@ -137,9 +138,14 @@ const {
   abilityProfile
 } = storeToRefs(practiceStore)
 
-// ── 题目展示策略状态（抽到 utils/displayStrategy.js，纯函数化） ──
-// 注意：原实现是模块级 mutable，改为 ref 化的响应式状态
-const displayStats = ref(createInitialStats())
+// ── 题目展示策略 composable (PR-4.2 抽离) ──
+// 封装 displayStats ref + applyDisplayModeForCurrentQuestion + generateOptions + resetDisplayStats
+const {
+  displayStats,
+  applyDisplayModeForCurrentQuestion,
+  generateOptions,
+  resetDisplayStats,
+} = useDisplayStrategy(session, currentQuestion)
 
 // ── 自适应会话 composable ──
 // 响应式状态：adaptiveEngine / adaptiveGroupIndex / groupAnswerOffset / nextLocked
@@ -215,45 +221,6 @@ const inputProps = computed(() => {
 })
 
 /**
- * 根据当前题目的 inputMode 字段应用 displayMode
- *
- * P0 重构（参见 PLAN-v2-roadmap.md）：
- * - 自适应引擎生成的题目携带 inputMode 字段（在 diversifyBatch 中写入）
- * - 查 ASSIST_LEVELS 表得到 layout/input，避免旧版硬编码选择题→横式的逻辑
- * - 普通 Generate.vue 练习题没有 inputMode，回退到 decideDisplayMode 做 per-question 救援
- *
- * @returns {void} 直接修改 session.value.displayMode / session.value.currentOptions
- */
-const applyDisplayModeForCurrentQuestion = () => {
-  const q = currentQuestion.value
-  if (!q) return
-
-  // 自适应题：inputMode 已由 diversifyBatch 写入；查 ASSIST_LEVELS 表得到 layout/input
-  const modeConfig = q.inputMode && ASSIST_LEVELS.find(m => m.key === q.inputMode)
-
-  if (modeConfig) {
-    session.value.displayMode = { layout: modeConfig.layout, input: modeConfig.input }
-    if (modeConfig.input === 'options' && q.options?.length) {
-      // 选择题：拷贝引擎预置的 options 数组
-      session.value.currentOptions = [...q.options]
-    } else {
-      // keypad 题：清空旧选项数组（防止上一题残留）
-      session.value.currentOptions = []
-    }
-    return
-  }
-
-  // 非自适应题（普通 Generate.vue 练习题）：保留 decideDisplayMode 作为 fallback / per-question 救援
-  const mode = decideDisplayMode(q.equation, displayStats.value)
-  session.value.displayMode = mode
-  if (mode.input === 'options') {
-    generateOptions(q.solution)
-  } else {
-    session.value.currentOptions = []
-  }
-}
-
-/**
  * 每题重置：重置输入/反馈状态 + 计时器 + displayMode
  * 注意：不清空 session.answers（只在组边界才清空，见 resetGroupAnswers）
  * 这样 handleNext 每题调此处时，当前组答案不丢失，
@@ -266,7 +233,8 @@ const initPractice = () => {
   practiceStore.resetQuestionInputState()
   practiceStore.session.sessionStartTime = Date.now()
 
-  displayStats.value = createInitialStats()
+  // 重置 displayStats (PR-4.2 抽到 composable)
+  resetDisplayStats()
 
   // 从 currentQuestion.inputMode 查 ASSIST_LEVELS 表决定 layout/input
   applyDisplayModeForCurrentQuestion()
@@ -282,18 +250,6 @@ const initPractice = () => {
  */
 const resetGroupAnswers = () => {
   practiceStore.session.answers = []
-}
-
-const generateOptions = (correct) => {
-  const options = [correct]
-  while (options.length < 4) {
-    const offset = Math.floor(Math.random() * 5) + 1
-    const wrong = correct + (Math.random() > 0.5 ? offset : -offset)
-    if (wrong > 0 && !options.includes(wrong)) {
-      options.push(wrong)
-    }
-  }
-  session.value.currentOptions = options.sort(() => Math.random() - 0.5)
 }
 
 /** 竖式逐位输入：委托给 DigitInput */
