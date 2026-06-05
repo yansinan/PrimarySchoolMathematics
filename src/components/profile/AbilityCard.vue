@@ -106,7 +106,7 @@
       <div class="ability-card__wrong-label">📌 需重点关注（前 5）</div>
       <ol class="ability-card__wrong-list">
         <li
-          v-for="(item, idx) in statsWrongPriority.slice(0, 5)"
+          v-for="(item, idx) in statsWrongPriority.slice(0, priorityLimit)"
           :key="item.questionId"
           class="ability-card__wrong-item"
           :class="{ 'ability-card__wrong-item--resolved': item.isResolved }"
@@ -148,20 +148,6 @@ const props = defineProps({
    * @type {Object<number, number>}
    */
   statsMasteryByNumber: { type: Object,  default: () => ({}) },
-  /**
-   * 动态弱项列表（按 accuracy 升序）
-   * 来源：useAbilityAnalysis.weaknessV2
-   * 元素形状：{ key: string, accuracy: number, sample: number, ... }
-   * @type {Array<Object>}
-   */
-  statsWeaknessV2:      { type: Array,   default: () => [] },
-  /**
-   * 动态强项列表（按 score 降序）
-   * 来源：useAbilityAnalysis.strengthV2
-   * 元素形状：{ key: string, score: number, sample: number, ... }
-   * @type {Array<Object>}
-   */
-  statsStrengthV2:      { type: Array,   default: () => [] },
   /**
    * 错题优先级列表（limit=20，按优先级排序）
    * 来源：useAbilityAnalysis.wrongAnswersPriority
@@ -207,6 +193,7 @@ const {
   hasMasteryData,
   masteryPercent,
   masteryCellClass,
+  priorityLimit,  // 🆕 新增: 错题优先级截取上限（fallback 5, 见 useAbilityProfile L55）
 } = profile
 </script>
 
