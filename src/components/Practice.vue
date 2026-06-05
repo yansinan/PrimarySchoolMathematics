@@ -258,44 +258,30 @@ const layoutRef = ref(null)
 /** 防退格后 @input 重复处理 */
 let bsLock = false
 
+/** 是否启用 DigitInput 逐位输入（keypad 模式统一处理，不区分横/竖式） */
+const isKeypad = () => session.value.displayMode.input === 'keypad'
+
 const handleInput = (value) => {
-  if (session.value.displayMode.layout === 'vertical' && session.value.displayMode.input === 'keypad') {
-    if (bsLock) { bsLock = false; return }   // 退格触发的 input，跳过
-    const digit = value.replace(/_/g, '').slice(-1)
-    if (digit && layoutRef.value?.acceptDigit) {
-      session.value.currentAnswer = layoutRef.value.acceptDigit(digit)
-    }
+  if (!isKeypad()) {
+    session.value.currentAnswer = value
     return
   }
-  // 横式 + keypad：也委托给 DigitInput 管理逐位输入
-  if (session.value.displayMode.layout === 'horizontal' && session.value.displayMode.input === 'keypad') {
-    if (bsLock) { bsLock = false; return }
-    const digit = String(value || '').replace(/_/g, '').slice(-1)
-    if (digit && layoutRef.value?.acceptDigit) {
-      session.value.currentAnswer = layoutRef.value.acceptDigit(digit)
-    }
-    return
+  if (bsLock) { bsLock = false; return }   // 退格触发的 input，跳过
+  const digit = String(value || '').replace(/_/g, '').slice(-1)
+  if (digit && layoutRef.value?.acceptDigit) {
+    session.value.currentAnswer = layoutRef.value.acceptDigit(digit)
   }
-  session.value.currentAnswer = value
 }
 
 const handleBackspace = () => {
-  if (session.value.displayMode.layout === 'vertical' && session.value.displayMode.input === 'keypad') {
-    bsLock = true
-    if (layoutRef.value?.acceptBackspace) {
-      session.value.currentAnswer = layoutRef.value.acceptBackspace()
-    }
+  if (!isKeypad()) {
+    session.value.currentAnswer = session.value.currentAnswer.slice(0, -1)
     return
   }
-  // 横式 + keypad：同样委托给 DigitInput
-  if (session.value.displayMode.layout === 'horizontal' && session.value.displayMode.input === 'keypad') {
-    bsLock = true
-    if (layoutRef.value?.acceptBackspace) {
-      session.value.currentAnswer = layoutRef.value.acceptBackspace()
-    }
-    return
+  bsLock = true
+  if (layoutRef.value?.acceptBackspace) {
+    session.value.currentAnswer = layoutRef.value.acceptBackspace()
   }
-  session.value.currentAnswer = session.value.currentAnswer.slice(0, -1)
 }
 
 const handleSelect = (option) => {
