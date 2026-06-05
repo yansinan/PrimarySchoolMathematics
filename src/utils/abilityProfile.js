@@ -19,6 +19,7 @@ import { saveAbilitySnapshot } from '@/utils/database'
 import { usePracticeStore } from '@/stores/practice'
 import { DIAG_LEVELS } from '@/utils/diagnostic'
 import { DIFFICULTY_LEVELS } from '@/utils/adaptiveEngine'
+import { getAnswerScore, sumAnswerScores } from '@/utils/score'
 
 /**
  * 单等级评估辅助函数
@@ -26,9 +27,9 @@ import { DIFFICULTY_LEVELS } from '@/utils/adaptiveEngine'
 function evaluateLevel(levelId, answers) {
   const la = answers.filter(a => a.level === levelId)
   if (!la.length) return { correct: 0, total: 0, accuracy: 0, hasData: false }
-  const correct = la.filter(a => a.isCorrect).length
+  const correct = la.filter(a => getAnswerScore(a) === 1).length
   const total = la.length
-  return { correct, total, accuracy: correct / total, hasData: true }
+  return { correct, total, accuracy: sumAnswerScores(la) / total, hasData: true }
 }
 
 /**
@@ -43,7 +44,7 @@ export async function computeAndSaveAbilityProfile() {
 
   // 整体统计数据
   const totalQuestions = all.length
-  const correctCount = all.filter(a => a.isCorrect).length
+  const correctCount = sumAnswerScores(all)
   const accuracy = totalQuestions > 0 ? correctCount / totalQuestions : 0
 
   // 强项/薄弱评估

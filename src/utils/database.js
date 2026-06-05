@@ -1,4 +1,5 @@
 import Dexie from 'dexie'
+import { computeScore, getAnswerScore, sumAnswerScores } from '@/utils/score'
 
 // ─── Helper: extract operand numbers from an equation string ────────────
 // e.g. "7+8=" → [7, 8], "15-8=" → [15, 8], "9-4=" → [9, 4]
@@ -102,6 +103,21 @@ class PracticeDB extends Dexie {
       } catch {}
     })
 
+    this.version(4).stores({
+      practiceSessions: '++id, studentId, createdAt, synced, updatedAt',
+      answers: '++id, sessionId, questionId, isCorrect, startedAt, synced, timestamp',
+      abilitySnapshots: '++id, studentId, computedAt, synced',
+      questions: '++id, &equation, operator, difficulty, createdAt, *operands',
+    }).upgrade(async (tx) => {
+      await tx.table('answers').toCollection().modify((a) => {
+        if (a.attemptCount == null) a.attemptCount = 1
+        if (a.score == null) a.score = a.isCorrect ? computeScore(a.attemptCount) : 0
+      })
+      try {
+        localStorage.setItem('psm_v3_to_v4_migration', new Date().toISOString())
+      } catch {}
+    })
+
     this.practiceSessions.mapToClass(PracticeSession)
     this.answers.mapToClass(Answer)
     this.questions.mapToClass(Question)
@@ -150,6 +166,8 @@ class Answer {
     this.solution = 0
     this.userAnswer = 0
     this.isCorrect = false
+    this.attemptCount = 1
+    this.score = 0
     this.responseTime = 0
     this.operator = ''
     this.isCarry = false
@@ -221,6 +239,8 @@ export async function saveSession(sessionData, answersData) {
       solution: a.solution ?? 0,
       userAnswer: a.userAnswer ?? 0,
       isCorrect: !!a.isCorrect,
+      attemptCount: a.attemptCount ?? 1,
+      score: typeof a.score === 'number' ? a.score : (a.isCorrect ? 1 : 0),
       responseTime: a.responseTime || 0,
       operator: a.operator || '',
       isCarry: !!a.isCarry,
@@ -351,7 +371,7 @@ export async function getAggregatedStats(studentId = 'default') {
     .toArray()
 
   const totalQuestions = allAnswers.length
-  const totalCorrect = allAnswers.filter(a => a.isCorrect).length
+  const totalCorrect = sumAnswerScores(allAnswers)
   const overallAccuracy = totalQuestions > 0 ? totalCorrect / totalQuestions : 0
 
   // Operator stats
@@ -361,8 +381,8 @@ export async function getAggregatedStats(studentId = 'default') {
     if (byOp.length > 0) {
       operatorStats[op] = {
         count: byOp.length,
-        correct: byOp.filter(a => a.isCorrect).length,
-        accuracy: byOp.filter(a => a.isCorrect).length / byOp.length
+        correct: sumAnswerScores(byOp),
+        accuracy: sumAnswerScores(byOp) / byOp.length
       }
     }
   }
@@ -373,13 +393,13 @@ export async function getAggregatedStats(studentId = 'default') {
   const carryStats = {
     withCarry: {
       count: withCarry.length,
-      correct: withCarry.filter(a => a.isCorrect).length,
-      accuracy: withCarry.length > 0 ? withCarry.filter(a => a.isCorrect).length / withCarry.length : 0
+      correct: sumAnswerScores(withCarry),
+      accuracy: withCarry.length > 0 ? sumAnswerScores(withCarry) / withCarry.length : 0
     },
     withoutCarry: {
       count: withoutCarry.length,
-      correct: withoutCarry.filter(a => a.isCorrect).length,
-      accuracy: withoutCarry.length > 0 ? withoutCarry.filter(a => a.isCorrect).length / withoutCarry.length : 0
+      correct: sumAnswerScores(withoutCarry),
+      accuracy: withoutCarry.length > 0 ? sumAnswerScores(withoutCarry) / withoutCarry.length : 0
     }
   }
 
@@ -389,13 +409,13 @@ export async function getAggregatedStats(studentId = 'default') {
   const borrowStats = {
     withBorrow: {
       count: withBorrow.length,
-      correct: withBorrow.filter(a => a.isCorrect).length,
-      accuracy: withBorrow.length > 0 ? withBorrow.filter(a => a.isCorrect).length / withBorrow.length : 0
+      correct: sumAnswerScores(withBorrow),
+      accuracy: withBorrow.length > 0 ? sumAnswerScores(withBorrow) / withBorrow.length : 0
     },
     withoutBorrow: {
       count: withoutBorrow.length,
-      correct: withoutBorrow.filter(a => a.isCorrect).length,
-      accuracy: withoutBorrow.length > 0 ? withoutBorrow.filter(a => a.isCorrect).length / withoutBorrow.length : 0
+      correct: sumAnswerScores(withoutBorrow),
+      accuracy: withoutBorrow.length > 0 ? sumAnswerScores(withoutBorrow) / withoutBorrow.length : 0
     }
   }
 
@@ -406,8 +426,8 @@ export async function getAggregatedStats(studentId = 'default') {
     const byStep = allAnswers.filter(a => a.stepCount === step)
     stepStats[step] = {
       count: byStep.length,
-      correct: byStep.filter(a => a.isCorrect).length,
-      accuracy: byStep.filter(a => a.isCorrect).length / byStep.length
+      correct: sumAnswerScores(byStep),
+      accuracy: sumAnswerScores(byStep) / byStep.length
     }
   }
 
@@ -462,8 +482,9 @@ export async function getAggregatedStats(studentId = 'default') {
         }
       }
       numberStats[key].count++
-      if (answer.isCorrect) {
-        numberStats[key].correct++
+      const answerScore = getAnswerScore(answer)
+      if (answerScore > 0) {
+        numberStats[key].correct += answerScore
       } else {
         numberStats[key].wrongEquations.push({
           equation: eq,

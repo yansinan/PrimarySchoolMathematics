@@ -303,3 +303,88 @@ describe('v2 → v3 migration', () => {
     await Dexie.delete('TestMigrationV3')
   })
 })
+
+describe('v3 → v4 migration', () => {
+  let db
+
+  beforeEach(async () => {
+    await Dexie.delete('TestMigrationV4')
+    db = new Dexie('TestMigrationV4')
+    db.version(3).stores({
+      practiceSessions: '++id, studentId',
+      answers: '++id, sessionId, questionId, isCorrect, startedAt, synced, timestamp',
+      abilitySnapshots: '++id, studentId, computedAt, synced',
+      questions: '++id, &equation, operator, difficulty, createdAt, *operands',
+    })
+    await db.open()
+    await db.answers.bulkAdd([
+      {
+        sessionId: 1,
+        questionId: 1,
+        equation: '1+1=',
+        solution: 2,
+        userAnswer: 2,
+        isCorrect: true,
+        responseTime: 1000,
+        operator: '+',
+        isCarry: false,
+        isBorrow: false,
+        stepCount: 1,
+        operandMin: 1,
+        operandMax: 1,
+        timestamp: Date.now(),
+        startedAt: Date.now() - 1000,
+        endedAt: Date.now(),
+        synced: 0,
+      },
+      {
+        sessionId: 1,
+        questionId: 2,
+        equation: '2+2=',
+        solution: 4,
+        userAnswer: 3,
+        isCorrect: false,
+        responseTime: 2000,
+        operator: '+',
+        isCarry: false,
+        isBorrow: false,
+        stepCount: 1,
+        operandMin: 2,
+        operandMax: 2,
+        timestamp: Date.now(),
+        startedAt: Date.now() - 2000,
+        endedAt: Date.now(),
+        synced: 0,
+      },
+    ])
+    db.close()
+  })
+
+  afterEach(async () => {
+    if (db?.isOpen()) db.close()
+    await Dexie.delete('TestMigrationV4')
+  })
+
+  it('backfills attemptCount and score for legacy answers', async () => {
+    const db4 = new Dexie('TestMigrationV4')
+    db4.version(4).stores({
+      practiceSessions: '++id, studentId, createdAt, synced, updatedAt',
+      answers: '++id, sessionId, questionId, isCorrect, startedAt, synced, timestamp',
+      abilitySnapshots: '++id, studentId, computedAt, synced',
+      questions: '++id, &equation, operator, difficulty, createdAt, *operands',
+    }).upgrade(async (tx) => {
+      await tx.table('answers').toCollection().modify((a) => {
+        if (a.attemptCount == null) a.attemptCount = 1
+        if (a.score == null) a.score = a.isCorrect ? 1 : 0
+      })
+    })
+    await db4.open()
+    const answers = await db4.answers.toArray()
+    expect(answers).toHaveLength(2)
+    expect(answers[0].attemptCount).toBe(1)
+    expect(answers[0].score).toBe(1)
+    expect(answers[1].attemptCount).toBe(1)
+    expect(answers[1].score).toBe(0)
+    db4.close()
+  })
+})
