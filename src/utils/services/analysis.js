@@ -10,12 +10,7 @@
  * - § 3.1 题目聚合（findEquivalent / findRelated / getMasteryByNumber）
  */
 
-import {
-  db,
-  saveQuestion,
-  getQuestion,
-  getQuestionByEquation,
-} from '@/utils/database'
+import { db } from '@/utils/database'
 
 // ─── 辅助工具 ─────────────────────────────────────────────────────
 
@@ -34,21 +29,6 @@ function parseEquationParts(equation) {
     operator: m[2],
     rightOperand: +m[3],
   }
-}
-
-/**
- * operator 标准化（符号 → 内部表示）
- * - `×` → `*`
- * - `÷` → `/`
- * - `+` `-` 保持
- * 当前阶段（小学 1 年级）仅 + / -，但保留供阶段 3+ 复用
- * @param {string} op
- * @returns {string}
- */
-function normalizeOperator(op) {
-  if (op === '×') return '*'
-  if (op === '÷') return '/'
-  return op
 }
 
 // ─── 3.0 responseTime 辅助 ────────────────────────────────────────
@@ -152,22 +132,20 @@ export async function findRelated(equation, { range = 3, limit = 10 } = {}) {
     )
   })
 
-  // 按欧氏距离升序
-  candidates.sort((a, b) => {
-    const pa = parseEquationParts(a.equation)
-    const pb = parseEquationParts(b.equation)
-    const distA = Math.hypot(
-      pa.leftOperand - leftOperand,
-      pa.rightOperand - rightOperand,
-    )
-    const distB = Math.hypot(
-      pb.leftOperand - leftOperand,
-      pb.rightOperand - rightOperand,
-    )
-    return distA - distB
-  })
+  // 按欧氏距离升序（Schwartzian transform：先 map 预解析，再 sort，最后 strip）
+  // - 避免 sort 比较器内重复 parseEquationParts（之前每对比较调 2 次）
+  // - 同时给 sort 加 null 守卫（filter 阶段已保证 pa/pb 非 null，理论不会触发）
+  const decorated = candidates.map((q) => {
+    const p = parseEquationParts(q.equation)
+    return p && {
+      q,
+      dist: Math.hypot(p.leftOperand - leftOperand, p.rightOperand - rightOperand),
+    }
+  }).filter(Boolean)
+  decorated.sort((a, b) => a.dist - b.dist)
+  const ordered = decorated.map((d) => d.q)
 
-  return candidates.slice(0, limit)
+  return ordered.slice(0, limit)
 }
 
 /**
@@ -303,11 +281,7 @@ export async function getWrongAnswers({
   const uniqueQIds = [
     ...new Set(wrongAnswers.map((a) => a.questionId).filter((id) => id != null)),
   ]
-  const qMap = new Map()
-  if (uniqueQIds.length > 0) {
-    const questions = await db.questions.where('id').anyOf(uniqueQIds).toArray()
-    for (const q of questions) qMap.set(q.id, q)
-  }
+  const qMap = await loadQuestionsByIds(uniqueQIds)
 
   // 5. 拼装返回结构
   return wrongAnswers.map((a) => {
@@ -473,9 +447,8 @@ export async function prioritizeWrongAnswers({ limit = 20 } = {}) {
   const uniqueQIds = [...byQ.keys()]
   if (uniqueQIds.length === 0) return []
 
-  // 3. 批量取 questions 元数据（PK 查找）
-  const questions = await db.questions.where('id').anyOf(uniqueQIds).toArray()
-  const qMap = new Map(questions.map((q) => [q.id, q]))
+  // 3. 批量取 questions 元数据（PK 查找，**复用 loadQuestionsByIds helper**）
+  const qMap = await loadQuestionsByIds(uniqueQIds)
 
   // 4. 一次 anyOf 取这些题目的所有记录，内存里求 totalAttempts + lastCorrectAt
   const allForQ = await db.answers
