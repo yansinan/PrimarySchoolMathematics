@@ -645,6 +645,7 @@ export async function getNumberCurve(number, { days = 30 } = {}) {
  * - 全量 answers（v3 schema 无更强索引，只能全表；阶段 9 考虑加 timestamp 上界）
  * - 按 questionId 分组 reduce，关联 questions 表（**复用 loadQuestionsByIds**）
  * - responseTime 用 getEffectiveResponseTime 兜底（**复用**，不内联）
+ * - 额外统计 realWrongCount（v2.3.0 1-strike 软规则用）：非 isTimeout/快错的"真错"
  * - 过滤 total >= minSample
  *
  * @param {object} [opts]
@@ -652,6 +653,7 @@ export async function getNumberCurve(number, { days = 30 } = {}) {
  * @returns {Promise<Array<{
  *   questionId:number, equation:string,
  *   total:number, correct:number, totalRT:number, lastSeenAt:number,
+ *   realWrongCount:number,
  *   accuracy:number, avgResponseTime:number|null
  * }>>}
  */
@@ -672,14 +674,18 @@ async function _aggregateQuestions({ minSample = 3 } = {}) {
         correct: 0,
         totalRT: 0,
         lastSeenAt: 0,
+        realWrongCount: 0, // v2.3.0 1-strike：非 isTimeout/快错的"真错"计数
       }
       map.set(a.questionId, g)
     }
     g.total += 1
     if (a.isCorrect) g.correct += 1
     // 复用 getEffectiveResponseTime（不内联）——落实阶段 3 review 建议
-    const { responseTime } = getEffectiveResponseTime(a)
+    const { responseTime, isTimeout } = getEffectiveResponseTime(a)
     if (responseTime != null) g.totalRT += responseTime
+    // v2.3.0 1-strike 软规则：仅在"真错"时计数（isTimeout/快错不算）
+    // 边界：isCorrect=false 且 !isTimeout 才算"真错"
+    if (!a.isCorrect && !isTimeout) g.realWrongCount += 1
     g.lastSeenAt = Math.max(g.lastSeenAt, a.startedAt ?? a.timestamp ?? 0)
   }
 
@@ -704,16 +710,35 @@ async function _aggregateQuestions({ minSample = 3 } = {}) {
  * 动态弱项（v2 简化版）：单桶全时间聚合 + 最小样本门槛
  * - 按 accuracy 升序（最不熟排前）
  * - 全时间（无 days 限制）；阶段 9 考虑加时间窗口
+ * - v2.3.0 支持 mode: 'strict' 1-strike 软规则：
+ *   - normal（默认）：保持 v2.2.0 行为，minSample 门槛 + accuracy 升序
+ *   - strict：minSample 强制为 1，但过滤条件更严：
+ *     1. 至少 1 次"真错"（realWrongCount >= 1，非 isTimeout/快错）
+ *     2. 至少 1 次对题作对比（correct >= 1，避免"全错"被高估）
+ *   - 设计动机：normal 模式样本门槛 =3 会漏掉新题/偶尔错题；strict 模式
+ *     让"1 次真错 + 有对比"的题立即进入弱项候选（即使 1 次对 1 次错）
+ *   - 边界：仅影响"刚做过但样本不足"的题，老题仍按 normal 路径走
  *
  * @param {object} [opts]
- * @param {number} [opts.minSample=3] 最少作答次数
+ * @param {number} [opts.minSample=3] 最少作答次数（strict 模式忽略，强制 1）
+ * @param {'normal' | 'strict'} [opts.mode='normal'] 判定模式
  * @returns {Promise<Array<{
  *   questionId:number, equation:string,
  *   total:number, correct:number, accuracy:number,
- *   avgResponseTime:number|null, lastSeenAt:number
+ *   avgResponseTime:number|null, lastSeenAt:number,
+ *   realWrongCount:number
  * }>>}
  */
-export async function getDynamicWeakness({ minSample = 3 } = {}) {
+export async function getDynamicWeakness({ minSample = 3, mode = 'normal' } = {}) {
+  if (mode === 'strict') {
+    // 1-strike 软规则：取消 minSample 门槛（强制为 1），但要求：
+    // 1. 至少 1 次"真错"（realWrongCount >= 1）
+    // 2. 至少 1 次对题作对比（correct >= 1）
+    const groups = await _aggregateQuestions({ minSample: 1 })
+    return groups
+      .filter((g) => (g.realWrongCount ?? 0) >= 1 && g.correct >= 1)
+      .sort((a, b) => a.accuracy - b.accuracy)
+  }
   const groups = await _aggregateQuestions({ minSample })
   return groups.sort((a, b) => a.accuracy - b.accuracy)
 }

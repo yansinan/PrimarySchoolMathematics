@@ -425,6 +425,159 @@ describe('getDynamicWeakness', () => {
     const weakness = await getDynamicWeakness({ minSample: 10 })
     expect(weakness).toEqual([])
   })
+
+  // ── v2.3.0 1-strike 软规则（strict mode）──
+
+  it('strict mode includes question with 1 real wrong + 1 correct (1-strike)', async () => {
+    // 准备：清空 + 1 个 Q，1 个真错（rt=2000ms, isTimeout=false） + 1 个对
+    await db.answers.clear()
+    await db.questions.clear()
+    await db.questions.bulkAdd([mkQuestion({ id: 1, equation: '23+47=' })])
+    const now = Date.now()
+    await db.answers.add(
+      mkAnswer({
+        questionId: 1,
+        isCorrect: false,
+        userAnswer: 60,
+        responseTime: 2000,
+        timestamp: now,
+      })
+    )
+    await db.answers.add(
+      mkAnswer({ questionId: 1, isCorrect: true, responseTime: 2000, timestamp: now })
+    )
+    // 调 strict 模式
+    const weakness = await getDynamicWeakness({ mode: 'strict' })
+    // 断言：包含该 Q（不被 minSample=1 排除，且 realWrongCount=1 + correct=1 满足条件）
+    expect(weakness).toHaveLength(1)
+    expect(weakness[0].questionId).toBe(1)
+    expect(weakness[0].realWrongCount).toBe(1)
+    expect(weakness[0].correct).toBe(1)
+  })
+
+  it('strict mode excludes all-correct questions', async () => {
+    // 准备：清空 + 1 个 Q，全对 3 个 answers
+    await db.answers.clear()
+    await db.questions.clear()
+    await db.questions.bulkAdd([mkQuestion({ id: 1, equation: '23+47=' })])
+    const now = Date.now()
+    for (let i = 0; i < 3; i++) {
+      await db.answers.add(
+        mkAnswer({
+          questionId: 1,
+          isCorrect: true,
+          responseTime: 2000,
+          timestamp: now - i * 1000,
+        })
+      )
+    }
+    // 调 strict 模式
+    const weakness = await getDynamicWeakness({ mode: 'strict' })
+    // 断言：不含该 Q（无 realWrong）
+    expect(weakness).toEqual([])
+  })
+
+  it('strict mode excludes isTimeout-only wrong (快错/超时不算真错)', async () => {
+    // 准备：1 个 Q，1 个快错（rt=100ms, isTimeout=true）+ 1 个超时错（rt=400000ms）
+    //        + 1 个对（rt=2000ms）
+    await db.answers.clear()
+    await db.questions.clear()
+    await db.questions.bulkAdd([mkQuestion({ id: 1, equation: '23+47=' })])
+    const now = Date.now()
+    await db.answers.add(
+      mkAnswer({
+        questionId: 1,
+        isCorrect: false,
+        userAnswer: 60,
+        responseTime: 100, // 快错
+        timestamp: now,
+      })
+    )
+    await db.answers.add(
+      mkAnswer({
+        questionId: 1,
+        isCorrect: false,
+        userAnswer: 60,
+        responseTime: 400000, // 超时
+        timestamp: now - 1000,
+      })
+    )
+    await db.answers.add(
+      mkAnswer({
+        questionId: 1,
+        isCorrect: true,
+        responseTime: 2000,
+        timestamp: now - 2000,
+      })
+    )
+    // 调 strict 模式
+    const weakness = await getDynamicWeakness({ mode: 'strict' })
+    // 断言：不含该 Q（realWrongCount=0：两个 wrong 都被 isTimeout 排除）
+    expect(weakness).toEqual([])
+  })
+
+  it('strict mode requires ≥ 1 correct for comparison (避免全错被高估)', async () => {
+    // 准备：1 个 Q，2 个真错（都不是 isTimeout）
+    await db.answers.clear()
+    await db.questions.clear()
+    await db.questions.bulkAdd([mkQuestion({ id: 1, equation: '23+47=' })])
+    const now = Date.now()
+    await db.answers.add(
+      mkAnswer({
+        questionId: 1,
+        isCorrect: false,
+        userAnswer: 60,
+        responseTime: 2000,
+        timestamp: now,
+      })
+    )
+    await db.answers.add(
+      mkAnswer({
+        questionId: 1,
+        isCorrect: false,
+        userAnswer: 60,
+        responseTime: 2000,
+        timestamp: now - 1000,
+      })
+    )
+    // 调 strict 模式
+    const weakness = await getDynamicWeakness({ mode: 'strict' })
+    // 断言：不含该 Q（correct=0，无对比 → 避免"全错"被高估）
+    expect(weakness).toEqual([])
+  })
+
+  it('normal mode unchanged (backward compat) — mode defaults to normal', async () => {
+    // 准备：1 个 Q，4 个 answers（3 对 1 错）
+    await db.answers.clear()
+    await db.questions.clear()
+    await db.questions.bulkAdd([mkQuestion({ id: 1, equation: '23+47=' })])
+    const now = Date.now()
+    for (let i = 0; i < 3; i++) {
+      await db.answers.add(
+        mkAnswer({
+          questionId: 1,
+          isCorrect: true,
+          responseTime: 2000,
+          timestamp: now - i * 1000,
+        })
+      )
+    }
+    await db.answers.add(
+      mkAnswer({
+        questionId: 1,
+        isCorrect: false,
+        userAnswer: 60,
+        responseTime: 2000,
+        timestamp: now - 3000,
+      })
+    )
+    // 调：不传 mode → 默认 'normal'，行为与 v2.2.0 完全一致
+    const weakness = await getDynamicWeakness()
+    // 断言：minSample=3 包含该 Q（4 >= 3）
+    expect(weakness).toHaveLength(1)
+    expect(weakness[0].questionId).toBe(1)
+    expect(weakness[0].accuracy).toBe(0.75) // 3/4
+  })
 })
 
 // ── 3.4 getDynamicStrength ────────────────────────────────────────
