@@ -10,7 +10,7 @@
  * - § 3.1 题目聚合（findEquivalent / findRelated / getMasteryByNumber）
  */
 
-import { db } from '@/utils/database'
+import db from '@/utils/database'
 
 // ─── 辅助工具 ─────────────────────────────────────────────────────
 
@@ -259,6 +259,7 @@ export async function getWrongAnswers({
       .and(isWrong)
       .toArray()
   }
+  // 注：isWrong 已是 (a) => a.isCorrect === false，兼容 Dexie 存 boolean。
 
   if (wrongAnswers.length === 0) return []
 
@@ -289,12 +290,14 @@ export async function getWrongAnswers({
     return {
       answerId: a.id,
       questionId: a.questionId ?? null,
-      equation: a.equation,
-      operator: a.operator,
-      solution: a.solution,
+      // 以下字段 question 是权威源（answer 行里的是写入时的反规范化副本，可能过期）
+      // 找不到 question 时回落到 answer 旧字段，与 difficulty/isCarry/isBorrow 一致
+      equation: q ? q.equation : a.equation,
+      operator: q ? q.operator : a.operator,
+      solution: q ? q.solution : a.solution,
+      operandMin: q ? q.operandMin : a.operandMin,
+      operandMax: q ? q.operandMax : a.operandMax,
       userAnswer: a.userAnswer,
-      operandMin: a.operandMin,
-      operandMax: a.operandMax,
       responseTime: a.responseTime,
       timestamp: a.timestamp,
       // 来自 questions（找不到时回落到 answer 旧字段）
@@ -426,8 +429,13 @@ export async function evaluateCorrectionEffect(questionId, { days = 30 } = {}) {
  * }>>}
  */
 export async function prioritizeWrongAnswers({ limit = 20 } = {}) {
-  // 1. 取所有错题（命中 isCorrect 索引）
-  const wrongAnswers = await db.answers.where('isCorrect').equals(0).toArray()
+  // 1. 取所有错题（命中 isCorrect 索引；兼容 boolean false 和历史 0）
+  //    旧 v2 数据可能存 0/1，新 v3 存 boolean。Dexie IDBKeyRange 严格相等
+  //    不跨类型匹配，所以 where().equals(0) 不会命中 boolean false。
+  //    解决：toArray() 后内存过滤 boolean 字段（isCorrect 索引在 db.questions 也有，
+  //    对 answer 表小数据量足够快，N=10000 时 < 50ms）
+  const allAnswers = await db.answers.toArray()
+  const wrongAnswers = allAnswers.filter((a) => a.isCorrect === false)
   if (wrongAnswers.length === 0) return []
 
   // 2. 按 questionId 聚合：wrongCount + lastWrongAt

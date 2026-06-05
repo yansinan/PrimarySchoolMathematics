@@ -7,7 +7,7 @@
  * 工具：vitest + fake-indexeddb（让 Dexie 在 Node 环境跑）
  */
 import { describe, it, expect, beforeEach } from 'vitest'
-import { db } from '@/utils/database'
+import db from '@/utils/database'
 import {
   getEffectiveResponseTime,
   findEquivalent,
@@ -467,18 +467,26 @@ describe('getDynamicStrength', () => {
 
   it('handles all-no-rt gracefully (maxRT || 1 fallback)', async () => {
     await db.answers.clear()
-    await db.questions.bulkAdd([mkQuestion({ id: 1, equation: '23+47=' })])
+    await db.questions.clear() // 防止与 describe beforeEach Q1 unique 冲突
+    await db.questions.bulkPut([mkQuestion({ id: 1, equation: '23+47=' })])
     const now = Date.now()
-    // 5 对但全 responseTime = null
+    // 5 对且全 responseTime=0 + startedAt===endedAt（确保兜底也算 0）
     for (let i = 0; i < 5; i++) {
       await db.answers.add(
-        mkAnswer({ questionId: 1, isCorrect: true, responseTime: null, timestamp: now - i * 1000 })
+        mkAnswer({
+          questionId: 1,
+          isCorrect: true,
+          responseTime: 0,
+          startedAt: now - i * 1000,
+          endedAt: now - i * 1000,
+          timestamp: now - i * 1000,
+        })
       )
     }
     const strength = await getDynamicStrength({ minSample: 3 })
     expect(strength).toHaveLength(1)
     expect(strength[0].accuracy).toBe(1)
-    // score = 1*0.7 + (1-0/1)*0.3 = 0.7 + 0.3 = 1.0
-    expect(strength[0].score).toBe(1.0)
+    // maxRT fallback 触发：0/1 = 0 → score = 1*0.7 + 1*0.3 = 1.0（浮点容差）
+    expect(strength[0].score).toBeCloseTo(1.0, 5)
   })
 })
