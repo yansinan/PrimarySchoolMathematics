@@ -147,6 +147,8 @@ const {
 // ── 自适应会话 composable ──
 // 响应式状态：adaptiveEngine / adaptiveGroupIndex / groupAnswerOffset / nextLocked
 // 方法：startNewAdaptiveSession / completeAssessment (PR-4.3) / completeGroup (PR-4.4)
+// 注入 dialogs / saver 让 useAdaptiveSession 复用 V 层已创建的实例
+// (否则 useAdaptiveSession 内部 usePracticeDialogs() 会创建独立 ref, 弹窗状态不互通)
 const {
   adaptiveEngine,
   adaptiveGroupIndex,
@@ -156,7 +158,7 @@ const {
   startNewAdaptiveSession,
   completeAssessment,
   completeGroup,
-} = useAdaptiveSession()
+} = useAdaptiveSession({ dialogs, saver })
 
 // ── 弹窗 composable（替代 ElMessageBox 和 window.__evalSelect 桥） ──
 const dialogs = usePracticeDialogs()
