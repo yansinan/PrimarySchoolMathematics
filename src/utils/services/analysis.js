@@ -655,3 +655,116 @@ export async function getNumberCurve(number, { days = 30 } = {}) {
     }))
     .sort((a, b) => a.date.localeCompare(b.date))
 }
+
+// ─── 3.4 动态弱项 / 强项 ────────────────────────────────────────
+
+/**
+ * @internal
+ * 通用聚合：按 questionId 聚合所有 answers，返回每题的总/正确/响应时间/最近作答
+ * - 全量 answers（v3 schema 无更强索引，只能全表；阶段 9 考虑加 timestamp 上界）
+ * - 按 questionId 分组 reduce，关联 questions 表（**复用 loadQuestionsByIds**）
+ * - responseTime 用 getEffectiveResponseTime 兜底（**复用**，不内联）
+ * - 过滤 total >= minSample
+ *
+ * @param {object} [opts]
+ * @param {number} [opts.minSample=3] 最少作答次数门槛
+ * @returns {Promise<Array<{
+ *   questionId:number, equation:string,
+ *   total:number, correct:number, totalRT:number, lastSeenAt:number,
+ *   accuracy:number, avgResponseTime:number|null
+ * }>>}
+ */
+async function _aggregateQuestions({ minSample = 3 } = {}) {
+  // 1. 全量查 answers（v3 schema 无更强索引）
+  const answers = await db.answers.toArray()
+
+  // 2. 按 questionId 分组 reduce
+  const map = new Map()
+  for (const a of answers) {
+    if (a.questionId == null) continue
+    let g = map.get(a.questionId)
+    if (!g) {
+      g = {
+        questionId: a.questionId,
+        equation: a.equation, // 先用 answer 的 equation（兜底）
+        total: 0,
+        correct: 0,
+        totalRT: 0,
+        lastSeenAt: 0,
+      }
+      map.set(a.questionId, g)
+    }
+    g.total += 1
+    if (a.isCorrect) g.correct += 1
+    // 复用 getEffectiveResponseTime（不内联）——落实阶段 3 review 建议
+    const { responseTime } = getEffectiveResponseTime(a)
+    if (responseTime != null) g.totalRT += responseTime
+    g.lastSeenAt = Math.max(g.lastSeenAt, a.startedAt ?? a.timestamp ?? 0)
+  }
+
+  // 3. 关联 questions 表拿权威 equation（**复用 loadQuestionsByIds**）
+  const qMap = await loadQuestionsByIds([...map.keys()])
+  for (const g of map.values()) {
+    const q = qMap.get(g.questionId)
+    g.equation = q?.equation ?? g.equation
+  }
+
+  // 4. 计算衍生字段
+  for (const g of map.values()) {
+    g.accuracy = g.total > 0 ? g.correct / g.total : 0
+    g.avgResponseTime = g.total > 0 ? g.totalRT / g.total : null
+  }
+
+  // 5. 过滤 + 转数组
+  return [...map.values()].filter((g) => g.total >= minSample)
+}
+
+/**
+ * 动态弱项（v2 简化版）：单桶全时间聚合 + 最小样本门槛
+ * - 按 accuracy 升序（最不熟排前）
+ * - 全时间（无 days 限制）；阶段 9 考虑加时间窗口
+ *
+ * @param {object} [opts]
+ * @param {number} [opts.minSample=3] 最少作答次数
+ * @returns {Promise<Array<{
+ *   questionId:number, equation:string,
+ *   total:number, correct:number, accuracy:number,
+ *   avgResponseTime:number|null, lastSeenAt:number
+ * }>>}
+ */
+export async function getDynamicWeakness({ minSample = 3 } = {}) {
+  const groups = await _aggregateQuestions({ minSample })
+  return groups.sort((a, b) => a.accuracy - b.accuracy)
+}
+
+/**
+ * 动态强项（v2 简化版）：综合 accuracy + 响应速度
+ * - 评分公式：score = accuracy * 0.7 + (1 - avgResponseTime / maxRT) * 0.3
+ * - 按 score 降序
+ * - 全时间（无 days 限制）
+ *
+ * @param {object} [opts]
+ * @param {number} [opts.minSample=3] 最少作答次数
+ * @returns {Promise<Array<{
+ *   questionId:number, equation:string,
+ *   total:number, correct:number, accuracy:number,
+ *   avgResponseTime:number|null, lastSeenAt:number,
+ *   score:number
+ * }>>}
+ */
+export async function getDynamicStrength({ minSample = 3 } = {}) {
+  const groups = await _aggregateQuestions({ minSample })
+  // 空数据防御：避免 Math.max(...[]) 返回 -Infinity
+  if (groups.length === 0) return []
+  // maxRT 防御：所有题都无 responseTime 时退化为纯 accuracy 排序（除以 1）
+  const maxRT = Math.max(...groups.map((g) => g.avgResponseTime ?? 0))
+  const divisor = maxRT || 1
+  return groups
+    .map((g) => ({
+      ...g,
+      score:
+        g.accuracy * 0.7 +
+        (1 - (g.avgResponseTime ?? 0) / divisor) * 0.3,
+    }))
+    .sort((a, b) => b.score - a.score)
+}
