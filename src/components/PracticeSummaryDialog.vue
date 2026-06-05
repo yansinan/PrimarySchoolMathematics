@@ -56,8 +56,8 @@
       :stats-level-total="statsLevelTotal"
       :stats-level-label="currentLevelLabel"
       :stats-mastery-by-number="masteryByNumber"
-      :stats-weakness-v2="analysis.weaknessV2.value"
-      :stats-strength-v2="analysis.strengthV2.value"
+      :stats-weakness-v2="profile.weaknessV2Flat.value"
+      :stats-strength-v2="profile.strengthV2Flat.value"
       :stats-wrong-priority="wrongPriorityList"
       :stats-weakness-by-number="weaknessByNumber"
       :stats-strength-by-number="strengthByNumber"
@@ -90,8 +90,6 @@
  */
 import { ref, watch } from 'vue'
 import AbilityCard from '@/components/profile/AbilityCard.vue'
-import { usePracticeStore } from '@/stores/practice'
-import { useAbilityAnalysis } from '@/composables/useAbilityAnalysis'
 import { useAbilityProfile } from '@/composables/useAbilityProfile'
 
 const props = defineProps({
@@ -107,10 +105,8 @@ const props = defineProps({
   cancelText: { type: String, default: '🏠 首页' },
 })
 
-// ── 从 store 读取能力画像数据 ──
-const practiceStore = usePracticeStore()
-const analysis = useAbilityAnalysis()
-const profile = useAbilityProfile({ analysis, practiceStore })
+// ── 从 composable 读取能力画像数据（V→C，业务编排下沉到 C 层） ──
+const profile = useAbilityProfile()
 const {
   strongLevels,
   weakLevels,
@@ -121,10 +117,15 @@ const {
   strengthByNumber,
   wrongPriorityList,
   statsLevelTotal,
+  // 新增：V 模板不用 .value（顶层包成 computed）
+  weaknessV2Flat,
+  strengthV2Flat,
+  // 新增：弹窗打开时一键刷新（业务编排下沉到 C 层）
+  refreshForSummary,
 } = profile
 
-// ── P2 阶段 10：用户能力分析 composable（11 函数响应式数据层） ──
-// 弹窗打开时才触发查询，避免常驻计算 + 页面污染
+// ── 弹窗打开时才触发查询，避免常驻计算 + 页面污染 ──
+// 编排已下沉到 composable.refreshForSummary，V 层只调一行
 const loading = ref(false)
 watch(
   () => props.visible,
@@ -132,11 +133,7 @@ watch(
     if (v) {
       loading.value = true
       try {
-        const answersSource = practiceStore.adaptiveAnswers && practiceStore.adaptiveAnswers.length
-          ? practiceStore.adaptiveAnswers
-          : practiceStore.session.answers
-        await analysis.refresh()
-        await analysis.refreshMasteryFromAnswers(answersSource || [])
+        await refreshForSummary()
       } finally {
         loading.value = false
       }

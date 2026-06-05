@@ -16,7 +16,7 @@
  */
 
 import { ref } from 'vue'
-import * as analysis from '@/utils/services/analysis'
+import * as analysis from '@/services'
 
 // ─── 设计常量 ────────────────────────────────────────────────
 /** 时间窗口：所有"近期"聚合查询的默认天数（与 services/analysis.js 默认值对齐） */

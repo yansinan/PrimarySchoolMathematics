@@ -130,6 +130,23 @@ export function useAbilityProfile(options = {}) {
     return (answers.value || []).filter((answer) => getAnswerScore(answer) === 1).length
   })
 
+  // 顶层包 weaknessV2 / strengthV2, V 模板不用写 .value
+  const weaknessV2Flat = computed(() => analysis.weaknessV2.value)
+  const strengthV2Flat = computed(() => analysis.strengthV2.value)
+
+  /**
+   * 弹窗打开时的"刷新汇总数据"方法
+   * 封装: 答案源选择 → refresh() → refreshMasteryFromAnswers()
+   * 业务规则下沉到 C 层, V 层只调 1 行
+   */
+  async function refreshForSummary() {
+    const answersSource = (storeRefs.adaptiveAnswers.value && storeRefs.adaptiveAnswers.value.length)
+      ? storeRefs.adaptiveAnswers.value
+      : (storeRefs.session.value?.answers || [])
+    await analysis.refresh()
+    await analysis.refreshMasteryFromAnswers(answersSource || [])
+  }
+
   return {
     analysis,
     answers,
@@ -165,5 +182,10 @@ export function useAbilityProfile(options = {}) {
     masteryCellClass,
     strengthEncouragement,
     fullCorrectCount,
+    // 新增: V 模板不用 .value
+    weaknessV2Flat,
+    strengthV2Flat,
+    // 新增: 弹窗打开时一键刷新
+    refreshForSummary,
   }
 }
