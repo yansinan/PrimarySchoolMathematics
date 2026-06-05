@@ -529,3 +529,129 @@ export async function prioritizeWrongAnswers({ limit = 20 } = {}) {
   results.sort((a, b) => b.priority - a.priority)
   return results.slice(0, limit)
 }
+
+// ─── 4.0 internal helpers ────────────────────────────────────────
+
+/**
+ * @internal
+ * 批量加载 questions，返回 Map<id, question> 便于 O(1) 查询
+ * - ids 为空直接返回空 Map（避免无效 DB 调用）
+ * - 仅本文件内部使用：阶段 3 的 2 处重复（行 309 / 478）暂不回头改；
+ *   阶段 9 验收时统一 refactor（阶段 3 + 阶段 4）
+ * @param {Array<number>} ids
+ * @returns {Promise<Map<number, object>>}
+ */
+async function loadQuestionsByIds(ids) {
+  if (!ids.length) return new Map()
+  const qs = await db.questions.where('id').anyOf(ids).toArray()
+  return new Map(qs.map((q) => [q.id, q]))
+}
+
+// ─── 3.3 学习曲线 ────────────────────────────────────────────────
+
+/**
+ * 单题学习曲线（答题历史时间序列）
+ * - 命中 questionId 索引，内存按 startedAt 时间窗口过滤
+ * - 按 startedAt 升序，标 attemptIndex（0-based）
+ * - 每点 responseTime 用 getEffectiveResponseTime 兜底（v1 旧字段 → v3 startedAt/endedAt）
+ * - 不 join questions（题目元数据走 questionId 单独取）
+ *
+ * @param {number} questionId
+ * @param {object} [opts]
+ * @param {number} [opts.days=30] 时间窗口（天）
+ * @returns {Promise<Array<{
+ *   timestamp:number, startedAt:number, endedAt:number,
+ *   isCorrect:boolean, responseTime:number|null, isTimeout:boolean,
+ *   userAnswer:number, attemptIndex:number
+ * }>>}
+ */
+export async function getLearningCurve(questionId, { days = 30 } = {}) {
+  if (questionId == null) return []
+
+  // 命中 questionId 索引；时间窗口内存过滤（与 evaluateCorrectionEffect 一致）
+  const cutoff = Date.now() - days * 86400e3
+  const raw = await db.answers
+    .where('questionId')
+    .equals(questionId)
+    .toArray()
+  const answers = raw
+    .filter((a) => a.startedAt > cutoff)
+    .sort((a, b) => a.startedAt - b.startedAt)
+
+  if (answers.length === 0) return []
+
+  return answers.map((a, idx) => {
+    const { responseTime, isTimeout } = getEffectiveResponseTime(a)
+    return {
+      timestamp: a.timestamp,
+      startedAt: a.startedAt,
+      endedAt: a.endedAt,
+      isCorrect: a.isCorrect,
+      responseTime,
+      isTimeout,
+      userAnswer: a.userAnswer,
+      attemptIndex: idx,
+    }
+  })
+}
+
+/**
+ * 单数字历史正确率曲线（按日期桶聚合）
+ * - 命中 *operands multiEntry 索引查所有含 number 的 questions
+ * - anyOf(questionId) 命中 answers 索引
+ * - 按日期桶（YYYY-MM-DD）聚合 total/correct/questionsCount
+ * - 与 getMasteryByNumber 的差异：后者是"全时间单值聚合"，本函数是"按时段序列"
+ *
+ * @param {number} number
+ * @param {object} [opts]
+ * @param {number} [opts.days=30] 时间窗口（天）
+ * @returns {Promise<Array<{
+ *   date:string, total:number, correct:number, accuracy:number,
+ *   questionsCount:number
+ * }>>}
+ */
+export async function getNumberCurve(number, { days = 30 } = {}) {
+  if (number == null) return []
+
+  // 1. 查所有 operands 包含 number 的题目（multiEntry 索引）
+  const questions = await db.questions.where('operands').equals(number).toArray()
+  if (questions.length === 0) return []
+
+  const qIds = questions.map((q) => q.id)
+
+  // 2. 查这些题目的答题记录（questionId 索引 + 时间窗口内存过滤）
+  //    用 timestamp 而非 startedAt：与 getMasteryByNumber 保持一致（同属"数字聚合"语义）
+  const cutoff = Date.now() - days * 86400e3
+  const raw = await db.answers
+    .where('questionId')
+    .anyOf(qIds)
+    .toArray()
+  const answers = raw.filter((a) => a.timestamp > cutoff)
+
+  if (answers.length === 0) return []
+
+  // 3. 按日期桶聚合（YYYY-MM-DD 字符串）
+  const buckets = new Map() // date -> { total, correct, qIds: Set }
+  for (const a of answers) {
+    const date = new Date(a.timestamp).toISOString().slice(0, 10)
+    let bucket = buckets.get(date)
+    if (!bucket) {
+      bucket = { total: 0, correct: 0, qIds: new Set() }
+      buckets.set(date, bucket)
+    }
+    bucket.total += 1
+    if (a.isCorrect) bucket.correct += 1
+    if (a.questionId != null) bucket.qIds.add(a.questionId)
+  }
+
+  // 4. 转数组 + 按日期升序
+  return [...buckets.entries()]
+    .map(([date, b]) => ({
+      date,
+      total: b.total,
+      correct: b.correct,
+      accuracy: b.total > 0 ? b.correct / b.total : 0,
+      questionsCount: b.qIds.size,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+}
