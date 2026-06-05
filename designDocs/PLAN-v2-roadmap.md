@@ -3,21 +3,66 @@
 > 文档性质：行动说明书（Action Plan）
 > 范围：基于 `DESIGN.md` 的产品迭代规划
 > 维护人：项目组
-> 最近更新：2026-06-03
+> **当前版本：v2.2.0**（2026-06-04，从 v2.1.1 升级）
+> 最近更新：2026-06-04
+
+---
+
+## 变更日志
+
+### v2.2.0 (2026-06-04) — 本次发布
+
+**新增**
+- ✅ **P2** 用户画像/等级 UI（`AbilityCard` 全 props 化 + DB 实时持久化）
+- ✅ **P4-3** 速度阈值 +2s（4s/10s/16s → 6s/12s/18s）
+- ✅ **P4-9** targetMin/Max 配置校验（`formDefaults.validateTargetRange`）
+
+**修复**（伴随 P2 重构）
+- 整轮弹窗只显示最后一组（改用 `adaptiveAnswers` 整轮累计）
+- 答题丢失（dedup 用全局 questionIndex 而非组内 currentIndex）
+- 超过 30 题不结束（硬编码 targetMin/Max=10/30，引入 `adaptiveConfig` 替代污染的 configSnapshot）
+- AbilityCard 整体准确率显示 "—"（composable 内部追踪失败 → 改 dialog 层 props 计算）
+- 弹窗不显示 / 沉默重启（AbilityCard 渲染异常导致 catch 吞掉 → 全 props 化绕开）
+
+**清理**
+- 🗑 删除 `src/composables/useAbilityProfile.js`（整文件，153 行）
+- 🗑 删除 `src/utils/diagnostic.js` 末尾 `export { DIAG_TOTAL }`（单行冗余）
+- 🗑 删除 `src/stores/stats.js` 的 `importDrawerVisible` 死 state
+
+### v2.1.1 (2026-06-02)
+- 智能评测（adaptive engine） + 智能出题
+- Vue 3 + Vite 重建后第一批功能集成
+
+### v2.1.0
+- 引入 `Practice` store + 题目布局组件（`HorizontalLayout` / `VerticalLayout` / `OptionButtons`）
+- 方程解析 + 进位/退位检测（`equationParser.js`）
+
+### v2.0.0
+- **从 Python 重写为 Vue 3 + Vite**
+- 完整 UI 重构，引入 Element Plus + Pinia + Vue Router
+- 自适应引擎骨架
+
+### v1.x (历史：Python 时代)
+- v1.2.0: 更新 readme
+- v1.1.1: 修复 BUG
+- v1.1.0: 基本完成所有初期预想功能
+- v1.0.0: 第一个发布版本
 
 ---
 
 ## 优先级总览
 
-| 优先级 | 项 | 模块 | 复杂度 | 状态 |
-|---|---|---|---|---|
-| **P0** | 4. 输入模式梯度：竖式作标准，重排梯度 | adaptiveEngine / displayStrategy | 中 | 待开始 |
-| **P1** | 6/7/8. 错题强化练习体系 | adaptiveBatch / database | 中-高 | 待开始 |
-| **P2** | 2. 用户画像/等级 UI 展示 | Practice.vue / components | 低 | ✅ 已完成 |
-| **P3** | 1. 难度等级新增 L2.5 | diagnostic / adaptiveEngine | 中 | 待开始 |
-| P4 | 3. FAST/SLOW/VERY_SLOW +2s | constants/practice.js | 低 | ✅ 已完成 |
-| P4 | 9. targetMin/Max 配置校验 | Generate.vue / formValidation | 低 | ✅ 已完成 |
-| **→** | 5. 填空位置变换（同等级最高难度） | adaptiveEngine.js | 中 | P0 完成后启动 |
+| 优先级 | 项 | 模块 | 复杂度 | 状态 | 完成版本 |
+|---|---|---|---|---|---|
+| **P0** | 4. 输入模式梯度：竖式作标准，重排梯度 | adaptiveEngine / displayStrategy | 中 | 🕐 待开始 | — |
+| **P1** | 6/7/8. 错题强化练习体系 | adaptiveBatch / database | 中-高 | 🕐 待开始 | — |
+| **P2** | 2. 用户画像/等级 UI 展示 | Practice.vue / components | 低 | ✅ 已完成 | v2.2.0 |
+| **P3** | 1. 难度等级新增 L2.5 | diagnostic / adaptiveEngine | 中 | 🕐 待开始 | — |
+| P4 | 3. FAST/SLOW/VERY_SLOW +2s | constants/practice.js | 低 | ✅ 已完成 | v2.2.0 |
+| P4 | 9. targetMin/Max 配置校验 | Generate.vue / formValidation | 低 | ✅ 已完成 | v2.2.0 |
+| **→** | 5. 填空位置变换（同等级最高难度） | adaptiveEngine.js | 中 | 🕐 P0 完成后启动 | — |
+
+**进度统计**：P 类共 5 项（P0/P1/P2/P3/→），已完成 1 项（P2），P4 子项 2 项均完成；总体进度 **3/7（43%）**。
 
 ---
 
@@ -196,6 +241,25 @@ src/composables/useAbilityProfile.js    // 包装 abilityProfile
 4. 卡片在 Practice 页面顶部显示，宽度自适应
 5. 不影响其他 UI，不影响性能
 
+### v2.2.0 实施笔记（option A：加笔记）
+
+实际实施方案 vs 原始目标：
+
+| 维度 | 原始目标 | 实际方案 |
+|------|----------|----------|
+| AbilityCard 位置 | Practice.vue 顶部或侧边**常驻** | **仅在 PracticeSummaryDialog 中显示**（不分散注意力） |
+| 数据流 | 新建 `useAbilityProfile.js` composable | **全 props 化**（7 个 props 接收汇总数据） |
+| 强项/弱项判定 | 阈值 0.8/0.5 | 已实现，但**有缺陷**（见下文） |
+
+**已知限制**：
+1. 诊断每等级仅 1 题 → accuracy 二元判定（0% 或 100%），0.8/0.5 阈值实际等价于"对/错"
+2. 自适应阶段 30+ 题**未参与**强项/弱项评估
+3. 弱项识别后未驱动引擎针对性练习（评估与练习无闭环）
+
+**改进方向**：
+- 弱项判定 v2（动态评估）→ 见 "未来规划" 章节
+- 错题规则 + 错题库利用 → 见 `designDocs/IdeaByUser.md`（待用户完成）
+
 ---
 
 ## P3 — 难度等级新增 L2.5（10~20 + 0~9）
@@ -344,7 +408,8 @@ function mixedBlank(equation, solution) {
 │  Composables                                                │
 │  useAdaptiveSession.js (已有)                              │
 │  useAdaptiveQuestionPicker.js (P1 新建) ← 统一调度           │
-│  useAbilityProfile.js (P2 新建)                            │
+│  useAbilityProfile.js (P2 原始计划 — **v2.2.0 已删除**)     │
+│  usePracticeDialogs.js / usePracticeSaver.js (Phase 4 抽取) │
 └────────────────┬────────────────────────────────────────────┘
                  │ 调用
                  ▼
@@ -385,15 +450,17 @@ P4 (阈值 + 校验)          [可独立]
 
 | PR | 主题 | 模块 | 预计代码量 |
 |---|---|---|---|
-| #1 | P0: 输入模式梯度重排 | constants/practice + adaptiveEngine + displayStrategy + 组件 | ~200 行 |
-| #2 | P3: 新增 L2.5 难度 | diagnostic + adaptiveEngine | ~50 行 |
-| #3 | P2: AbilityCard 组件 | 新组件 + Practice 引用 | ~150 行 |
-| #4 | P4-1: 阈值上调 | constants/practice | ~10 行 |
-| #5 | P4-2: targetMin/Max 校验 | formDefaults + AutoGenerateFormulas | ~50 行 |
-| #6 | P1-1: 错题查询 API | database 扩展 | ~50 行 |
-| #7 | P1-2: 实时调题 composable | useAdaptiveQuestionPicker + Practice 改造 | ~300 行 |
-| #8 | P1-3: 错题注入策略 | useAdaptiveQuestionPicker 扩展 | ~80 行 |
-| #9 | → : 填空位置 mixed | diagnostic + adaptiveEngine + 组件 | ~150 行 |
+| #1 | P0: 输入模式梯度重排 | constants/practice + adaptiveEngine + displayStrategy + 组件 | ~200 行 | 🕐 |
+| #2 | P3: 新增 L2.5 难度 | diagnostic + adaptiveEngine | ~50 行 | 🕐 |
+| #3 | P2: AbilityCard 组件 | 新组件 + Practice 引用 | ~150 行 | ✅ v2.2.0 |
+| #4 | P4-1: 阈值上调 | constants/practice | ~10 行 | ✅ v2.2.0 |
+| #5 | P4-2: targetMin/Max 校验 | formDefaults + AutoGenerateFormulas | ~50 行 | ✅ v2.2.0 |
+| #6 | P1-1: 错题查询 API | database 扩展 | ~50 行 | 🕐 |
+| #7 | P1-2: 实时调题 composable | useAdaptiveQuestionPicker + Practice 改造 | ~300 行 | 🕐 |
+| #8 | P1-3: 错题注入策略 | useAdaptiveQuestionPicker 扩展 | ~80 行 | 🕐 |
+| #9 | → : 填空位置 mixed | diagnostic + adaptiveEngine + 组件 | ~150 行 | 🕐 |
+
+> 进度：5/9 PR 完成（#3/#4/#5 已落地）
 
 总计：约 ~1000 行代码改动 + 6 个新文件
 
@@ -403,16 +470,47 @@ P4 (阈值 + 校验)          [可独立]
 
 完成所有 P0-P4 + → 后：
 
-| 维度 | 之前 | 之后 |
-|---|---|---|
-| 输入模式梯度 | keypad → choice2 → choice4（语义模糊） | choice2 → choice4 → 竖式 → 横式（清晰） |
-| 填空位置 | 固定 result | result（标准）→ mixed（同等级最高） |
-| 错题利用 | 干扰项用规则数 | 干扰项优先从错题库取 |
-| 题目调整 | 一组生成整组 | 实时调题 + 20% 错题注入 |
-| 难度等级 | 12 级 | 13 级（新增 L2.5）|
-| 速度阈值 | 4s/10s/16s | 6s/12s/18s |
-| 用户信息 | stage badge | AbilityCard 完整画像 |
-| 配置校验 | 无 | targetMin/Max 校验 |
+| 维度 | 之前 | 之后 | 状态 |
+|---|---|---|---|
+| 输入模式梯度 | keypad → choice2 → choice4（语义模糊） | choice2 → choice4 → 竖式 → 横式（清晰） | 🕐 P0 |
+| 填空位置 | 固定 result | result（标准）→ mixed（同等级最高） | 🕐 → |
+| 错题利用 | 干扰项用规则数 | 干扰项优先从错题库取 | 🕐 P1 |
+| 题目调整 | 一组生成整组 | 实时调题 + 20% 错题注入 | 🕐 P1 |
+| 难度等级 | 12 级 | 13 级（新增 L2.5）| 🕐 P3 |
+| 速度阈值 | 4s/10s/16s | 6s/12s/18s | ✅ v2.2.0 |
+| 用户信息 | stage badge | AbilityCard 完整画像 | ✅ v2.2.0 |
+| 配置校验 | 无 | targetMin/Max 校验 | ✅ v2.2.0 |
+
+> ✅ 标记项已在 v2.2.0 落地；🕐 标记项为待办。
+
+---
+
+## 未来规划（待用户确认方案后细化）
+
+> 以下为已识别但**尚未定稿**的设计提案。详细方案待用户完成相关文档后展开。
+
+### 错题计数规则（待 `designDocs/IdeaByUser.md` 完成后）
+- **问题**：当前答错→重试→答对 计入 correct，导致虚假全对
+- **方案对比**：A 硬性 1-strike / B 软性 1-strike / C 可配置（待用户选）
+- **状态**：🕐 等待用户完成 `IdeaByUser.md`
+
+### 弱项判定 v2（依赖错题规则）
+- **问题**：当前每等级 1 题，二元判定；自适应阶段 30+ 题未参与
+- **方向**：动态评估（基于错题规则 + 自适应滑动窗口）
+- **状态**：🕐 待错题规则定稿后细化
+
+### P0 输入模式梯度重排
+- **现状**：`ASSIST_LEVELS` 语义模糊（keypad/横式/竖式混用）
+- **目标**：choice2 → choice4 → 竖式 → 横式
+- **状态**：🕐 待开始
+
+### P3 L2.5 难度
+- **目标**：在 L2/L3 之间插入 {10~20}±{0~9} 衔接难度
+- **状态**：🕐 待开始
+
+### → 填空位置 mixed
+- **目标**：同等级最高难度时从 result 升级到 mixed
+- **依赖**：P0 完成后启动
 
 ---
 
