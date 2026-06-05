@@ -72,6 +72,36 @@ const props = defineProps({
   statsLevel:      { type: Number,    default: 0 },
   statsLevelTotal: { type: Number,    default: 12 },
   statsLevelLabel: { type: String,    default: '' },
+  // ── 以下 4 个 props 为 P2 阶段 7 扩展（向后兼容：v2.0 不渲染，仅扩展 props 列表）
+  // ── 数据来源：useAbilityAnalysis composable（阶段 8 由 saver 触发，阶段 9+ 接入 UI）
+  /**
+   * 数字 0-9 掌握度（聚合 accuracy，值域 0-1）
+   * 来源：useAbilityAnalysis.masteryByNumber
+   * 形状示例：{ 0: 0.85, 1: 0.6, ..., 9: 0.7 }
+   * @type {Object<number, number>}
+   */
+  statsMasteryByNumber: { type: Object,  default: () => ({}) },
+  /**
+   * 动态弱项列表（按 accuracy 升序）
+   * 来源：useAbilityAnalysis.weaknessV2
+   * 元素形状：{ key: string, accuracy: number, sample: number, ... }
+   * @type {Array<Object>}
+   */
+  statsWeaknessV2:      { type: Array,   default: () => [] },
+  /**
+   * 动态强项列表（按 score 降序）
+   * 来源：useAbilityAnalysis.strengthV2
+   * 元素形状：{ key: string, score: number, sample: number, ... }
+   * @type {Array<Object>}
+   */
+  statsStrengthV2:      { type: Array,   default: () => [] },
+  /**
+   * 错题优先级列表（limit=20，按优先级排序）
+   * 来源：useAbilityAnalysis.wrongAnswersPriority
+   * 元素形状：{ questionId, equation, priority, lastWrong, ... }
+   * @type {Array<Object>}
+   */
+  statsWrongPriority:   { type: Array,   default: () => [] },
 })
 
 const hasData = computed(() => props.statsTotal > 0)
