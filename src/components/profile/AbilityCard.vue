@@ -12,7 +12,7 @@
     </div>
     <div v-else class="ability-card__compact-row">
       <span class="ability-card__compact-label">📊</span>
-      <span class="ability-card__compact-level">{{ statsLevelLabel || '—' }}</span>
+      <span class="ability-card__compact-level">{{ currentLevelLabel || '—' }}</span>
       <span class="ability-card__compact-divider">·</span>
       <span class="ability-card__compact-acc" :class="accuracyClass">
         {{ hasData ? `${Math.round(displayAccuracy * 100)}%` : '—' }}
@@ -22,12 +22,12 @@
     <div v-if="!compact" class="ability-card__row">
       <div class="ability-card__level">
         <span class="ability-card__label">当前等级</span>
-        <span class="ability-card__value">{{ statsLevelLabel || '—' }}</span>
+        <span class="ability-card__value">{{ currentLevelLabel || '—' }}</span>
       </div>
       <div class="ability-card__accuracy">
         <span class="ability-card__label">整体准确率</span>
         <span class="ability-card__value" :class="accuracyClass">
-          {{ hasData ? `${Math.round(displayAccuracy * 100)}% (${statsCorrect}/${statsTotal})` : '—' }}
+          {{ hasData ? `${Math.round(displayAccuracy * 100)}% (${scoreSum}/${totalAnswers})` : '—' }}
         </span>
       </div>
     </div>
@@ -36,7 +36,7 @@
       <div class="ability-card__progress">
         <div class="ability-card__progress-label">
           <span>等级进度</span>
-          <span class="ability-card__progress-text">{{ statsLevel }} / {{ statsLevelTotal }}</span>
+          <span class="ability-card__progress-text">{{ levelCurrentDisplay }} / {{ statsLevelTotal }}</span>
         </div>
         <div class="ability-card__progress-bar">
           <div class="ability-card__progress-fill" :style="{ width: progressPercent + '%' }" />
@@ -125,11 +125,13 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
 import WeaknessV2Card from './WeaknessV2Card.vue'
 import StrengthV2Card from './StrengthV2Card.vue'
 import { useAbilityProfile } from '@/composables/useAbilityProfile'
 
+// 保留 props 定义(向后兼容: PracticeSummaryDialog 仍在传值, 下轮清理)
+// arch-v2.3-5.4: 内部不再用 props 喂 composable, 改为无参 useAbilityProfile()
+// 由 composable 内部从 store + analysis 取默认数据源
 const props = defineProps({
   compact:         { type: Boolean,   default: false },
   statsTotal:      { type: Number,    default: 0 },
@@ -172,18 +174,8 @@ const props = defineProps({
   statsStrengthByNumber: { type: Array, default: () => [] },
 })
 
-const profile = useAbilityProfile({
-  statsTotal: computed(() => props.statsTotal),
-  statsCorrect: computed(() => props.statsCorrect),
-  statsLevel: computed(() => props.statsLevel),
-  statsLevelTotal: computed(() => props.statsLevelTotal),
-  statsLevelLabel: computed(() => props.statsLevelLabel),
-  masteryByNumber: computed(() => props.statsMasteryByNumber),
-  masteryByNumberFull: computed(() => props.statsMasteryByNumber),
-  weaknessByNumber: computed(() => props.statsWeaknessByNumber),
-  strengthByNumber: computed(() => props.statsStrengthByNumber),
-  wrongPriorityList: computed(() => props.statsWrongPriority),
-})
+// 走 composable 默认 fallback (从 store + analysis 自取), 不再透传 12 个 props
+const profile = useAbilityProfile()
 
 const {
   hasData,
