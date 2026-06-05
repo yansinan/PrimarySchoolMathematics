@@ -167,8 +167,10 @@ export async function findRelated(equation, { range = 3, limit = 10 } = {}) {
  * }>}
  */
 export async function getMasteryByNumber(number, { days = 30 } = {}) {
-  // 1. 查所有 operands 包含 number 的题目（multiEntry 索引）
-  const questions = await db.questions.where('operands').equals(number).toArray()
+  // P2 阶段 13：不依赖 questions.operands 字段（migration 不一致），
+  // 改从 operandMin + operandMax 反推数位（“3”' ’、‘8' 也击 number=3、8）
+  const allQuestions = await db.questions.toArray()
+  const questions = allQuestions.filter((q) => _extractOperandDigits(q).includes(number))
   const questionIds = questions.map((q) => q.id)
 
   if (questionIds.length === 0) {
@@ -217,20 +219,19 @@ export async function getMasteryByNumber(number, { days = 30 } = {}) {
  * }>}
  */
 async function _getMasteryByNumberFromAnswers(answers, number) {
-  // 1. 拿所有 questionId → 查 questions 表拿 operands
+  // P2 阶段 13：同样从 operandMin/Max 反推数位，不依赖 operands 字段
   const qIds = [...new Set(answers.map((a) => a.questionId).filter((id) => id != null))]
   if (qIds.length === 0) {
     return { number, total: 0, correct: 0, accuracy: 0, questionsCount: 0 }
   }
   const qMap = await loadQuestionsByIds(qIds)
 
-  // 2. 过滤涉及该 number 的 answers
   let total = 0
   let correct = 0
   const qIdsWithNumber = new Set()
   for (const a of answers) {
     const q = qMap.get(a.questionId)
-    if (!q || !q.operands?.includes(number)) continue
+    if (!q || !_extractOperandDigits(q).includes(number)) continue
     total += 1
     if (a.isCorrect === true) correct += 1
     qIdsWithNumber.add(a.questionId)
@@ -243,6 +244,31 @@ async function _getMasteryByNumberFromAnswers(answers, number) {
     accuracy: total > 0 ? correct / total : 0,
     questionsCount: qIdsWithNumber.size,
   }
+}
+
+/**
+ * P2 阶段 13：从 question.operandMin + operandMax 反推涉及的数字（0-9）
+ * - 原因：questions.operands 字段在 migration 中只填了 [operandMin, operandMax]，
+ *   而设计意图是“按数位拆分”（13+15 → [1,3,1,5]）。直接查 equals(n) 会丢失 0-9 范围。
+ * - 修正：反推方式同时保证代码与设计语义一致，不依赖 questions.operands。
+ *
+ * @param {{operandMin:number, operandMax:number}} q - question
+ * @returns {number[]} 涉及的所有数字（0-9，去重）
+ */
+function _extractOperandDigits(q) {
+  if (!q) return []
+  const min = q.operandMin
+  const max = q.operandMax
+  if (min == null && max == null) return []
+  const digits = new Set()
+  for (const n of [min, max]) {
+    if (n == null) continue
+    for (const ch of String(n)) {
+      const d = Number(ch)
+      if (!isNaN(d) && d >= 0) digits.add(d)
+    }
+  }
+  return [...digits]
 }
 
 /**

@@ -49,7 +49,7 @@ function mkAnswer(overrides = {}) {
 }
 
 function mkQuestion(overrides = {}) {
-  return {
+  const merged = {
     id: nextId++,
     equation: '23+47=',
     solution: 70,
@@ -67,6 +67,13 @@ function mkQuestion(overrides = {}) {
     createdAt: Date.now(),
     ...overrides,
   }
+  // 一致性：若 overrides 传了 operands 但没传 operandMin/Max，自动从 operands 推
+  // （阶段 13：getMasteryByNumber 从 operandMin/Max 反推数位，operands 字段与算法解耦）
+  if (overrides.operands && (overrides.operandMin == null || overrides.operandMax == null)) {
+    merged.operandMin = Math.min(...overrides.operands)
+    merged.operandMax = Math.max(...overrides.operands)
+  }
+  return merged
 }
 
 beforeEach(async () => {
