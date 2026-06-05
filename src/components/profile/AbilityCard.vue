@@ -128,6 +128,7 @@
 import { computed } from 'vue'
 import WeaknessV2Card from './WeaknessV2Card.vue'
 import StrengthV2Card from './StrengthV2Card.vue'
+import { useAbilityProfile } from '@/composables/useAbilityProfile'
 
 const props = defineProps({
   compact:         { type: Boolean,   default: false },
@@ -185,49 +186,28 @@ const props = defineProps({
   statsStrengthByNumber: { type: Array, default: () => [] },
 })
 
-const hasData = computed(() => props.statsTotal > 0)
-
-const displayAccuracy = computed(() => {
-  if (hasData.value) return props.statsCorrect / props.statsTotal
-  return 0
+const profile = useAbilityProfile({
+  statsTotal: computed(() => props.statsTotal),
+  statsCorrect: computed(() => props.statsCorrect),
+  statsLevel: computed(() => props.statsLevel),
+  statsLevelTotal: computed(() => props.statsLevelTotal),
+  statsLevelLabel: computed(() => props.statsLevelLabel),
+  masteryByNumber: computed(() => props.statsMasteryByNumber),
+  masteryByNumberFull: computed(() => props.statsMasteryByNumber),
+  weaknessByNumber: computed(() => props.statsWeaknessByNumber),
+  strengthByNumber: computed(() => props.statsStrengthByNumber),
+  wrongPriorityList: computed(() => props.statsWrongPriority),
 })
 
-const progressPercent = computed(() => {
-  if (props.statsLevelTotal <= 0) return 0
-  return Math.min(100, Math.max(0, (props.statsLevel / props.statsLevelTotal) * 100))
-})
-
-const accuracyClass = computed(() => {
-  const acc = displayAccuracy.value
-  if (acc >= 0.8)  return 'ability-card__value--strong'
-  if (acc < 0.5)   return 'ability-card__value--weak'
-  return 'ability-card__value--mid'
-})
-
-// ── P2 阶段 10：v2 数据 computeds ──
-
-/** 数字掌握度是否有数据（任一数字有 total>0） */
-const hasMasteryData = computed(() => {
-  const m = props.statsMasteryByNumber || {}
-  return Object.values(m).some((acc) => acc > 0)
-})
-
-/** 单个数字的掌握度百分比（0-100），无数据返 0 */
-function masteryPercent(n) {
-  const m = props.statsMasteryByNumber || {}
-  const acc = m[n]
-  if (acc == null) return 0
-  return Math.round(acc * 100)
-}
-
-/** 单个数字的 cell class：未学过 / 弱 / 中 / 强 */
-function masteryCellClass(n) {
-  const pct = masteryPercent(n)
-  if (pct === 0) return 'ability-card__mastery-cell--empty'
-  if (pct < 50) return 'ability-card__mastery-cell--weak'
-  if (pct < 80) return 'ability-card__mastery-cell--mid'
-  return 'ability-card__mastery-cell--strong'
-}
+const {
+  hasData,
+  displayAccuracy,
+  accuracyClass,
+  progressPercent,
+  hasMasteryData,
+  masteryPercent,
+  masteryCellClass,
+} = profile
 </script>
 
 <style scoped lang="scss">

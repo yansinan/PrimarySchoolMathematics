@@ -72,6 +72,12 @@ export function useAbilityAnalysis() {
   const strengthByNumber = ref([])
 
   /**
+   * 中间档 v2（单数字）：0.5 <= score < 1 且 total >= 3
+   * 形状: Array<{ number, score, total, correct, questionsCount }>
+   */
+  const midByNumber = ref([])
+
+  /**
    * 学习曲线缓存：{ [questionId]: curve[] }
    * - curve 元素: { timestamp, startedAt, endedAt, isCorrect, responseTime, isTimeout, userAnswer, attemptIndex }
    */
@@ -212,13 +218,17 @@ export function useAbilityAnalysis() {
   function _deriveWeaknessAndStrength() {
     const entries = Object.entries(masteryByNumberFull.value)
     weaknessByNumber.value = entries
-      .filter(([, r]) => r.total > 0 && r.accuracy < 0.7)
+      .filter(([, r]) => r.total > 0 && r.score < 0.5)
       .map(([n, r]) => ({ number: Number(n), ...r }))
-      .sort((a, b) => a.accuracy - b.accuracy)
+      .sort((a, b) => a.score - b.score)
+    midByNumber.value = entries
+      .filter(([, r]) => r.total >= 3 && r.score >= 0.5 && r.score < 1)
+      .map(([n, r]) => ({ number: Number(n), ...r }))
+      .sort((a, b) => b.score - a.score)
     strengthByNumber.value = entries
-      .filter(([, r]) => r.total >= 3 && r.accuracy >= 0.8)
+      .filter(([, r]) => r.total >= 3 && r.score >= 1)
       .map(([n, r]) => ({ number: Number(n), ...r }))
-      .sort((a, b) => b.accuracy - a.accuracy)
+      .sort((a, b) => b.score - a.score)
   }
 
   /**
@@ -269,6 +279,7 @@ export function useAbilityAnalysis() {
   function reset() {
     weaknessV2.value = []
     strengthV2.value = []
+    midByNumber.value = []
     masteryByNumber.value = {}
     wrongAnswersPriority.value = []
     learningCurves.value = {}
@@ -284,6 +295,7 @@ export function useAbilityAnalysis() {
     masteryByNumberFull,
     weaknessByNumber,
     strengthByNumber,
+    midByNumber,
     wrongAnswersPriority,
     learningCurves,
     loading,

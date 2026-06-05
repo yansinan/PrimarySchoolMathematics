@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { EMPTY_PARSED_EQUATION, getCarryType, parseEquation } from '@/utils/equationParser'
 import { saveSession } from '@/utils/database'
 import { LS_KEY_PSM_PROFILE } from '@/constants/storageKeys'
+import { sumAnswerScores } from '@/utils/score'
 
 const LS_KEY = LS_KEY_PSM_PROFILE
 
@@ -80,7 +81,7 @@ export const usePracticeStore = defineStore('drawer', {
       return getCarryType(this.currentParsedEquation)
     },
     isLastQuestion: (state) => state.session.currentIndex >= state.listPractices.length - 1,
-    correctCount: (state) => state.session.answers.filter((a) => a.isCorrect).length,
+    correctCount: (state) => sumAnswerScores(state.session.answers),
     /** 是否处于诊断模式 */
     isAssessment: (state) => state.phase === 'assessment',
     /** 是否处于正常练习模式 */
@@ -227,7 +228,7 @@ export const usePracticeStore = defineStore('drawer', {
         return true
       })
 
-      const correctCount = uniqueAnswers.filter(a => a.isCorrect).length
+      const correctCount = sumAnswerScores(uniqueAnswers)
       const totalDuration = Date.now() - (this.session.sessionStartTime || Date.now())
 
       const sessionData = {
@@ -252,6 +253,8 @@ export const usePracticeStore = defineStore('drawer', {
         stepCount: a.stepCount || 1,
         operandMin: a.operandMin ?? 0,
         operandMax: a.operandMax ?? 0,
+        attemptCount: a.attemptCount ?? 1,
+        score: typeof a.score === 'number' ? a.score : (a.isCorrect ? 1 : 0),
         timestamp: a.timestamp || Date.now()
       }))
 

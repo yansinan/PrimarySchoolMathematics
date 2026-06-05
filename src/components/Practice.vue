@@ -109,6 +109,7 @@ import { decideDisplayMode, updateDisplayStats, createInitialStats } from '@/uti
 import { useAdaptiveSession } from '@/composables/useAdaptiveSession'
 import { usePracticeDialogs } from '@/composables/usePracticeDialogs'
 import { usePracticeSaver } from '@/composables/usePracticeSaver'
+import { buildAttemptScore, sumAnswerScores } from '@/utils/score'
 import { FEEDBACK_DELAYS, ASSESSMENT_ABORT_WRONG_STREAK, getGroupComment, getCommentByRate, ASSIST_LEVELS } from '@/constants/practice'
 import { TARGET_LIMITS } from '@/utils/formDefaults'
 
@@ -380,10 +381,14 @@ const handleSubmit = (answer) => {
   // （后者只反映当前组内的题号，会跨组冲突导致后续题号累加失效）
   const newQuestionIndex = groupAnswerOffset.value + currentIndex.value
   const existingIdx = session.value.answers.findIndex(a => a.questionIndex === newQuestionIndex)
+  const previousAttemptCount = existingIdx >= 0 ? (session.value.answers[existingIdx].attemptCount || 1) : 0
+  const { attemptCount, score } = buildAttemptScore(previousAttemptCount, isCorrect)
   const answerEntry = {
     ...currentQuestion.value,
     userAnswer,
     isCorrect,
+    attemptCount,
+    score,
     timestamp: Date.now(),
     responseTime,
     operator,
@@ -578,7 +583,7 @@ const completeAdaptiveGroup = async () => {
     // ── 全部完成 → 显示精美的结束画面 ──
     // finalAnswers 现在用 adaptiveAnswers（整轮所有组），不是 allAnswers（最后一组）
     const finalAnswers = practiceStore.adaptiveAnswers
-    const totalCorrect = finalAnswers.filter(a => a.isCorrect).length
+    const totalCorrect = sumAnswerScores(finalAnswers)
     const totalTime = finalAnswers.reduce((s, a) => s + (a.responseTime || 0), 0)
     const totalRate = Math.round((totalCorrect / finalAnswers.length) * 100)
 

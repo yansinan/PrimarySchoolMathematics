@@ -44,18 +44,18 @@
       </div>
 
       <!-- P2 阶段 14：本组 v2 弱项/强项（孩子友好的简洁文案） -->
-      <div v-if="analysis.weaknessByNumber.value.length || analysis.strengthByNumber.value.length" class="eval-v2-cards">
+      <div v-if="weaknessByNumber.value.length || strengthByNumber.value.length" class="eval-v2-cards">
         <StrengthV2Card
-          v-if="analysis.strengthByNumber.value.length"
-          :data="analysis.strengthByNumber.value"
+          v-if="strengthByNumber.value.length"
+          :data="strengthByNumber.value"
           :limit="3"
           :title="'🌟 这组拿手'"
           :empty-text="''"
           compact
         />
         <WeaknessV2Card
-          v-if="analysis.weaknessByNumber.value.length"
-          :data="analysis.weaknessByNumber.value"
+          v-if="weaknessByNumber.value.length"
+          :data="weaknessByNumber.value"
           :limit="3"
           :title="'📒 多练练'"
           :empty-text="''"
@@ -81,8 +81,8 @@
  *  - update:visible
  *  - select (score: 1|2|3|4|5)
  */
-import { ref, watch, computed } from 'vue'
-import { useAbilityAnalysis } from '@/composables/useAbilityAnalysis'
+import { ref, watch } from 'vue'
+import { useAbilityProfile } from '@/composables/useAbilityProfile'
 import WeaknessV2Card from '@/components/profile/WeaknessV2Card.vue'
 import StrengthV2Card from '@/components/profile/StrengthV2Card.vue'
 
@@ -104,7 +104,10 @@ const hoveredScore = ref(null)
 
 // ── P2 阶段 11：v2 数字弱项/强项（与 StatsDrawer / AbilityCard UI 统一组件） ──
 // 数据范围：本组 answers（每组完成时调 refresh）
-const analysis = useAbilityAnalysis()
+const profile = useAbilityProfile()
+const analysis = profile.analysis
+const weaknessByNumber = profile.weaknessByNumber
+const strengthByNumber = profile.strengthByNumber
 watch(() => props.visible, (v) => {
   if (v) {
     selectedScore.value = 3

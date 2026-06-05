@@ -62,18 +62,18 @@
         </div>
 
         <!-- ── P2 阶段 14：数字弱项 / 强项（孩子友好的简洁文案） ── -->
-        <div v-if="weakNumbersV2.length || strengthNumbersV2.length" class="weak-section">
+        <div v-if="weaknessByNumber.length || strengthByNumber.length" class="weak-section">
           <h3 class="section-title">你掌握得怎么 样</h3>
           <StrengthV2Card
-            v-if="strengthNumbersV2.length"
-            :data="strengthNumbersV2"
+            v-if="strengthByNumber.length"
+            :data="strengthByNumber"
             :title="`🌟 你最拿手`"
             :empty-text="''"
             class="weak-section__v2-card"
           />
           <WeaknessV2Card
-            v-if="weakNumbersV2.length"
-            :data="weakNumbersV2"
+            v-if="weaknessByNumber.length"
+            :data="weaknessByNumber"
             :title="`📒 多练习`"
             :empty-text="''"
             class="weak-section__v2-card"
@@ -144,15 +144,17 @@ import {
 } from '@element-plus/icons-vue'
 import { Chart, registerables } from 'chart.js'
 import { useStatsStore } from '@/stores/stats'
-import { getMasteryByNumber } from '@/utils/services/analysis'
 import { formatDuration } from '@/utils/timeFormat'
 import WeaknessV2Card from '@/components/profile/WeaknessV2Card.vue'
 import StrengthV2Card from '@/components/profile/StrengthV2Card.vue'
+import { useAbilityProfile } from '@/composables/useAbilityProfile'
 import SessionDetail from './SessionDetail.vue'
 
 Chart.register(...registerables)
 
 const statsStore = useStatsStore()
+const profile = useAbilityProfile()
+const { analysis, weaknessByNumber, strengthByNumber } = profile
 
 const trendChartRef = ref(null)
 const operatorChartRef = ref(null)
@@ -170,26 +172,6 @@ const accuracyClass = computed(() => {
 const weakNumbers = computed(() => {
   return statsStore.aggregatedStats?.weakNumbers || []
 })
-
-// ── P2 阶段 11：v2 数字弱项 / 强项（与 AbilityCard 数字 0-9 掌握度同源） ──
-const weakNumbersV2 = ref([])
-const strengthNumbersV2 = ref([])
-
-async function loadV2WeaknessAndStrength() {
-  // P2 阶段 11：全量历史（不设 days 限制，等价于历史所有答题）
-  const numbers = Array.from({ length: 10 }, (_, i) => i)
-  const details = await Promise.all(
-    numbers.map((n) => getMasteryByNumber(n, { days: 99999 }))
-  )
-  // 弱项：accuracy < 0.7 且 total > 0
-  weakNumbersV2.value = details
-    .filter((r) => r.total > 0 && r.accuracy < 0.7)
-    .sort((a, b) => a.accuracy - b.accuracy)
-  // 强项：accuracy >= 0.8 且 total >= 3
-  strengthNumbersV2.value = details
-    .filter((r) => r.total >= 3 && r.accuracy >= 0.8)
-    .sort((a, b) => b.accuracy - a.accuracy)
-}
 
 const weakNumberSuggestion = computed(() => {
   const items = weakNumbers.value
@@ -312,8 +294,7 @@ function buildOperatorChart() {
 
 async function handleOpen() {
   await statsStore.refreshAll()
-  // P2 阶段 11：v2 数字弱项/强项查询（与 AbilityCard 数字 0-9 掌握度同源）
-  await loadV2WeaknessAndStrength()
+  await analysis.refreshMastery()
   await nextTick()
   buildTrendChart()
   buildOperatorChart()

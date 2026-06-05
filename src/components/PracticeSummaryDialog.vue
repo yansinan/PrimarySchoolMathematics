@@ -14,7 +14,7 @@
     custom-class="eval-dialog"
     @update:model-value="handleUpdate"
   >
-    <div class="summary-content">
+    <div v-loading="loading" class="summary-content">
       <div class="summary-emoji">{{ emoji }}</div>
       <div class="summary-title">练习完成</div>
       <div class="summary-comment">{{ comment }}</div>
@@ -50,17 +50,17 @@
     <AbilityCard
       :stats-total="totalAnswers"
       :stats-correct="correctAnswers"
-      :stats-strong="strongLevelsComputed"
-      :stats-weak="weakLevelsComputed"
+      :stats-strong="strongLevels"
+      :stats-weak="weakLevels"
       :stats-level="totalAnswers > 0 ? levelCurrentDisplay : 0"
-      :stats-level-total="DIFFICULTY_LEVELS.length"
+      :stats-level-total="statsLevelTotal"
       :stats-level-label="currentLevelLabel"
-      :stats-mastery-by-number="analysis.masteryByNumber.value"
+      :stats-mastery-by-number="masteryByNumber"
       :stats-weakness-v2="analysis.weaknessV2.value"
       :stats-strength-v2="analysis.strengthV2.value"
-      :stats-wrong-priority="analysis.wrongAnswersPriority.value"
-      :stats-weakness-by-number="analysis.weaknessByNumber.value"
-      :stats-strength-by-number="analysis.strengthByNumber.value"
+      :stats-wrong-priority="wrongPriorityList"
+      :stats-weakness-by-number="weaknessByNumber"
+      :stats-strength-by-number="strengthByNumber"
     />
 
     <template #footer>
@@ -88,78 +88,11 @@
  *  - update:visible (boolean)
  *  - select (action: 'confirm' | 'cancel' | 'close')
  */
-import { computed, watch } from 'vue'
-import { storeToRefs } from 'pinia'
+import { ref, watch } from 'vue'
 import AbilityCard from '@/components/profile/AbilityCard.vue'
 import { usePracticeStore } from '@/stores/practice'
 import { useAbilityAnalysis } from '@/composables/useAbilityAnalysis'
-import { DIAG_LEVELS } from '@/utils/diagnostic'
-import { DIFFICULTY_LEVELS } from '@/utils/adaptiveEngine'
-
-// ── 从 store 读取能力画像数据 ──
-const practiceStore = usePracticeStore()
-const { abilityProfile, currentDifficultyIdx, adaptiveAnswers } = storeToRefs(practiceStore)
-
-// ── P2 阶段 10：用户能力分析 composable（11 函数响应式数据层） ──
-// 弹窗打开时才触发查询，避免常驻计算 + 页面污染
-const analysis = useAbilityAnalysis()
-watch(
-  () => props.visible,
-  (v) => {
-    if (v) {
-      // 全量 + 本轮数字掌握度并发查询（refresh 内已用 Promise.all 串并行）
-      analysis.refresh()
-      // P2 阶段 11：数字掌握度改为“本轮”统计（adaptiveAnswers）
-      // 与 StatsDrawer（全量历史）形成对比
-      analysis.refreshMasteryFromAnswers(practiceStore.adaptiveAnswers || [])
-    }
-  }
-)
-
-// ── 强项/薄弱评估（基于 diagAnswers） ──
-function evaluateLevel(levelId, answers) {
-  const la = answers.filter(a => a.level === levelId)
-  if (!la.length) return { correct: 0, total: 0, accuracy: 0, hasData: false }
-  const correct = la.filter(a => a.isCorrect).length
-  const total = la.length
-  return { correct, total, accuracy: correct / total, hasData: true }
-}
-
-const diagAnswers = computed(() => abilityProfile.value?.diagAnswers || [])
-
-const strongLevelsComputed = computed(() =>
-  DIAG_LEVELS.filter(l => {
-    const s = evaluateLevel(l.id, diagAnswers.value)
-    return s.hasData && s.accuracy >= 0.8
-  }).map(l => l.label)
-)
-
-const weakLevelsComputed = computed(() =>
-  DIAG_LEVELS.filter(l => {
-    const s = evaluateLevel(l.id, diagAnswers.value)
-    return s.hasData && s.accuracy < 0.5
-  }).map(l => l.label)
-)
-
-// ── 等级进度（基于 currentDifficultyIdx） ──
-const levelCurrentDisplay = computed(() => Math.max(1, currentDifficultyIdx.value + 1))
-
-// ── 当前等级标签 ──
-const currentLevelLabel = computed(() => {
-  const idx = Math.max(0, currentDifficultyIdx.value)
-  return DIFFICULTY_LEVELS[idx]?.label || '—'
-})
-
-// ── P2 阶段 14：强项 v2 鼓励文案（top 3 数字 → "4、5、9 的运算是你最拿手的！"） ──
-const strengthEncouragement = computed(() => {
-  const list = analysis.strengthByNumber.value
-  if (!list || list.length === 0) return ''
-  const top3 = list.slice(0, 3).map((s) => s.number)
-  if (top3.length === 0) return ''
-  if (top3.length === 1) return `${top3[0]} 的运算是你最拿手的！`
-  if (top3.length === 2) return `${top3[0]}、${top3[1]} 的运算是你最拿手的！`
-  return `${top3[0]}、${top3[1]}、${top3[2]} 的运算是你最拿手的！`
-})
+import { useAbilityProfile } from '@/composables/useAbilityProfile'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -173,6 +106,43 @@ const props = defineProps({
   confirmText: { type: String, default: '📊 分析' },
   cancelText: { type: String, default: '🏠 首页' },
 })
+
+// ── 从 store 读取能力画像数据 ──
+const practiceStore = usePracticeStore()
+const analysis = useAbilityAnalysis()
+const profile = useAbilityProfile({ analysis, practiceStore })
+const {
+  strongLevels,
+  weakLevels,
+  levelCurrentDisplay,
+  currentLevelLabel,
+  masteryByNumber,
+  weaknessByNumber,
+  strengthByNumber,
+  wrongPriorityList,
+  statsLevelTotal,
+} = profile
+
+// ── P2 阶段 10：用户能力分析 composable（11 函数响应式数据层） ──
+// 弹窗打开时才触发查询，避免常驻计算 + 页面污染
+const loading = ref(false)
+watch(
+  () => props.visible,
+  async (v) => {
+    if (v) {
+      loading.value = true
+      try {
+        const answersSource = practiceStore.adaptiveAnswers && practiceStore.adaptiveAnswers.length
+          ? practiceStore.adaptiveAnswers
+          : practiceStore.session.answers
+        await analysis.refresh()
+        await analysis.refreshMasteryFromAnswers(answersSource || [])
+      } finally {
+        loading.value = false
+      }
+    }
+  }
+)
 
 const emit = defineEmits(['update:visible', 'select'])
 
