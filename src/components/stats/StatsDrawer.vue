@@ -177,10 +177,10 @@ const weakNumbersV2 = ref([])
 const strengthNumbersV2 = ref([])
 
 async function loadV2WeaknessAndStrength() {
-  // 0-9 并发查 getMasteryByNumber，与 AbilityCard.refreshMastery 同一函数
+  // P2 阶段 11：全量历史（不设 days 限制，等价于历史所有答题）
   const numbers = Array.from({ length: 10 }, (_, i) => i)
   const details = await Promise.all(
-    numbers.map((n) => getMasteryByNumber(n, { days: 30 }))
+    numbers.map((n) => getMasteryByNumber(n, { days: 99999 }))
   )
   // 弱项：accuracy < 0.7 且 total > 0
   weakNumbersV2.value = details

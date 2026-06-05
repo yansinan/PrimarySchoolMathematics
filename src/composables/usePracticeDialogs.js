@@ -77,6 +77,7 @@ export function usePracticeDialogs() {
    *   totalCount: number,
    *   timeText: string,
    *   comment: string,
+   *   groupAnswers?: Array,  // P2 阶段 11：本组 answers（v2 弱项/强项分析用）
    * }} opts
    * @returns {Promise<number>} score 1-5
    */
@@ -87,6 +88,7 @@ export function usePracticeDialogs() {
       totalCount: 0,
       timeText: '00:00',
       comment: '',
+      groupAnswers: [],
       ...opts,
     }
     evalVisible.value = true

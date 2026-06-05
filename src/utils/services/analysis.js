@@ -205,7 +205,62 @@ export async function getMasteryByNumber(number, { days = 30 } = {}) {
   }
 }
 
-// ─── 3.2 错题分析 ────────────────────────────────────────────────
+/**
+ * P2 阶段 11：从传入的 answers 算 masteryByNumber（不查 db.answers）
+ * - 用于“本轮”/“本组”等上下文相关数据源（不同统计范围）
+ * - 仍查 db.questions 拿 operands 字段（反查哪些题涉及该数字）
+ *
+ * @param {Array} answers - caller 传入的 answer 数组（任意范围）
+ * @param {number} number - 目标数字
+ * @returns {Promise<{
+ *   number:number, total:number, correct:number, accuracy:number, questionsCount:number
+ * }>}
+ */
+async function _getMasteryByNumberFromAnswers(answers, number) {
+  // 1. 拿所有 questionId → 查 questions 表拿 operands
+  const qIds = [...new Set(answers.map((a) => a.questionId).filter((id) => id != null))]
+  if (qIds.length === 0) {
+    return { number, total: 0, correct: 0, accuracy: 0, questionsCount: 0 }
+  }
+  const qMap = await loadQuestionsByIds(qIds)
+
+  // 2. 过滤涉及该 number 的 answers
+  let total = 0
+  let correct = 0
+  const qIdsWithNumber = new Set()
+  for (const a of answers) {
+    const q = qMap.get(a.questionId)
+    if (!q || !q.operands?.includes(number)) continue
+    total += 1
+    if (a.isCorrect === true) correct += 1
+    qIdsWithNumber.add(a.questionId)
+  }
+
+  return {
+    number,
+    total,
+    correct,
+    accuracy: total > 0 ? correct / total : 0,
+    questionsCount: qIdsWithNumber.size,
+  }
+}
+
+/**
+ * P2 阶段 11：批量查 0-9 数字 mastery（从 caller 传入的 answers 算）
+ * - 三个调用方不同数据范围：
+ *   - StatsDrawer：传 db.answers 全量（历史所有）
+ *   - PracticeSummaryDialog：传 adaptiveAnswers（本轮）
+ *   - SelfEvaluationDialog：传 session.answers（本组）
+ *
+ * @param {Array} answers - caller 传入的 answer 数组
+ * @returns {Promise<Array<{number, total, correct, accuracy, questionsCount}>>}
+ */
+export async function getMasteryByNumberFromAnswersBatch(answers) {
+  const numbers = Array.from({ length: 10 }, (_, i) => i)
+  return await Promise.all(
+    numbers.map((n) => _getMasteryByNumberFromAnswers(answers || [], n))
+  )
+}
 
 /**
  * 查询错题

@@ -107,9 +107,11 @@ watch(
   () => props.visible,
   (v) => {
     if (v) {
-      // 全量 + 数字掌握度并发查询（refresh 内已用 Promise.all 串并行）
+      // 全量 + 本轮数字掌握度并发查询（refresh 内已用 Promise.all 串并行）
       analysis.refresh()
-      analysis.refreshMastery()
+      // P2 阶段 11：数字掌握度改为“本轮”统计（adaptiveAnswers）
+      // 与 StatsDrawer（全量历史）形成对比
+      analysis.refreshMasteryFromAnswers(practiceStore.adaptiveAnswers || [])
     }
   }
 )

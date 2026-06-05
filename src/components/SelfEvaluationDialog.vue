@@ -42,6 +42,26 @@
           点击表情打分 · 单击即继续
         </template>
       </div>
+
+      <!-- P2 阶段 11：本组 v2 弱项/强项（compact 模式，与 StatsDrawer/AbilityCard 同一组件） -->
+      <div v-if="analysis.weaknessByNumber.value.length || analysis.strengthByNumber.value.length" class="eval-v2-cards">
+        <StrengthV2Card
+          v-if="analysis.strengthByNumber.value.length"
+          :data="analysis.strengthByNumber.value"
+          :limit="3"
+          :title="'✓ 本组强项'"
+          :empty-text="'💪 继续练习'"
+          compact
+        />
+        <WeaknessV2Card
+          v-if="analysis.weaknessByNumber.value.length"
+          :data="analysis.weaknessByNumber.value"
+          :limit="3"
+          :title="'⚠ 本组弱项'"
+          :empty-text="'🎉 没有弱项'"
+          compact
+        />
+      </div>
     </div>
   </el-dialog>
 </template>
@@ -55,12 +75,16 @@
  *  - totalCount: number
  *  - timeText: string (格式化后的时间，如 '01:23')
  *  - comment: string (本组评语，如 '又快又准！👍')
+ *  - groupAnswers: Array (本组 answers，阶段 11 用于 v2 弱项/强项分析)
  *
  * Emits:
  *  - update:visible
  *  - select (score: 1|2|3|4|5)
  */
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
+import { useAbilityAnalysis } from '@/composables/useAbilityAnalysis'
+import WeaknessV2Card from '@/components/profile/WeaknessV2Card.vue'
+import StrengthV2Card from '@/components/profile/StrengthV2Card.vue'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -69,6 +93,8 @@ const props = defineProps({
   totalCount: { type: Number, default: 0 },
   timeText: { type: String, default: '00:00' },
   comment: { type: String, default: '' },
+  // P2 阶段 11：本组 answers（用于 v2 弱项/强项分析）
+  groupAnswers: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['update:visible', 'select'])
@@ -76,11 +102,15 @@ const emit = defineEmits(['update:visible', 'select'])
 const selectedScore = ref(3)  // 默认 3 = 刚刚好
 const hoveredScore = ref(null)
 
-// 弹窗打开时重置
+// ── P2 阶段 11：v2 数字弱项/强项（与 StatsDrawer / AbilityCard UI 统一组件） ──
+// 数据范围：本组 answers（每组完成时调 refresh）
+const analysis = useAbilityAnalysis()
 watch(() => props.visible, (v) => {
   if (v) {
     selectedScore.value = 3
     hoveredScore.value = null
+    // 弹窗打开时从本组 answers 算 mastery
+    analysis.refreshMasteryFromAnswers(props.groupAnswers || [])
   }
 })
 
@@ -171,5 +201,16 @@ function handleUpdate(val) {
   margin-top: 4px;
   font-size: 11px;
   color: #c0c4cc;
+}
+
+/* P2 阶段 11：本组 v2 弱项/强项卡 */
+.eval-v2-cards {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed #edf2f7;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
 }
 </style>

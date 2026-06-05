@@ -262,6 +262,7 @@ export function useAbilityAnalysis() {
     refresh,
     refreshWeakness,
     refreshMastery,
+    refreshMasteryFromAnswers,
     refreshWrongAnswers,
     getCurve,
     reset,

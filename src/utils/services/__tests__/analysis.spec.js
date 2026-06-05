@@ -13,6 +13,7 @@ import {
   findEquivalent,
   findRelated,
   getMasteryByNumber,
+  getMasteryByNumberFromAnswersBatch,
   getWrongAnswers,
   evaluateCorrectionEffect,
   prioritizeWrongAnswers,
@@ -216,6 +217,69 @@ describe('getMasteryByNumber', () => {
       questionsCount: 0,
       days: 30,
     })
+  })
+})
+
+// ── 3.1b getMasteryByNumberFromAnswersBatch（阶段 11：上下文相关数据源） ───
+
+describe('getMasteryByNumberFromAnswersBatch', () => {
+  beforeEach(async () => {
+    await db.questions.bulkAdd([
+      mkQuestion({ id: 1, equation: '8+3=', solution: 11, operands: [3, 8] }),
+      mkQuestion({ id: 2, equation: '8-3=', solution: 5, operator: '-', operands: [3, 8] }),
+      mkQuestion({ id: 3, equation: '4+5=', solution: 9, operands: [4, 5] }),
+    ])
+  })
+
+  it('returns 10 zero-accuracy entries for empty answers', async () => {
+    const batch = await getMasteryByNumberFromAnswersBatch([])
+    expect(batch).toHaveLength(10)
+    expect(batch[0]).toEqual({ number: 0, total: 0, correct: 0, accuracy: 0, questionsCount: 0 })
+    expect(batch[8].total).toBe(0)
+  })
+
+  it('filters to only answers whose question operands include the number', async () => {
+    // 3 answers: Q1 (operands 3,8) 2次对1次错, Q3 (operands 4,5) 1次对
+    const answers = [
+      mkAnswer({ questionId: 1, isCorrect: true, sessionId: 1 }),
+      mkAnswer({ questionId: 1, isCorrect: true, sessionId: 1 }),
+      mkAnswer({ questionId: 1, isCorrect: false, sessionId: 1 }),
+      mkAnswer({ questionId: 3, isCorrect: true, sessionId: 1 }),
+    ]
+    const batch = await getMasteryByNumberFromAnswersBatch(answers)
+    // 数字 8 出现：Q1 (3 answers 涉及 8)
+    const r8 = batch.find((r) => r.number === 8)
+    expect(r8).toEqual({ number: 8, total: 3, correct: 2, accuracy: 2 / 3, questionsCount: 1 })
+    // 数字 3 出现：Q1 涉及
+    const r3 = batch.find((r) => r.number === 3)
+    expect(r3.total).toBe(3)
+    // 数字 4 出现：Q3 1 次对
+    const r4 = batch.find((r) => r.number === 4)
+    expect(r4).toEqual({ number: 4, total: 1, correct: 1, accuracy: 1, questionsCount: 1 })
+    // 数字 7 未出现
+    const r7 = batch.find((r) => r.number === 7)
+    expect(r7.total).toBe(0)
+  })
+
+  it('is scope-bounded by caller-provided answers (本组/本轮/全量 同一函数不同数据)', async () => {
+    // 模拟“本组”只有 1 个 answer
+    const groupAnswers = [mkAnswer({ questionId: 1, isCorrect: false, sessionId: 1 })]
+    const groupBatch = await getMasteryByNumberFromAnswersBatch(groupAnswers)
+    // 数字 8 只 1 次（错）
+    const r8group = groupBatch.find((r) => r.number === 8)
+    expect(r8group).toEqual({ number: 8, total: 1, correct: 0, accuracy: 0, questionsCount: 1 })
+
+    // 模拟“本轮”含 3 个 answers
+    const roundAnswers = [
+      mkAnswer({ questionId: 1, isCorrect: true, sessionId: 1 }),
+      mkAnswer({ questionId: 2, isCorrect: true, sessionId: 1 }),
+      mkAnswer({ questionId: 3, isCorrect: false, sessionId: 1 }),
+    ]
+    const roundBatch = await getMasteryByNumberFromAnswersBatch(roundAnswers)
+    // 数字 8 出现 2 次（Q1 + Q2）
+    const r8round = roundBatch.find((r) => r.number === 8)
+    expect(r8round.total).toBe(2)
+    expect(r8round.correct).toBe(2)
   })
 })
 
