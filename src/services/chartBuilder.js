@@ -23,6 +23,15 @@ const OP_COLORS = {
 export function buildTrendChart(canvas, data) {
   if (!canvas || !data?.length) return null
 
+  // 确保 canvas 有实际尺寸再创建 Chart
+  const parent = canvas.parentElement
+  if (parent) {
+    const w = parent.clientWidth
+    const h = parent.clientHeight
+    if (w > 0) canvas.width = w
+    if (h > 0) canvas.height = h
+  }
+
   return new Chart(canvas, {
     type: 'line',
     data: {
@@ -65,6 +74,15 @@ export function buildTrendChart(canvas, data) {
  */
 export function buildOperatorChart(canvas, data) {
   if (!canvas || !data?.length) return null
+
+  // 确保 canvas 有实际尺寸再创建 Chart
+  const parent = canvas.parentElement
+  if (parent) {
+    const w = parent.clientWidth
+    const h = parent.clientHeight
+    if (w > 0) canvas.width = w
+    if (h > 0) canvas.height = h
+  }
 
   return new Chart(canvas, {
     type: 'bar',

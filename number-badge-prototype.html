@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>数字掌握度 Badge 方案探索</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #f5f7fa; color: #1e3c5c; padding: 40px;
+}
+h1 { font-size: 20px; margin-bottom: 32px; color: #303133; }
+h2 { font-size: 15px; margin-bottom: 16px; color: #606266; }
+.section { margin-bottom: 48px; }
+.row { display: flex; gap: 24px; flex-wrap: wrap; }
+
+/* --- 卡片容器 --- */
+.card {
+  background: #fff; border-radius: 12px; padding: 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08); flex: 1; min-width: 260px;
+}
+.card-label {
+  font-size: 12px; color: #909399; margin-bottom: 12px; letter-spacing: .3px;
+}
+
+/* --- 方案 A: 纯色圆盘 --- */
+.a-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.a-badge {
+  width: 44px; height: 44px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 18px; color: #fff;
+}
+.a-badge.s { background: #58cc71; }
+.a-badge.m { background: #409eff; }
+.a-badge.w { background: #e6a23c; }
+
+/* --- 方案 B: 彩色圆盘 + 外圈环 --- */
+.b-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.b-badge {
+  width: 44px; height: 44px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 18px; color: #fff;
+  position: relative;
+}
+.b-badge.s { background: #58cc71; }
+.b-badge.m { background: #409eff; }
+.b-badge.w { background: #e6a23c; }
+.b-badge::after {
+  content: ''; position: absolute; inset: -3px;
+  border-radius: 50%; border: 2px solid currentColor;
+  opacity: .3;
+}
+.b-badge.s::after { color: #58cc71; }
+.b-badge.m::after { color: #409eff; }
+.b-badge.w::after { color: #e6a23c; }
+
+/* --- 方案 C: 迷你圆盘（更小，适应更多数字）--- */
+.c-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.c-badge {
+  width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 15px; color: #fff;
+}
+.c-badge.s { background: #58cc71; }
+.c-badge.m { background: #409eff; }
+.c-badge.w { background: #e6a23c; }
+.c-badge .tooltip { display: none; }
+
+/* --- 方案 D: 渐变填充（比例感）--- */
+.d-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.d-badge {
+  width: 44px; height: 44px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 18px; color: #fff;
+  position: relative; overflow: hidden;
+}
+.d-badge .num { position: relative; z-index: 1; }
+.d-badge .fill {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: rgba(255,255,255,.25); transition: height .3s;
+}
+
+/* color variant */
+.d-badge.s { background: linear-gradient(135deg, #27ae60, #58cc71); }
+.d-badge.m { background: linear-gradient(135deg, #2980b9, #409eff); }
+.d-badge.w { background: linear-gradient(135deg, #d68910, #e6a23c); }
+
+.data-table { margin-top: 12px; font-size: 12px; color: #909399; }
+</style>
+</head>
+<body>
+
+<h1>🎯 数字掌握度 Badge 方案</h1>
+
+<div class="section">
+  <h2>💡 当前目标</h2>
+  <p style="color:#606266;font-size:14px;line-height:1.6;margin-bottom:16px;">
+    • 去掉序号 / 去掉百分比文字 / 节省空间<br>
+    • 数字放圆内 / 颜色分级（绿≥95% / 蓝≥80% / 黄≥50%）<br>
+    • 一行为一组，flex-wrap 自动换行
+  </p>
+</div>
+
+<!-- 方案 A -->
+<div class="section">
+  <div class="card">
+    <div class="card-label">方案 A — 纯色圆盘（推荐 ✓）</div>
+    <div class="a-list">
+      <div class="a-badge s">9</div>
+      <div class="a-badge s">8</div>
+      <div class="a-badge s">7</div>
+      <div class="a-badge s">6</div>
+      <div class="a-badge s">5</div>
+      <div class="a-badge m">4</div>
+      <div class="a-badge m">3</div>
+      <div class="a-badge m">2</div>
+      <div class="a-badge w">1</div>
+    </div>
+    <div class="data-table">44px 圆 | 18px 白字 | 颜色=掌握度等级 | 最简洁</div>
+  </div>
+</div>
+
+<!-- 方案 B -->
+<div class="section">
+  <div class="card">
+    <div class="card-label">方案 B — 彩色圆盘 + 外圈装饰线</div>
+    <div class="b-list">
+      <div class="b-badge s">9</div>
+      <div class="b-badge s">8</div>
+      <div class="b-badge s">7</div>
+      <div class="b-badge s">6</div>
+      <div class="b-badge s">5</div>
+      <div class="b-badge m">4</div>
+      <div class="b-badge m">3</div>
+      <div class="b-badge m">2</div>
+      <div class="b-badge w">1</div>
+    </div>
+    <div class="data-table">44px 圆 | 外圈虚线 = 可练习方向 | 比A多一层信息</div>
+  </div>
+</div>
+
+<!-- 方案 C -->
+<div class="section">
+  <div class="card">
+    <div class="card-label">方案 C — 迷你圆盘（紧凑）</div>
+    <div class="c-list">
+      <div class="c-badge s">9</div>
+      <div class="c-badge s">8</div>
+      <div class="c-badge s">7</div>
+      <div class="c-badge s">6</div>
+      <div class="c-badge s">5</div>
+      <div class="c-badge m">4</div>
+      <div class="c-badge m">3</div>
+      <div class="c-badge m">2</div>
+      <div class="c-badge w">1</div>
+    </div>
+    <div class="data-table">36px 圆 | 15px 字 | 适合 7+ 个数字 | 最省空间</div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>📐 在统计面板中的效果预览</h2>
+</div>
+
+<div class="row">
+  <!-- 强项卡片预览 -->
+  <div class="card">
+    <div class="card-label" style="font-weight:600;color:#27ae60;">🌟 你最拿手</div>
+    <div class="a-list">
+      <div class="a-badge s">0</div>
+      <div class="a-badge s">3</div>
+      <div class="a-badge s">7</div>
+      <div class="a-badge s">9</div>
+      <div class="a-badge s">6</div>
+    </div>
+  </div>
+  <!-- 中间档卡片预览 -->
+  <div class="card">
+    <div class="card-label" style="font-weight:600;color:#409eff;">🟢 还行</div>
+    <div class="a-list">
+      <div class="a-badge m">2</div>
+      <div class="a-badge m">4</div>
+      <div class="a-badge m">5</div>
+      <div class="a-badge m">8</div>
+      <div class="a-badge m">1</div>
+    </div>
+  </div>
+</div>
+
+<p style="margin-top:32px;font-size:13px;color:#909399;">
+  光标悬停 <code>.c-badge</code> 可见 tooltip，但移动端无 hover — 需要另处理。
+</p>
+
+</body>
+</html>
