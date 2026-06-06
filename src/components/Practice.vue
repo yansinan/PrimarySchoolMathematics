@@ -553,7 +553,7 @@ watch(listPractices, (newPracticeList) => {
 //
 // ## 在浏览器中调用
 // 打开 DevTools Console 或 Playwright `page.evaluate(() => ...)` 即可。
-// 最常用的 6 个调用：
+// 最常用的 4 个调用：
 //   // 1) 答当前题（默认答对 = 用 solution 答）
 //   window.__psm_debug.answer()
 //   // 2) 故意答错当前题（用 solution+1 答）
@@ -565,10 +565,8 @@ watch(listPractices, (newPracticeList) => {
 //     await window.__psm_debug.answer(true)
 //     await window.__psm_debug.answer(false)
 //   }
-//   // 5) 强制弹 SelfEvaluationDialog（模拟"本组答完"）
-//   window.__psm_debug.completeGroup()
-//   // 6) 强制从评估态切到自适应态（模拟"评估完成"）
-//   window.__psm_debug.completeAssessment()
+// （之前的 completeGroup / completeAssessment 已删除：直接调会污染
+//  能力画像 / 自适应引擎历史，agent 测试应走"先 answerN 再等弹窗"流程）
 //
 // ## API 完整列表
 //
@@ -598,23 +596,6 @@ watch(listPractices, (newPracticeList) => {
 //   - 不要并行调用多个 `answerN`（共享全局 `currentQuestion` 会冲突）
 //   - 不要在 `answerN` 未完成时调用 `state()`，可能拿到中间态
 //
-// ### completeGroup() → 同步
-// 强制调用 `useAdaptiveSession.completeGroup()`，模拟"本组答完"。
-// @returns void
-// @side-effects
-//   - 触发 `dialogs.showSelfEvaluationDialog()` 弹窗（用户选"更难/稍难/一样/稍易/更易"）
-//   - 用户选择后，自适应引擎根据难度档位决定下一组题
-// @usage 主要用于 agent 测试：不用真答完一组，直接调这个就能弹 SelfEvaluationDialog
-//
-// ### completeAssessment() → 同步
-// 强制调用 `useAdaptiveSession.completeAssessment()`，模拟"评估阶段答完"。
-// @returns void
-// @side-effects
-//   - 调用 `saver.saveAssessmentFinal()` 把诊断结果写入 DB
-//   - 触发 `dialogs.showAssessmentSummaryDialog()` 弹窗（展示评估结果）
-//   - 关闭弹窗后自动进入自适应第 1 组
-// @usage 主要用于 agent 测试：不用真答完 5 道诊断题，直接调这个就能切到自适应
-//
 // ### state() → 同步，纯查询
 // 查询当前状态，无副作用。
 // @returns {{
@@ -642,19 +623,9 @@ watch(listPractices, (newPracticeList) => {
 //
 // 场景 3: 测评估阶段连续错 2 次提前结束（ASSESSMENT_ABORT_WRONG_STREAK=2）
 //   await window.__psm_debug.answer(false)
-//   await window.__psm_debug.answer(false)  // 触发 completeAssessment（弹评估结束弹窗）
+//   await window.__psm_debug.answer(false)  // 内部触发 completeAssessment（弹评估结束弹窗，agent 不需调 API）
 //
-// 场景 4: 测 SelfEvaluationDialog 弹窗（自适应模式下"本组答完"会弹）
-//   await window.__psm_debug.answerN(5, true)  // 评估完成 → 进自适应
-//   window.__psm_debug.completeGroup()         // 强制弹 SelfEvaluationDialog
-//
-// 场景 5: 测 PracticeSummaryDialog（整轮完成时弹）
-//   await window.__psm_debug.answerN(5, true)   // 评估完成 → 进自适应第 1 组
-//   // 接下来要"完成所有自适应组"才会弹 PracticeSummaryDialog
-//   // 真实路径：要循环 "答一组 → completeGroup → 选难度 → 再答一组" 若干次
-//   // agent 测试通常只测弹窗能否弹出，可直接调 dialogs.showPracticeSummaryDialog(...)
-//
-// 场景 6: 测 StatsDrawer 3 section（先用 answerN 答题生成数据）
+// 场景 4: 测 StatsDrawer 3 section（先用 answerN 答题生成数据）
 //   await window.__psm_debug.answerN(20, true)
 //   // 然后通过 Vue Devtools / 直接 import statsStore 调 openDrawer()
 //   // StatsDrawer 内部从 store 读数据，__psm_debug 暂不暴露 statsStore
@@ -669,8 +640,6 @@ watch(listPractices, (newPracticeList) => {
 //   → 不要并行调用多个 `answerN`（共享 `currentQuestion` 会乱）
 // - 答错时 `isCorrect=false` 会走 `attemptCount` 累加重试逻辑
 //   → 连答 4 次错才会强制跳题（见 `handleSubmit` 的 `attemptCount >= MAX_ATTEMPT_PER_QUESTION + 1`）
-// - `completeGroup()` / `completeAssessment()` 弹窗是异步的
-//   → agent 测试要用 `dialogs` 自己的 API 接续（或等待弹窗出现），不要靠 `sleep`
 // - 测错路径前先 `await window.__psm_debug.state()` 看 `phase`、`groupIdx` 等
 //
 // ## 相关常量（来自 src/constants/practice.js）
@@ -727,16 +696,6 @@ if (typeof window !== 'undefined') {
       }
       return { ok: true, done }
     },
-
-    /**
-     * 强制触发当前组完成（测 SelfEvaluationDialog 弹窗是否弹出）
-     */
-    completeGroup: () => completeGroup(),
-
-    /**
-     * 强制触发评估完成（从诊断态切到自适应态）
-     */
-    completeAssessment: () => completeAssessment(),
 
     /**
      * 查询当前状态
