@@ -195,9 +195,8 @@ const {
 
 // P2 阶段 14: useAbilityProfile 传 options.answers = 全量历史
 // 显示孩子长期掌握度
-const profile = useAbilityProfile({
-  answers: computed(() => allAnswers)
-})
+// P5 v2.3.0 修复：allAnswers 已是 ComputedRef，不要再套一层 computed（否则 unref 只能解一层）
+const profile = useAbilityProfile({ answers: allAnswers })
 // 修复 Bug 1: 解构加 midByNumber, 让模板可访问中间档数据
 const { weaknessByNumber, strengthByNumber, midByNumber, strongLevels, weakLevels } = profile
 
