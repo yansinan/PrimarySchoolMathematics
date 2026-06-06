@@ -23,6 +23,8 @@
           <div class="level-info">
             <span class="level-icon">{{ gameLevel.icon }}</span>
             <span class="level-title">{{ gameLevel.title }}</span>
+            <!-- 运算符专精辅助标签 -->
+            <span v-for="op in operatorSkills" :key="op" class="level-aux-tag">{{ op }}</span>
             <span class="level-xp">经验 {{ aggregatedStats.totalQuestions }}/{{ gameLevel.nextXP }}</span>
           </div>
           <div class="level-bar-wrap">
@@ -30,10 +32,26 @@
           </div>
         </div>
 
-        <!-- ── 技能标签条（banner 下方独立一行） ── -->
+        <!-- ── 技能标签（从 strongLevels/weakLevels 等级强弱项派生） ── -->
         <div v-if="strengthSkills.length || weaknessSkills.length" class="skill-bar">
-          <span v-for="s in strengthSkills" :key="'s-' + s" class="skill-tag skill-tag--strong">{{ s }}</span>
-          <span v-for="s in weaknessSkills" :key="'w-' + s" class="skill-tag skill-tag--weak">{{ s }}</span>
+          <el-tag
+            v-for="s in strengthSkills"
+            :key="'s-' + s"
+            class="skill-tag skill-tag--strong"
+            size="small"
+            effect="dark"
+          >
+            {{ s }}
+          </el-tag>
+          <el-tag
+            v-for="s in weaknessSkills"
+            :key="'w-' + s"
+            class="skill-tag skill-tag--weak"
+            size="small"
+            effect="plain"
+          >
+            {{ s }}
+          </el-tag>
         </div>
 
         <!-- ── Overview cards ── -->
@@ -239,16 +257,26 @@ const gameLevel = computed(() => {
 })
 
 // ── 技能标签（从 strongLevels/weakLevels 等级强弱项派生） ──
-/** 强项技能标签 e.g. '混合进退位① · 专精' */
+/** 强项技能标签 e.g. '混合进退位①' */
 const strengthSkills = computed(() => {
   const labels = strongLevels?.value || []
-  return labels.map(l => `${l} · 专精`)
+  return labels
 })
 
-/** 弱项技能标签 e.g. '进退位入门 · 待提升' */
+/** 弱项技能标签 e.g. '进退位入门' */
 const weaknessSkills = computed(() => {
   const labels = weakLevels?.value || []
-  return labels.map(l => `${l} · 待提升`)
+  return labels
+})
+
+// ── 运算符辅助标签（称号旁的辅助信息） ──
+const operatorSkills = computed(() => {
+  const ops = aggregatedStats.value?.operatorStats
+  if (!ops) return []
+  return Object.entries(ops)
+    .filter(([, d]) => d.accuracy >= 0.9)
+    .sort(([, a], [, b]) => b.accuracy - a.accuracy)
+    .map(([op]) => `${op === '+' ? '加法' : op === '-' ? '减法' : op}专精`)
 })
 // V 层只传 canvas + 数据进 S 层 chartBuilder，Chart.js 生命周期不在此
 
@@ -552,6 +580,7 @@ onBeforeUnmount(() => {
 }
 .level-icon { font-size: 24px; }
 .level-title { font-size: 16px; font-weight: 700; flex: 1; }
+.level-aux-tag { font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.2); color: rgba(255,255,255,0.8); white-space: nowrap; }
 .level-xp { font-size: 12px; opacity: 0.85; }
 .level-bar-wrap {
   height: 10px; background: rgba(255,255,255,0.25); border-radius: 5px; overflow: hidden;
