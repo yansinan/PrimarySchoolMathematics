@@ -10,6 +10,9 @@ import {
   // (M 层可引 D 层 — database.js 是数据层, 合规)
   getAllAnswers
 } from '@/utils/database'
+// 统一 operator 映射（ARCHITECTURE.md §3.5 消除重复）
+// OPERATOR_SYMBOLS 对应图表显示（＋ － × ÷）
+import { OPERATOR_SYMBOLS } from '@/services'
 
 /**
  * Stats Store — manages historical practice data, aggregated statistics,
@@ -56,15 +59,9 @@ export const useStatsStore = defineStore('stats', {
       const stats = this.aggregatedStats
       if (!stats || !stats.operatorStats) return []
 
-      const map = {
-        '+': '＋',
-        '-': '－',
-        '*': '×',
-        '/': '÷'
-      }
-
       return Object.entries(stats.operatorStats).map(([op, data]) => ({
-        label: map[op] || op,
+        // 统一源 OPERATOR_SYMBOLS (services/operatorMap.js)
+        label: OPERATOR_SYMBOLS[op] || op,
         accuracy: data.accuracy || 0,
         count: data.count || 0
       }))

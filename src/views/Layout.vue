@@ -1,6 +1,7 @@
 <template>
   <el-container class="practice-layout">
     <Generate />
+    <DebugPanel />
     <el-main class="practice-layout__main">
       <Practice />
     </el-main>
@@ -11,6 +12,7 @@
 <script setup>
 import { Generate, Practice } from '@/components'
 import StatsDrawer from '@/components/stats/StatsDrawer.vue'
+import DebugPanel from '@/components/dev/DebugPanel.vue'
 </script>
 
 <style lang="scss" scoped>

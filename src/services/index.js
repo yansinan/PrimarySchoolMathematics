@@ -10,3 +10,5 @@
  */
 
 export * from '@/utils/services/analysis'
+// 统一 operator 映射 (ARCHITECTURE.md §2.1 目标树)
+export * from './operatorMap'

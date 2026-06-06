@@ -2,9 +2,12 @@ import { computed, unref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { usePracticeStore } from '@/stores/practice'
 import { useAbilityAnalysis } from '@/composables/useAbilityAnalysis'
-import { DIAG_LEVELS } from '@/utils/diagnostic'
-import { DIFFICULTY_LEVELS } from '@/utils/adaptiveEngine'
+import { DIFFICULTY_LEVELS } from '@/utils/algorithm/adaptiveEngine'
+import { matchLevel } from '@/utils/algorithm/adaptiveEngine'
 import { getAnswerScore, sumAnswerScores } from '@/utils/score'
+// 旧: 依赖 diagAnswers + DIAG_LEVELS 体系，改用 matchLevel 从任意 answers 派生
+// import { DIAG_LEVELS } from '@/utils/algorithm/diagnostic'
+// function evaluateLevelByScore(levelId, answers) { ... }
 
 function resolveSource(source, fallback) {
   return computed(() => {
@@ -12,16 +15,6 @@ function resolveSource(source, fallback) {
     if (value != null) return value
     return typeof fallback === 'function' ? fallback() : fallback
   })
-}
-
-function evaluateLevelByScore(levelId, answers) {
-  const list = (answers || []).filter((answer) => answer.level === levelId)
-  if (!list.length) return { total: 0, score: 0, hasData: false }
-  return {
-    total: list.length,
-    score: sumAnswerScores(list) / list.length,
-    hasData: true,
-  }
 }
 
 export function useAbilityProfile(options = {}) {
@@ -34,7 +27,8 @@ export function useAbilityProfile(options = {}) {
     return adaptiveAnswers.length ? adaptiveAnswers : (storeRefs.session.value?.answers || [])
   })
 
-  const diagAnswers = resolveSource(options.diagAnswers, () => storeRefs.abilityProfile.value?.diagAnswers || [])
+  // 旧 diagAnswers: 仅在诊断数据中有 level 字段，无法适配任意 answers
+  // const diagAnswers = resolveSource(options.diagAnswers, () => storeRefs.abilityProfile.value?.diagAnswers || [])
   const currentDifficultyIdx = resolveSource(options.currentDifficultyIdx, () => practiceStore.currentDifficultyIdx)
 
   const statsTotal = resolveSource(options.statsTotal, () => (answers.value || []).length)
@@ -79,19 +73,52 @@ export function useAbilityProfile(options = {}) {
     return Math.min(100, Math.max(0, (statsLevel.value / statsLevelTotal.value) * 100))
   })
 
+  // ── 判定阈值（可调参数，后续可挪到配置文件） ──
+/** 强项正确率下限：≥此值算强项 */
+const STRONG_THRESHOLD = 0.95
+
+/**
+   * 强项等级：该档位所有题目的正确率 ≥ STRONG_THRESHOLD → 强项
+   * 数据源：answers（已有答题数组），经 matchLevel 自动匹配档位
+   * 答完一题即更新（响应式依赖 answers.value）
+   */
   const strongLevels = computed(() => {
-    return DIAG_LEVELS.filter((level) => {
-      const stat = evaluateLevelByScore(level.id, diagAnswers.value)
-      return stat.hasData && stat.total >= 3 && stat.score >= 1
-    }).map((level) => level.label)
+    const groups = _groupAnswersByLevel(answers.value)
+    return groups
+      .filter((g) => g.accuracy >= STRONG_THRESHOLD)
+      .map((g) => g.label)
   })
 
+  /**
+   * 弱项等级：该档位存在任意错误 → 弱项
+   */
   const weakLevels = computed(() => {
-    return DIAG_LEVELS.filter((level) => {
-      const stat = evaluateLevelByScore(level.id, diagAnswers.value)
-      return stat.hasData && stat.total >= 1 && stat.score < 0.5
-    }).map((level) => level.label)
+    const groups = _groupAnswersByLevel(answers.value)
+    return groups
+      .filter((g) => g.accuracy < 1)
+      .map((g) => g.label)
   })
+
+  /**
+   * 将 answers 按 matchLevel 分组，计算各组总题数/正确数/正确率
+   */
+  function _groupAnswersByLevel(ans) {
+    const map = {}
+    for (const a of ans || []) {
+      const match = matchLevel(a)
+      if (!match) continue
+      const key = match.levelIdx
+      if (!map[key]) {
+        map[key] = { levelIdx: key, label: match.label, total: 0, correct: 0 }
+      }
+      map[key].total++
+      if (getAnswerScore(a) === 1) map[key].correct++
+    }
+    return Object.values(map).map((g) => ({
+      ...g,
+      accuracy: g.total > 0 ? g.correct / g.total : 0,
+    }))
+  }
 
   const hasMasteryData = computed(() => {
     const value = masteryByNumberFull.value || {}
@@ -168,7 +195,7 @@ export function useAbilityProfile(options = {}) {
   return {
     analysis,
     answers,
-    diagAnswers,
+    // diagAnswers,     // 已废弃：改用 matchLevel + answers (2026-06)
     currentDifficultyIdx,
     statsTotal,
     statsCorrect,

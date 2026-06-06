@@ -11,6 +11,7 @@
 import { computed } from 'vue'
 import { useStatsStore } from '@/stores/stats'
 import { formatDuration as _formatDuration } from '@/utils/timeFormat'
+// 统一 operator 中文名称（services/operatorMap.js）
 import { OPERATOR_LABELS } from '@/services'
 
 export function useStatsDrawer() {
@@ -77,6 +78,7 @@ export function useStatsDrawer() {
   }
 
   function operatorLabel(op) {
+    // 统一源 OPERATOR_LABELS (services/operatorMap.js)
     return OPERATOR_LABELS[op] || op
   }
 

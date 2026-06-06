@@ -21,7 +21,7 @@ import {
   MASTERY_CHECK_CONFIG,
   CONSECUTIVE_GOOD_TO_ADVANCE,
   MIN_GROUPS_PER_DIMENSION,
-} from '../constants/practice'
+} from '../../constants/practice'
 
 // ─── 精细难度分阶（16级，每步变化微小） ───
 //
@@ -443,4 +443,108 @@ export function evaluateGroup(engine, groupAnswers) {
   }
 
   return { engine: next, nextGroupSize: GROUP_SIZES[next.groupSizeIdx], done: false }
+}
+
+// ──────────── matchLevel: 任意答案 → DIFFICULTY_LEVELS 档位 ────────────
+
+/** 运算符字符 → DIFFICULTY_LEVELS 数字编码 */
+const _OP_TO_NUM = { '+': 1, '-': 2, '*': 3, '/': 4, '×': 3, '÷': 4, '＋': 1, '－': 2 }
+
+/**
+ * 将一道题匹配到 DIFFICULTY_LEVELS 档位
+ * （无状态纯函数，不读任何外部状态 / IO）
+ *
+ * @param {object} answer - 答题记录
+ * @param {string} answer.equation - 算式，"12+5=__" 或 "12+5=17"
+ * @param {string} [answer.operator] - 运算符 '+' | '-' | '*' | '/'
+ * @param {number} [answer.operandMin] - 最小操作数（有则跳过解析）
+ * @param {number} [answer.operandMax] - 最大操作数
+ * @param {boolean} [answer.isCarry] - 是否进位（有则跳过计算）
+ * @param {boolean} [answer.isBorrow] - 是否退位
+ * @returns {{ levelIdx: number, label: string } | null}
+ */
+export function matchLevel(answer) {
+  if (!answer || !answer.equation) return null
+
+  // 运算符：优先用显式字段，否则从算式首字符提取
+  const opChar = answer.operator || answer.equation.replace(/=.*$/, '').trim().match(/[+\-*/×÷＋－]/)?.[0] || ''
+  const opNum = _OP_TO_NUM[opChar]
+  if (opNum == null) return null
+
+  // 提取操作数（优先用已有字段，否则解算式）
+  const [a, b] = (answer.operandMin != null && answer.operandMax != null)
+    ? [answer.operandMin, answer.operandMax]
+    : _parseOperands(answer.equation, opChar)
+  if (a == null || b == null) return null
+
+  const operandMin = Math.min(a, b)
+  const operandMax = Math.max(a, b)
+
+  // 进位/退位判定
+  const hasCarry = answer.isCarry ?? _isCarry(a, b)
+  const hasBorrow = answer.isBorrow ?? _isBorrow(a, b, opNum)
+
+  // 逐级匹配 DIFFICULTY_LEVELS
+  for (let i = 0; i < DIFFICULTY_LEVELS.length; i++) {
+    const level = DIFFICULTY_LEVELS[i]
+
+    // 进退位约束（仅加减法）
+    if (opNum === 1) {
+      if (level.carry === '2' && !hasCarry) continue
+      if (level.carry === '3' && hasCarry) continue
+    }
+    if (opNum === 2) {
+      if (level.abdication === '2' && !hasBorrow) continue
+      if (level.abdication === '3' && hasBorrow) continue
+    }
+
+    // 数字范围 + 运算符匹配
+    // 优先匹配 operators 显式包含当前运算符的条目；兜底匹配 operators=null 的
+    // 注意：若同层有其他条目显式限制了 operators 且不含当前运算符，null 条目不生效
+    const rangeMatch = (() => {
+      // ① 精确匹配：formula 限制的 operators 包含当前运算符
+      const specific = level.formulaList.find(f => {
+        if (operandMax > f.max) return false
+        if (!(operandMin >= f.min || operandMax >= f.min)) return false
+        return f.operators != null && f.operators.includes(opNum)
+      })
+      if (specific) return true
+      // ② 兜底匹配：仅当同层无任何显式 operator 限制时，operators=null 才作数
+      const hasExplicitOp = level.formulaList.some(f => f.operators != null)
+      if (hasExplicitOp) return false
+      return level.formulaList.some(f => {
+        if (operandMax > f.max) return false
+        if (!(operandMin >= f.min || operandMax >= f.min)) return false
+        return f.operators == null
+      })
+    })()
+    if (!rangeMatch) continue
+
+    return { levelIdx: i, label: level.label }
+  }
+
+  return null
+}
+
+/** 从算式拆出两个操作数（保持原始顺序：a=被加数/被减数） */
+function _parseOperands(equation, operator) {
+  if (!equation || !operator) return [null, null]
+  const eq = equation.replace(/=.*$/, '').trim()
+  const idx = eq.indexOf(operator)
+  if (idx === -1) return [null, null]
+  const left = parseInt(eq.substring(0, idx).trim())
+  const right = parseInt(eq.substring(idx + 1).trim())
+  if (isNaN(left) || isNaN(right)) return [null, null]
+  return [left, right]
+}
+
+/** 加法是否进位（个位相加≥10） */
+function _isCarry(a, b) {
+  return (a % 10) + (b % 10) >= 10
+}
+
+/** 减法是否退位（被减数个位 < 减数个位；非减法返回 false） */
+function _isBorrow(a, b, opNum) {
+  if (opNum !== 2) return false
+  return (a % 10) < (b % 10)
 }
