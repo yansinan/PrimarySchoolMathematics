@@ -83,7 +83,7 @@
         </el-row>
 
         <!-- ── Accuracy trend chart（仅在有数据时显示） ── -->
-        <div v-if="accuracyTrend.length > 1" class="chart-section">
+        <div v-show="accuracyTrend.length > 1" class="chart-section">
           <h3 class="section-title">正确率趋势</h3>
           <div class="chart-container">
             <canvas ref="trendChartRef"></canvas>
@@ -91,7 +91,7 @@
         </div>
 
         <!-- ── Operator breakdown chart（仅在有数据时显示） ── -->
-        <div v-if="operatorBreakdown.length" class="chart-section">
+        <div v-show="operatorBreakdown.length" class="chart-section">
           <h3 class="section-title">运算符正确率</h3>
           <div class="chart-container">
             <canvas ref="operatorChartRef"></canvas>
