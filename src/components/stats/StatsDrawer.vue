@@ -28,11 +28,16 @@
           <div class="level-bar-wrap">
             <div class="level-bar" :style="{ width: gameLevel.progress + '%', background: gameLevel.color }"></div>
           </div>
-          <!-- 技能标签 -->
-          <div class="skill-tags">
-            <el-tag v-for="s in strengthSkills" :key="s" size="small" class="skill-tag skill-tag--strong">{{ s }}</el-tag>
-            <el-tag v-for="s in weaknessSkills" :key="s" size="small" class="skill-tag skill-tag--weak">{{ s }}</el-tag>
-          </div>
+        </div>
+
+        <!-- ── 技能标签条（banner 下方独立一行） ── -->
+        <div v-if="strengthSkills.length || weaknessSkills.length" class="skill-bar">
+          <el-tag v-for="s in strengthSkills" :key="'s-' + s" class="skill-tag skill-tag--strong" size="small" effect="dark">
+            {{ s }}
+          </el-tag>
+          <el-tag v-for="s in weaknessSkills" :key="'w-' + s" class="skill-tag skill-tag--weak" size="small" effect="plain">
+            {{ s }}
+          </el-tag>
         </div>
 
         <!-- ── Overview cards ── -->
@@ -319,7 +324,8 @@ watch(() => isDrawerOpen, async (visible) => {
       await openDrawer()
       await profile.refreshMasteryFromAnswers(allAnswers?.value || [])
       await nextTick()
-      rebuildCharts()
+      // 延迟 200ms 等抽屉动画完成，确保 canvas 有非零尺寸
+      setTimeout(() => rebuildCharts(), 200)
     } catch (err) {
       console.error('[StatsDrawer] watch refresh failed:', err)
     }
@@ -559,8 +565,31 @@ onBeforeUnmount(() => {
 .level-bar {
   height: 100%; border-radius: 5px; transition: width 0.5s ease;
 }
-.skill-tags { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 4px; }
-.skill-tag { border: none !important; }
-.skill-tag--strong { background: rgba(255,215,0,0.3) !important; color: #ffd700 !important; }
-.skill-tag--weak { background: rgba(180,180,180,0.25) !important; color: #ccc !important; }
+
+/* ── 技能标签条（banner 下方独立一行） ── */
+.skill-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border-radius: 10px;
+  margin-bottom: 16px;
+  border: 1px solid #e8eef5;
+}
+.skill-tag {
+  font-size: 12px !important;
+  font-weight: 600;
+  border: none !important;
+}
+.skill-tag--strong {
+  background: linear-gradient(135deg, #ffd700 0%, #ffb347 100%) !important;
+  color: #fff !important;
+  box-shadow: 0 2px 4px rgba(255, 200, 0, 0.3);
+}
+.skill-tag--weak {
+  background: #e8e8e8 !important;
+  color: #999 !important;
+  border: 1px dashed #b0b0b0 !important;
+}
 </style>
