@@ -11,6 +11,7 @@
 import { computed } from 'vue'
 import { useStatsStore } from '@/stores/stats'
 import { formatDuration as _formatDuration } from '@/utils/timeFormat'
+import { OPERATOR_LABELS } from '@/services'
 
 export function useStatsDrawer() {
   const statsStore = useStatsStore()
@@ -49,6 +50,21 @@ export function useStatsDrawer() {
     return statsStore.importData(file)
   }
 
+  /**
+   * 打开抽屉 + 刷新全量数据（ARCH 合规：编排下沉到 C）
+   * V 层只调一行，不需要分别调 refreshAll / loadAllAnswers
+   */
+  async function openDrawer() {
+    await Promise.all([
+      statsStore.refreshAll(),
+      statsStore.loadAllAnswers(),
+    ])
+  }
+
+  function loadAllAnswers() {
+    return statsStore.loadAllAnswers()
+  }
+
   // ── 纯函数（原 V 层内联，搬至此统一出口） ──
   function formatDuration(ms) {
     return _formatDuration(ms)
@@ -61,8 +77,7 @@ export function useStatsDrawer() {
   }
 
   function operatorLabel(op) {
-    const map = { '+': '加法', '-': '减法', '*': '乘法', '/': '除法' }
-    return map[op] || op
+    return OPERATOR_LABELS[op] || op
   }
 
   // ── 派生数据 ──
@@ -79,7 +94,7 @@ export function useStatsDrawer() {
   return {
     isDrawerOpen, toggleDrawer, loading, aggregatedStats, overallAccuracyPercent,
     sessions, accuracyTrend, operatorBreakdown, allAnswers,
-    openSessionDetail, refreshAll, exportData, importData,
+    openSessionDetail, refreshAll, openDrawer, loadAllAnswers, exportData, importData,
     formatDuration, formatDate, operatorLabel,
     weakNumbers, weakNumberSuggestion,
   }
