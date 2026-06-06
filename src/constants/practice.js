@@ -144,7 +144,7 @@ export const RESERVE_POOL_SIZE = 3
 /** 强项正确率下限：≥此值算强项 */
 export const STRONG_THRESHOLD = 0.95
 /** 弱项正确率上限：<此值算弱项 */
-export const WEAK_THRESHOLD = 0.5
+export const WEAK_THRESHOLD = 0.95
 
 /* ============================================================
    输入辅助模式 — 降低认知负荷，帮学生建立信心

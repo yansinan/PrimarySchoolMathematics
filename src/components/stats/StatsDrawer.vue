@@ -18,6 +18,18 @@
       <el-empty v-if="!loading && (!aggregatedStats || !aggregatedStats.totalSessions)" description="还没有练习记录，快去练几道题吧！" />
 
       <template v-if="aggregatedStats && aggregatedStats.totalSessions > 0">
+        <!-- ── 游戏等级（P5: 游戏化设计） ── -->
+        <div class="level-section">
+          <div class="level-info">
+            <span class="level-icon">{{ gameLevel.icon }}</span>
+            <span class="level-title">{{ gameLevel.title }}</span>
+            <span class="level-xp">经验 {{ aggregatedStats.totalQuestions }}/{{ gameLevel.nextXP }}</span>
+          </div>
+          <div class="level-bar-wrap">
+            <div class="level-bar" :style="{ width: gameLevel.progress + '%', background: gameLevel.color }"></div>
+          </div>
+        </div>
+
         <!-- ── Overview cards ── -->
         <el-row :gutter="12" class="stats-cards">
           <el-col :span="12">
@@ -189,6 +201,33 @@ const accuracyClass = computed(() => {
   if (pct >= 80) return 'color-success'
   if (pct >= 60) return 'color-warning'
   return 'color-danger'
+})
+
+// ── 游戏等级（P5: 游戏化设计） ──
+const GAME_LEVELS = [
+  { minXP: 0, title: '初学者', icon: '🌱', color: '#909399' },
+  { minXP: 20, title: '练习生', icon: '✏️', color: '#58cc71' },
+  { minXP: 50, title: '数学学徒', icon: '🔢', color: '#409eff' },
+  { minXP: 100, title: '计算小能手', icon: '⚡', color: '#e6a23c' },
+  { minXP: 200, title: '数学小达人', icon: '🌟', color: '#27ae60' },
+  { minXP: 500, title: '算术之星', icon: '⭐', color: '#f56c6c' },
+  { minXP: 1000, title: '数学大师', icon: '👑', color: '#9b59b6' },
+]
+const gameLevel = computed(() => {
+  const xp = aggregatedStats.value?.totalQuestions || 0
+  let level = GAME_LEVELS[0]
+  let next = GAME_LEVELS[1]
+  for (let i = GAME_LEVELS.length - 1; i >= 0; i--) {
+    if (xp >= GAME_LEVELS[i].minXP) {
+      level = GAME_LEVELS[i]
+      next = GAME_LEVELS[Math.min(i + 1, GAME_LEVELS.length - 1)]
+      break
+    }
+  }
+  const nextXP = next.minXP
+  const currentXP = level.minXP
+  const progress = nextXP > currentXP ? ((xp - currentXP) / (nextXP - currentXP)) * 100 : 100
+  return { ...level, nextXP, progress }
 })
 
 // ── Charts ──
@@ -454,5 +493,29 @@ onBeforeUnmount(() => {
   padding: 8px 12px;
   border-radius: 8px;
   border: 1px solid #fae7b3;
+}
+
+/* ── 游戏等级 ── */
+.level-section {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 16px;
+  color: #fff;
+}
+.level-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.level-icon { font-size: 24px; }
+.level-title { font-size: 16px; font-weight: 700; flex: 1; }
+.level-xp { font-size: 12px; opacity: 0.85; }
+.level-bar-wrap {
+  height: 10px; background: rgba(255,255,255,0.25); border-radius: 5px; overflow: hidden;
+}
+.level-bar {
+  height: 100%; border-radius: 5px; transition: width 0.5s ease;
 }
 </style>
