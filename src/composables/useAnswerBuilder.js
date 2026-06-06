@@ -13,7 +13,7 @@
  *   const { operator, isCarry, ... } = buildAnswerMeta(equation, question)
  *   const { attemptCount, score } = buildScore(prevAttempts, isCorrect)
  */
-import { extractQuestionMetadata } from '@/utils/equationParser'
+import { extractQuestionMetadata } from '@/utils/algorithm/equationParser'
 import { buildAttemptScore } from '@/utils/score'
 
 export function useAnswerBuilder() {

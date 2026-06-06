@@ -1,4 +1,4 @@
-import FormulasGenerator from "./psm";
+import FormulasGenerator from "./algorithm/psm";
 
 /**
  * 生成试卷

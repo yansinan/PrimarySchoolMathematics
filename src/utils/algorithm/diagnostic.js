@@ -6,7 +6,7 @@
  * 错误 1 次即判定该等级薄弱（5级×1题），后续练习中会自然回归真实水平。
  */
 
-import { EquationSolver } from './EquationSolver'
+import { EquationSolver } from '../EquationSolver'
 
 // ─── 难度等级定义 ───
 export const DIAG_LEVELS = [

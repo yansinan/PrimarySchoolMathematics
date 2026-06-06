@@ -15,7 +15,11 @@
  */
 
 import { ref } from 'vue'
-import { decideDisplayMode, createInitialStats } from '@/utils/displayStrategy'
+import {
+  decideDisplayMode,
+  createInitialStats,
+  updateDisplayStats,
+} from '@/utils/displayStrategy'
 import { ASSIST_LEVELS } from '@/constants/practice'
 
 /**
@@ -26,6 +30,7 @@ import { ASSIST_LEVELS } from '@/constants/practice'
  *   applyDisplayModeForCurrentQuestion: () => void,
  *   generateOptions: (correct: number) => void,
  *   resetDisplayStats: () => void,
+ *   updateStats: (isCorrect: boolean) => void,
  * }}
  */
 export function useDisplayStrategy(sessionRef, currentQuestionRef) {
@@ -92,10 +97,22 @@ export function useDisplayStrategy(sessionRef, currentQuestionRef) {
     sessionRef.value.currentOptions = options.sort(() => Math.random() - 0.5)
   }
 
+  /**
+   * 更新 displayStats（封装 updateDisplayStats 调用）
+   * 由 V 层在 handleSubmit 中调用，传入 isCorrect
+   * 内部完成"读旧 stats → 调 updateDisplayStats 算新 stats → 写回"
+   * @param {boolean} isCorrect
+   * @returns {void}
+   */
+  const updateStats = (isCorrect) => {
+    displayStats.value = updateDisplayStats(displayStats.value, isCorrect)
+  }
+
   return {
     displayStats,
     applyDisplayModeForCurrentQuestion,
     generateOptions,
     resetDisplayStats,
+    updateStats,
   }
 }

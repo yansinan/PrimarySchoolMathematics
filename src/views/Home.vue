@@ -52,9 +52,9 @@ import { generatePaper } from '@/apis/paper';
 import { useAppStore } from '@/stores/app';
 import { createFormulasGenerator } from '@/utils/paperGenerator';
 // 表单默认值（17 字段统一来源）
-import { DEFAULT_FORM_DATA, applyConfigToFormData } from '@/utils/formDefaults';
+import { DEFAULT_FORM_DATA, applyConfigToFormData, buildPaperDescriptionList } from '@/utils/formDefaults';
 // 解算式
-import { EquationSolver } from '@/utils/EquationSolver';
+import { EquationSolver } from '@/utils/algorithm/EquationSolver';
 
 const { proxy } = getCurrentInstance()
 
@@ -77,11 +77,7 @@ onMounted(async () => {
 })
 
 const paperList = ref([])
-const paperDescriptionList = computed(() => {
-  return paperList.value.map(p => {
-    return p.customFormulaList && p.customFormulaList.length ? `自定义口算题${p.numberOfFormulas}道` : `${p.step}步计算题口算题${p.numberOfFormulas}道`
-  })
-})
+const paperDescriptionList = computed(() => buildPaperDescriptionList(paperList.value))
 
 const activeConfigurationId = ref('1')
 const refreshConfiguration = () => {

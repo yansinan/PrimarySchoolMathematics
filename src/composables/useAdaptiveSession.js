@@ -22,9 +22,9 @@ import { usePracticeStore } from '@/stores/practice'
 import { useStatsStore } from '@/stores/stats'
 import { usePracticeDialogs } from '@/composables/usePracticeDialogs'
 import { usePracticeSaver } from '@/composables/usePracticeSaver'
-import { generateDiagnosticQuestions, analyzeAbility } from '@/utils/diagnostic'
-import { createAdaptiveEngine, getGroupSize, evaluateGroup, getDifficultyLabel } from '@/utils/adaptiveEngine'
-import { generateAdaptiveBatch } from '@/utils/adaptiveBatch'
+import { generateDiagnosticQuestions, analyzeAbility } from '@/utils/algorithm/diagnostic'
+import { createAdaptiveEngine, getGroupSize, evaluateGroup, getDifficultyLabel } from '@/utils/algorithm/adaptiveEngine'
+import { generateAdaptiveBatch } from '@/utils/algorithm/adaptiveBatch'
 import { getGroupComment, getCommentByRate } from '@/constants/practice'
 import { sumAnswerScores } from '@/utils/score'
 import { TARGET_LIMITS } from '@/utils/formDefaults'
@@ -42,7 +42,7 @@ import { formatDuration } from '@/utils/timeFormat'
  */
 export function useAdaptiveSession(options = {}) {
   const practiceStore = usePracticeStore()
-  const { session, correctCount } = storeToRefs(practiceStore)
+  const { session, correctCount, isAssessment, totalQuestions, abilityProfile } = storeToRefs(practiceStore)
 
   // 外部依赖（注入模式，默认从 useXxx() 取）
   const router = options.router || useRouter()
@@ -63,6 +63,39 @@ export function useAdaptiveSession(options = {}) {
   )
   /** 防止 handleNext 重复调用（choice 模式 + setTimeout 同时触发） */
   const nextLocked = ref(false)
+
+  /**
+   * 当前阶段展示标签（封装 4 个分支的 currentStage 计算）
+   * 等价于 V 层原 L172-186 的 currentStage computed
+   * @returns {import('vue').ComputedRef<string>}
+   */
+  const stageName = computed(() => {
+    if (isAssessment.value) {
+      return `能力评估 ${session.value.answers.length}/${totalQuestions.value}`
+    }
+    if (adaptiveEngine.value) {
+      const label = getDifficultyLabel(adaptiveEngine.value)
+      const groupIdx = adaptiveGroupIndex.value
+      return `${label} · 第${groupIdx}组`
+    }
+    if (abilityProfile.value) {
+      return '智能练习'
+    }
+    return '一年级'
+  })
+
+  /**
+   * 启动新诊断（生成诊断题 + 启动评估）
+   * 替代 V 层直接调 generateDiagnosticQuestions + startAssessment
+   * 语义与 V 层原 onMounted L724-735 + watch L527-545 完全等价
+   * @returns {void}
+   */
+  const startNewDiagnosticSession = () => {
+    const questions = generateDiagnosticQuestions()
+    if (questions.length > 0) {
+      practiceStore.startAssessment(questions)
+    }
+  }
 
   /**
    * 启动新一轮自适应练习
@@ -276,8 +309,11 @@ export function useAdaptiveSession(options = {}) {
     groupAnswerOffset,
     groupCorrectCount,
     nextLocked,
+    // 计算属性
+    stageName,                  // P2.2: 替代 V 层 currentStage computed
     // 方法
     startNewAdaptiveSession,
+    startNewDiagnosticSession,  // P2.3: 替代 V 层 generateDiagnosticQuestions + startAssessment 直调
     completeAssessment,
     completeGroup,
   }

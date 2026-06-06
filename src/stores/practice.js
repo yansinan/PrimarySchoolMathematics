@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { EMPTY_PARSED_EQUATION, getCarryType, parseEquation } from '@/utils/equationParser'
+import { EMPTY_PARSED_EQUATION, getCarryType, parseEquation } from '@/utils/algorithm/equationParser'
 import { saveSession } from '@/utils/database'
 import { LS_KEY_PSM_PROFILE } from '@/constants/storageKeys'
 import { sumAnswerScores } from '@/utils/score'

@@ -591,5 +591,3 @@ export default class FormulasGenerator {
         return this.__data_list;
     }
 }
-
-

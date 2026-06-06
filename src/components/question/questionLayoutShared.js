@@ -1,7 +1,7 @@
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { usePracticeStore } from '@/stores/practice'
-import { parseEquation, getCarryType, EMPTY_PARSED_EQUATION } from '@/utils/equationParser'
+import { parseEquation, getCarryType, EMPTY_PARSED_EQUATION } from '@/utils/algorithm/equationParser'
 
 export const questionLayoutProps = {
   showAnswer: {

@@ -20,8 +20,8 @@
  */
 
 import { saveAbilitySnapshot } from '@/utils/database'
-import { DIAG_LEVELS } from '@/utils/diagnostic'
-import { DIFFICULTY_LEVELS } from '@/utils/adaptiveEngine'
+import { DIAG_LEVELS } from '@/utils/algorithm/diagnostic'
+import { DIFFICULTY_LEVELS } from '@/utils/algorithm/adaptiveEngine'
 import { sumAnswerScores } from '@/utils/score'
 
 /**

@@ -12,8 +12,8 @@
  *  5) 用 diversifyBatch 混入输入模式（keypad/choice2/choice4）和填空位置
  */
 
-import { createFormulasGenerator } from './paperGenerator'
-import { EquationSolver } from './EquationSolver'
+import { createFormulasGenerator } from '../paperGenerator'
+import { EquationSolver } from '../EquationSolver'
 import { getDifficultyConfig, diversifyBatch } from './adaptiveEngine'
 
 /**
