@@ -98,35 +98,39 @@
           </div>
         </div>
 
-        <!-- ── P2 阶段 14：数字强弱项（左右布局，强项左弱项右） ── -->
-        <div v-if="weaknessByNumber.length || strengthByNumber.length || midByNumber.length" class="weak-section">
-          <el-row :gutter="12">
-            <el-col :span="12">
-              <StrengthV2Card
-                v-if="strengthByNumber.length"
-                :data="strengthByNumber"
-                :title="`🌟 你最拿手`"
-                :empty-text="''"
-                class="weak-section__v2-card"
-              />
-            </el-col>
-            <el-col :span="12">
-              <WeaknessV2Card
-                v-if="weaknessByNumber.length"
-                :data="weaknessByNumber"
-                :title="`📒 多练习`"
-                :empty-text="''"
-                class="weak-section__v2-card"
-              />
-            </el-col>
-          </el-row>
-          <MidV2Card
-            v-if="midByNumber.length"
-            :data="midByNumber"
-            :title="`🟢 还行`"
-            :empty-text="''"
-            class="weak-section__v2-card"
-          />
+        <!-- ── 数字掌握度（方案C: 迷你圆盘 + 技能标签同款背景） ── -->
+        <div v-if="weaknessByNumber.length || strengthByNumber.length || midByNumber.length" class="num-section">
+          <div v-if="strengthByNumber.length" class="num-section__block">
+            <span class="num-section__label">🌟 你最强的数字</span>
+            <div class="num-section__items">
+              <div
+                v-for="item in strengthByNumber"
+                :key="'s-'+item.number"
+                class="num-disc num-disc--s"
+              >{{ item.number }}</div>
+            </div>
+          </div>
+          <div v-if="midByNumber.length" class="num-section__block">
+            <span class="num-section__label">🟢 还行的数字</span>
+            <div class="num-section__items">
+              <div
+                v-for="item in midByNumber"
+                :key="'m-'+item.number"
+                class="num-disc num-disc--m"
+              >{{ item.number }}</div>
+            </div>
+          </div>
+          <div v-if="weaknessByNumber.length" class="num-section__block">
+            <span class="num-section__label">📒 还要练习的数字</span>
+            <div class="num-section__items">
+              <div
+                v-for="item in weaknessByNumber"
+                :key="'w-'+item.number"
+                class="num-disc"
+                :class="discClass(item.accuracy)"
+              >{{ item.number }}</div>
+            </div>
+          </div>
         </div>
 
         <!-- ── Recent sessions list ── -->
@@ -191,9 +195,6 @@ import { ElMessage } from 'element-plus'
 import {
   TrendCharts, ArrowRight, Download, Upload
 } from '@element-plus/icons-vue'
-import WeaknessV2Card from '@/components/profile/WeaknessV2Card.vue'
-import StrengthV2Card from '@/components/profile/StrengthV2Card.vue'
-import MidV2Card from '@/components/profile/MidV2Card.vue'
 import { useAbilityProfile } from '@/composables/useAbilityProfile'
 import { useStatsDrawer } from '@/composables/useStatsDrawer'
 // chartBuilder 抽离 Chart.js 实例管理（S 层）
@@ -228,6 +229,13 @@ const accuracyClass = computed(() => {
   if (pct >= 60) return 'color-warning'
   return 'color-danger'
 })
+
+function discClass(accuracy) {
+  if (accuracy >= 0.95) return 'num-disc--s'
+  if (accuracy >= 0.80) return 'num-disc--m'
+  if (accuracy >= 0.50) return 'num-disc--w'
+  return 'num-disc--d'
+}
 
 // ── 游戏等级（P5: 游戏化设计） ──
 const GAME_LEVELS = [
@@ -485,82 +493,7 @@ onBeforeUnmount(() => {
 }
 
 /* ── Weak number analysis ── */
-.weak-section {
-  margin-bottom: 20px;
-}
-
-.weak-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.weak-item {
-  background: #fff8f0;
-  border: 1px solid #fde8d0;
-  border-radius: 10px;
-  padding: 10px 14px;
-}
-
-.weak-item__header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.weak-item__number {
-  font-size: 20px;
-  font-weight: 800;
-  color: #e6a23c;
-  min-width: 28px;
-  text-align: center;
-}
-
-.weak-item__op {
-  font-size: 13px;
-  color: #7a8fa6;
-  background: #f0f4fa;
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-
-.weak-item__tag {
-  margin-left: auto;
-}
-
-.weak-item__desc {
-  margin-top: 6px;
-  font-size: 13px;
-  color: #8fa3b8;
-}
-
-.weak-item__desc-label {
-  color: #7a8fa6;
-}
-
-.weak-item__equations {
-  word-break: break-all;
-}
-
-.wrong-eq {
-  font-size: 13px;
-  color: #f56c6c;
-  background: #fef0f0;
-  padding: 1px 6px;
-  border-radius: 3px;
-}
-
-.weak-tip {
-  margin-top: 10px;
-  font-size: 13px;
-  color: #e6a23c;
-  background: #fffbe6;
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid #fae7b3;
-}
-
-/* ── 游戏等级 ── */
+/* ── 技能标签条（banner 下方独立一行） ── */
 .level-section {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 14px;
@@ -611,4 +544,29 @@ onBeforeUnmount(() => {
   color: #999 !important;
   border: 1px dashed #b0b0b0 !important;
 }
+
+/* ── 数字掌握度（方案C: 迷你圆盘 + 技能标签同款背景） ── */
+.num-section {
+  background: #f8fafc; border-radius: 10px; border: 1px solid #e8eef5;
+  padding: 10px 14px; margin-bottom: 16px; display: flex;
+  flex-direction: column; gap: 12px;
+}
+.num-section__block {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.num-section__label {
+  font-size: 13px; font-weight: 600; color: #1e3c5c;
+}
+.num-section__items {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.num-disc {
+  width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 15px; color: #fff; flex-shrink: 0;
+}
+.num-disc--s { background: #58cc71; }
+.num-disc--m { background: #409eff; }
+.num-disc--w { background: #e6a23c; }
+.num-disc--d { background: #f56c6c; }
 </style>
