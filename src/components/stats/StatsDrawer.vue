@@ -312,8 +312,18 @@ async function handleImport(file) {
   return false
 }
 
-watch(() => isDrawerOpen, (visible) => {
-  if (!visible) {
+watch(() => isDrawerOpen, async (visible) => {
+  if (visible) {
+    // 抽屉打开时主动刷新数据（@opened 事件在 KeepAlive 缓存下可能不触发）
+    try {
+      await openDrawer()
+      await profile.refreshMasteryFromAnswers(allAnswers?.value || [])
+      await nextTick()
+      rebuildCharts()
+    } catch (err) {
+      console.error('[StatsDrawer] watch refresh failed:', err)
+    }
+  } else {
     destroyChart(trendChartInstance); trendChartInstance = null
     destroyChart(operatorChartInstance); operatorChartInstance = null
   }

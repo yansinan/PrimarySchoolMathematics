@@ -19,9 +19,9 @@
 import { createFormulasGenerator } from '../paperGenerator'
 import { EquationSolver } from '../EquationSolver'
 import {
-  getDifficultyConfig,
   diversifyBatch,
   DIFFICULTY_LEVELS,
+  matchLevel,
   pickStrongLevel,
   pickWeakLevel,
 } from './adaptiveEngine'
@@ -134,6 +134,13 @@ function generateOneQuestion(levelIdx, engine, seen, type) {
     seen.add(key)
     const result = { equation: formula, solution }
     if (type) result.type = type
+    // B12: 验证 matchLevel 反推是否匹配预期 levelIdx
+    // paperGenerator 可能不严格遵循 carry/abdication 约束
+    // 导致 L5(禁进位) 出进位题被 matchLevel 反推到 L7
+    const matched = matchLevel(result)
+    if (matched && Math.abs(matched.levelIdx - levelIdx) > 1) {
+      continue  // 不匹配 → 跳过，继续试下一道
+    }
     return result
   }
 
