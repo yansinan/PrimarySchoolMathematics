@@ -269,10 +269,10 @@ const handleInput = (value) => {
     session.value.currentAnswer = layoutRef.value.acceptDigit(digit)
   }
   // P5: keypad 模式输完正确答案后自动提交，无需再点"确认"
-  if (isKeypad() && currentQuestion.value) {
-    const numVal = Number(session.currentAnswer)
+  if (currentQuestion.value) {
+    const numVal = Number(session.value.currentAnswer)
     if (!isNaN(numVal) && numVal === currentQuestion.value.solution) {
-      handleSubmit(session.currentAnswer)
+      handleSubmit()  // 不传参，让 useSubmitHandler 从 session.currentAnswer 读
     }
   }
 }
