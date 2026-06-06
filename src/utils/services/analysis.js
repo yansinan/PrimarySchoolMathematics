@@ -222,25 +222,27 @@ export async function getMasteryByNumber(number, { days = 30 } = {}) {
  * }>}
  */
 async function _getMasteryByNumberFromAnswers(answers, number) {
-  // P2 阶段 13：同样从 operandMin/Max 反推数位，不依赖 operands 字段
+  // P5 v2.3.0 兼容修复：答案记录无 questionId（从 currentQuestion spread 但 ID 被丢失），
+  // 直接从 answer.operandMin/Max 提取数位
   const qIds = [...new Set(answers.map((a) => a.questionId).filter((id) => id != null))]
-  if (qIds.length === 0) {
-    return { number, total: 0, correct: 0, accuracy: 0, questionsCount: 0 }
-  }
-  const qMap = await loadQuestionsByIds(qIds)
+  // 兼容：无 questionId 时直接用 answer 自身字段
+  const useAnswerDirectly = qIds.length === 0
+  const qMap = useAnswerDirectly ? null : await loadQuestionsByIds(qIds)
 
   let total = 0
   let correct = 0
   let score = 0
   const qIdsWithNumber = new Set()
   for (const a of answers) {
-    const q = qMap.get(a.questionId)
-    if (!q || !_extractOperandDigits(q).includes(number)) continue
+    // 优先用 question 字段，没有则用 answer 自身
+    const q = qMap ? qMap.get(a.questionId) : null
+    const refForDigits = q || a
+    if (!refForDigits || !_extractOperandDigits(refForDigits).includes(number)) continue
     total += 1
     const attemptScore = getAnswerScore(a)
     score += attemptScore
     if (attemptScore === 1) correct += 1
-    qIdsWithNumber.add(a.questionId)
+    if (q) qIdsWithNumber.add(a.questionId)
   }
 
   return {
