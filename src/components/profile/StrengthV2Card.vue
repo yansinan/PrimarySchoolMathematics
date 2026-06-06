@@ -1,5 +1,5 @@
 <!--
-  强项 v2 卡片 — P5: el-progress circle 替代进度条
+  强项 v2 卡片 — 方案C: 迷你圆盘（36px纯色圆，颜色分级，只显示数字）
 -->
 <template>
   <div class="sv2" :class="{ 'sv2--compact': compact }">
@@ -9,23 +9,14 @@
     <div v-if="!data || data.length === 0" class="sv2__empty">
       {{ emptyText }}
     </div>
-    <ol v-else class="sv2__list">
-      <li
-        v-for="(item, idx) in displayList"
+    <div v-else class="sv2__list">
+      <div
+        v-for="item in displayList"
         :key="item.number"
         class="sv2__item"
-      >
-        <span class="sv2__rank">{{ idx + 1 }}</span>
-        <span class="sv2__num">{{ item.number }}</span>
-        <el-progress
-          type="circle"
-          :percentage="Math.round(item.accuracy * 100)"
-          :width="36"
-          :stroke-width="4"
-          :color="ringColor(item.accuracy)"
-        />
-      </li>
-    </ol>
+        :class="sv2Class(item.accuracy)"
+      >{{ item.number }}</div>
+    </div>
   </div>
 </template>
 
@@ -46,12 +37,11 @@ const displayList = computed(() => {
   return props.data.slice(0, props.limit)
 })
 
-function ringColor(accuracy) {
-  const pct = accuracy * 100
-  if (pct >= 95) return '#58cc71'
-  if (pct >= 80) return '#409eff'
-  if (pct >= 50) return '#e6a23c'
-  return '#f56c6c'
+function sv2Class(accuracy) {
+  if (accuracy >= 0.95) return 'sv2__item--s'
+  if (accuracy >= 0.80) return 'sv2__item--m'
+  if (accuracy >= 0.50) return 'sv2__item--w'
+  return 'sv2__item--d'
 }
 </script>
 
@@ -63,13 +53,17 @@ function ringColor(accuracy) {
 }
 .sv2__icon { font-size: 16px; }
 .sv2__empty { color: #909399; font-size: 13px; padding: 6px 0; }
-.sv2__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.sv2__list { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; }
 .sv2__item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 6px 10px; border-radius: 8px; background: #f0f9f4;
+  width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 15px; color: #fff;
+  flex-shrink: 0;
 }
-.sv2__rank { font-weight: 700; color: #27ae60; min-width: 16px; font-size: 12px; }
-.sv2__num { font-weight: 700; color: #1e3c5c; font-size: 16px; min-width: 20px; text-align: center; }
-.sv2--compact .sv2__list { flex-direction: row; flex-wrap: wrap; gap: 6px; }
-.sv2--compact .sv2__item { padding: 3px 8px; font-size: 12px; }
+.sv2__item--s { background: #58cc71; }
+.sv2__item--m { background: #409eff; }
+.sv2__item--w { background: #e6a23c; }
+.sv2__item--d { background: #f56c6c; }
+.sv2--compact .sv2__list { gap: 4px; }
+.sv2--compact .sv2__item { width: 30px; height: 30px; font-size: 13px; }
 </style>

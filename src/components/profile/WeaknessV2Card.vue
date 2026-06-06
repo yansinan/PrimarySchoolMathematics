@@ -1,5 +1,5 @@
 <!--
-  弱项 v2 卡片 — P5: el-progress circle 替代进度条
+  弱项 v2 卡片 — 方案C: 迷你圆盘（36px纯色圆，颜色分级，只显示数字）
 -->
 <template>
   <div class="wv2" :class="{ 'wv2--compact': compact }">
@@ -9,23 +9,14 @@
     <div v-if="!data || data.length === 0" class="wv2__empty">
       {{ emptyText }}
     </div>
-    <ol v-else class="wv2__list">
-      <li
-        v-for="(item, idx) in displayList"
+    <div v-else class="wv2__list">
+      <div
+        v-for="item in displayList"
         :key="item.number"
         class="wv2__item"
-      >
-        <span class="wv2__rank">{{ idx + 1 }}</span>
-        <span class="wv2__num">{{ item.number }}</span>
-        <el-progress
-          type="circle"
-          :percentage="Math.round(item.accuracy * 100)"
-          :width="36"
-          :stroke-width="4"
-          :color="ringColor(item.accuracy)"
-        />
-      </li>
-    </ol>
+        :class="wv2Class(item.accuracy)"
+      >{{ item.number }}</div>
+    </div>
   </div>
 </template>
 
@@ -46,12 +37,11 @@ const displayList = computed(() => {
   return props.data.slice(0, props.limit)
 })
 
-function ringColor(accuracy) {
-  const pct = accuracy * 100
-  if (pct >= 95) return '#58cc71'
-  if (pct >= 80) return '#409eff'
-  if (pct >= 50) return '#e6a23c'
-  return '#f56c6c'
+function wv2Class(accuracy) {
+  if (accuracy >= 0.95) return 'wv2__item--s'
+  if (accuracy >= 0.80) return 'wv2__item--m'
+  if (accuracy >= 0.50) return 'wv2__item--w'
+  return 'wv2__item--d'
 }
 </script>
 
@@ -63,13 +53,17 @@ function ringColor(accuracy) {
 }
 .wv2__icon { font-size: 16px; }
 .wv2__empty { color: #909399; font-size: 13px; padding: 6px 0; }
-.wv2__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.wv2__list { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; }
 .wv2__item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 6px 10px; border-radius: 8px; background: #fdf6ec;
+  width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 15px; color: #fff;
+  flex-shrink: 0;
 }
-.wv2__rank { font-weight: 700; color: #e6a23c; min-width: 16px; font-size: 12px; }
-.wv2__num { font-weight: 700; color: #1e3c5c; font-size: 16px; min-width: 20px; text-align: center; }
-.wv2--compact .wv2__list { flex-direction: row; flex-wrap: wrap; gap: 6px; }
-.wv2--compact .wv2__item { padding: 3px 8px; font-size: 12px; }
+.wv2__item--s { background: #58cc71; }
+.wv2__item--m { background: #409eff; }
+.wv2__item--w { background: #e6a23c; }
+.wv2__item--d { background: #f56c6c; }
+.wv2--compact .wv2__list { gap: 4px; }
+.wv2--compact .wv2__item { width: 30px; height: 30px; font-size: 13px; }
 </style>
