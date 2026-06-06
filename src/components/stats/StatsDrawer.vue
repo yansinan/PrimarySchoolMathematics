@@ -298,12 +298,10 @@ async function handleOpen() {
   // 编排下沉到 composable.openDrawer（C 层，V 层不直接调 store）
   try {
     await openDrawer()
-    // 还要显式刷新数字掌握度（weaknessByNumber/strengthByNumber 依赖它）
     await profile.refreshMasteryFromAnswers(allAnswers?.value || [])
     await nextTick()
     rebuildCharts()
   } catch (err) {
-    // 捕获异步错误，避免 Vue 未处理事件处理器报黄
     console.error('[StatsDrawer] handleOpen failed:', err)
   }
 }
@@ -334,18 +332,7 @@ async function handleImport(file) {
 }
 
 watch(() => isDrawerOpen, async (visible) => {
-  if (visible) {
-    // 抽屉打开时主动刷新数据（@opened 事件在 KeepAlive 缓存下可能不触发）
-    try {
-      await openDrawer()
-      await profile.refreshMasteryFromAnswers(allAnswers?.value || [])
-      await nextTick()
-      // 延迟 200ms 等抽屉动画完成，确保 canvas 有非零尺寸
-      setTimeout(() => rebuildCharts(), 200)
-    } catch (err) {
-      console.error('[StatsDrawer] watch refresh failed:', err)
-    }
-  } else {
+  if (!visible) {
     destroyChart(trendChartInstance); trendChartInstance = null
     destroyChart(operatorChartInstance); operatorChartInstance = null
   }
