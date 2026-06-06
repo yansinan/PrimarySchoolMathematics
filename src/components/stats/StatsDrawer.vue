@@ -287,11 +287,30 @@ let operatorChartInstance = null
 function rebuildCharts() {
   destroyChart(trendChartInstance)
   destroyChart(operatorChartInstance)
-  trendChartInstance = buildTrendChart(trendChartRef.value, accuracyTrend)
-  operatorChartInstance = buildOperatorChart(operatorChartRef.value, operatorBreakdown)
-  // 强制 resize（确保 canvas 有正确尺寸）
-  if (trendChartInstance) trendChartInstance.resize()
-  if (operatorChartInstance) operatorChartInstance.resize()
+  const tc = trendChartRef.value
+  const oc = operatorChartRef.value
+  // 确保 canvas 在 DOM 中且有尺寸
+  if (tc && tc.parentElement && tc.parentElement.clientWidth > 0) {
+    trendChartInstance = buildTrendChart(tc, accuracyTrend)
+    if (trendChartInstance) trendChartInstance.resize()
+  }
+  if (oc && oc.parentElement && oc.parentElement.clientWidth > 0) {
+    operatorChartInstance = buildOperatorChart(oc, operatorBreakdown)
+    if (operatorChartInstance) operatorChartInstance.resize()
+  }
+  // 若 canvas 尺寸不对，延迟重试（抽屉动画可能还未完全结束）
+  if (!trendChartInstance || !operatorChartInstance) {
+    setTimeout(() => {
+      if (!trendChartInstance && tc?.parentElement?.clientWidth > 0) {
+        trendChartInstance = buildTrendChart(tc, accuracyTrend)
+        if (trendChartInstance) trendChartInstance.resize()
+      }
+      if (!operatorChartInstance && oc?.parentElement?.clientWidth > 0) {
+        operatorChartInstance = buildOperatorChart(oc, operatorBreakdown)
+        if (operatorChartInstance) operatorChartInstance.resize()
+      }
+    }, 500)
+  }
 }
 
 async function handleOpen() {

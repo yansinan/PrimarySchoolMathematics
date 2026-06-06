@@ -1,9 +1,5 @@
 <!--
-  强项 v2 卡片（单数字聚合）
-  - 数据源：composable.strengthByNumber（来自 getMasteryByNumber 派生）
-  - 形态：{ number, accuracy, total, correct, questionsCount }
-  - 判定：accuracy >= 0.8 且 total >= 3
-  - P5: 增加游戏化进度条
+  强项 v2 卡片 — P5: el-progress circle 替代进度条
 -->
 <template>
   <div class="sv2" :class="{ 'sv2--compact': compact }">
@@ -21,13 +17,13 @@
       >
         <span class="sv2__rank">{{ idx + 1 }}</span>
         <span class="sv2__num">{{ item.number }}</span>
-        <div class="sv2__bar-wrap">
-          <div
-            class="sv2__bar"
-            :style="{ width: Math.min(100, item.accuracy * 100) + '%' }"
-          ></div>
-        </div>
-        <span class="sv2__pct">{{ Math.round(item.accuracy * 100) }}%</span>
+        <el-progress
+          type="circle"
+          :percentage="Math.round(item.accuracy * 100)"
+          :width="36"
+          :stroke-width="4"
+          :color="ringColor(item.accuracy)"
+        />
       </li>
     </ol>
   </div>
@@ -49,6 +45,14 @@ const displayList = computed(() => {
   if (props.limit == null) return props.data
   return props.data.slice(0, props.limit)
 })
+
+function ringColor(accuracy) {
+  const pct = accuracy * 100
+  if (pct >= 95) return '#58cc71'
+  if (pct >= 80) return '#409eff'
+  if (pct >= 50) return '#e6a23c'
+  return '#f56c6c'
+}
 </script>
 
 <style scoped>
@@ -61,16 +65,11 @@ const displayList = computed(() => {
 .sv2__empty { color: #909399; font-size: 13px; padding: 6px 0; }
 .sv2__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
 .sv2__item {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 10px;
   padding: 6px 10px; border-radius: 8px; background: #f0f9f4;
 }
 .sv2__rank { font-weight: 700; color: #27ae60; min-width: 16px; font-size: 12px; }
 .sv2__num { font-weight: 700; color: #1e3c5c; font-size: 16px; min-width: 20px; text-align: center; }
-.sv2__bar-wrap {
-  flex: 1; height: 10px; background: #e0e8f0; border-radius: 5px; overflow: hidden;
-}
-.sv2__bar { height: 100%; background: linear-gradient(90deg, #58cc71, #27ae60); border-radius: 5px; transition: width 0.4s; }
-.sv2__pct { font-size: 12px; font-weight: 600; color: #27ae60; min-width: 36px; text-align: right; }
 .sv2--compact .sv2__list { flex-direction: row; flex-wrap: wrap; gap: 6px; }
 .sv2--compact .sv2__item { padding: 3px 8px; font-size: 12px; }
 </style>
