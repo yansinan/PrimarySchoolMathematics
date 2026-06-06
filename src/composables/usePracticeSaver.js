@@ -1,11 +1,11 @@
 /**
  * 练习持久化 composable
  *
- * 封装 Practice.vue 中 4 处 `practiceStore.saveSessionToDB` 调用：
- *  - 每题答完（fire-and-forget）
- *  - 自适应一组完成（checkpoint，含 evaluations）
- *  - 自适应全部完成（dialog callback，含 evaluations + refresh stats）
- *  - 普通练习完成（无 evaluations + refresh stats）
+ * 封装 Practice.vue 中 4 处持久化调用：
+ *  - 每题答完（fire-and-forget，只写 answer 不写 session）
+ *  - 自适应一组完成（checkpoint，写 1 个 group session）
+ *  - 自适应全部完成（dialog callback，写最终 session + refresh stats）
+ *  - 普通练习完成（写最终 session + refresh stats）
  *
  * 把"answers 整理 + evaluations 提取 + save + refresh stats"集中到这里，
  * 后续如果 save 逻辑变复杂（多步事务、错误重试、上传云端），只需要改这一个文件。
@@ -13,7 +13,7 @@
  * 用法：
  *   const saver = usePracticeSaver()
  *   saver.savePerQuestion()                              // fire-and-forget
- *   await saver.saveGroupCheckpoint(answers, history)    // 自适应一组后
+ *   await saver.saveGroupCheckpoint(history)            // 自适应一组后
  *   await saver.saveAdaptiveFinal(answers, history)      // 自适应全部完成
  *   await saver.savePracticeFinal()                      // 普通练习完成
  */
@@ -21,6 +21,9 @@
 import { usePracticeStore } from '@/stores/practice'
 import { useStatsStore } from '@/stores/stats'
 import { computeAndSaveAbilityProfile } from '@/utils/abilityProfile'
+// 修复 Bug 3: 直接 import db 实例, 用于 savePerQuestion 写单条 answer
+// (避免每题都 saveSessionToDB 产生 N 个 1 步 session 污染"最近练习"列表)
+import db from '@/utils/database'
 
 /**
  * 从 history 中提取 evaluations（{group, score}[]），转 JSON 字符串
@@ -52,24 +55,36 @@ export function usePracticeSaver() {
 
   /**
    * 1) 每题答完：fire-and-forget
-   * - 不 await，不阻塞 UI
-   * - 多次写同一题自动覆盖
-   * - 同步更新能力画像（fire‑and‑forget）
+   * 修复 Bug 3:
+   *   - 不再调 practiceStore.saveSessionToDB()，避免每答 1 题都创建 1 个 session 记录
+   *   - 改为只把"最近一条 answer"写到 db.answers 表（不写 session 表）
+   *   - 这样"最近练习"列表只显示 group checkpoint 和最终 session，不再被 1 步 session 淹没
+   *   - abilitySnapshot 仍正常更新（fire-and-forget）
    */
   function savePerQuestion() {
+    // 同步更新能力画像（fire-and-forget）
     computeAndSaveAbilityProfile(buildProfileContext())
-    return practiceStore.saveSessionToDB()
+    // 取 session.answers 最后一条（刚答完的那题），单独写入 db.answers
+    // sessionId=0 表示这条 answer 暂未关联到任何 session record
+    // 等到 group checkpoint / final 时，saveSessionToDB 会再写一份带 sessionId 的完整 record
+    const answers = practiceStore.session.answers
+    const lastAnswer = answers[answers.length - 1]
+    if (lastAnswer) {
+      void db.answers.put(lastAnswer)
+    }
   }
 
   /**
-   * 2) 自适应一组完成：checkpoint
-   * - 含 evaluations（如果之前答过有自评的组）
-   * - 只更新能力画像，不存 session；整轮完成时才落最终 session
-   * - 不 await，让弹窗立即显示
+   * 2) 自适应一组完成：group checkpoint
+   * 修复 Bug 3:
+   *   - 之前是 void history 什么也不做，导致"最近练习"列表只看到 final session
+   *   - 现在每组完成都写 1 个 group checkpoint session（含 evaluations）
+   *   - 这样 1 个 group = 1 个 session, 最近练习列表清晰可读
    */
   async function saveGroupCheckpoint(history) {
     computeAndSaveAbilityProfile(buildProfileContext())
-    void history
+    const evaluations = extractEvaluationsJSON(history)
+    await practiceStore.saveSessionToDB(evaluations)
   }
 
   /**

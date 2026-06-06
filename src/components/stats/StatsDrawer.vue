@@ -61,13 +61,22 @@
           </div>
         </div>
 
-        <!-- ── P2 阶段 14：数字弱项 / 强项（孩子友好的简洁文案） ── -->
-        <div v-if="weaknessByNumber.length || strengthByNumber.length" class="weak-section">
+        <!-- ── P2 阶段 14：数字弱项 / 强项 / 还行（孩子友好的简洁文案） ── -->
+        <!-- 修复 Bug 1: 增加 || midByNumber.length 让 section 在有 mid 时也显示 -->
+        <div v-if="weaknessByNumber.length || strengthByNumber.length || midByNumber.length" class="weak-section">
           <h3 class="section-title">你掌握得怎么 样</h3>
           <StrengthV2Card
             v-if="strengthByNumber.length"
             :data="strengthByNumber"
             :title="`🌟 你最拿手`"
+            :empty-text="''"
+            class="weak-section__v2-card"
+          />
+          <!-- 修复 Bug 1: 渲染中间档卡片 (🟢 还行) -->
+          <MidV2Card
+            v-if="midByNumber.length"
+            :data="midByNumber"
+            :title="`🟢 还行`"
             :empty-text="''"
             class="weak-section__v2-card"
           />
@@ -147,6 +156,8 @@ import { useStatsStore } from '@/stores/stats'
 import { formatDuration } from '@/utils/timeFormat'
 import WeaknessV2Card from '@/components/profile/WeaknessV2Card.vue'
 import StrengthV2Card from '@/components/profile/StrengthV2Card.vue'
+// 修复 Bug 1: 引入中间档卡片组件
+import MidV2Card from '@/components/profile/MidV2Card.vue'
 import { useAbilityProfile } from '@/composables/useAbilityProfile'
 import SessionDetail from './SessionDetail.vue'
 
@@ -154,7 +165,8 @@ Chart.register(...registerables)
 
 const statsStore = useStatsStore()
 const profile = useAbilityProfile()
-const { analysis, weaknessByNumber, strengthByNumber } = profile
+// 修复 Bug 1: 解构加 midByNumber, 让模板可访问中间档数据
+const { analysis, weaknessByNumber, strengthByNumber, midByNumber } = profile
 
 const trendChartRef = ref(null)
 const operatorChartRef = ref(null)
