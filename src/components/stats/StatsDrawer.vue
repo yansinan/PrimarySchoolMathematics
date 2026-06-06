@@ -1,8 +1,9 @@
 <template>
   <el-drawer
-    v-model="statsStore.drawerVisible"
+    :model-value="stats.isDrawerOpen.value"
     size="min(520px, 92vw)"
     direction="rtl"
+    @update:model-value="v => stats.toggleDrawer(v)"
     @opened="handleOpen"
   >
     <template #header>
@@ -12,34 +13,34 @@
       </span>
     </template>
 
-    <div v-loading="statsStore.loading" class="stats-drawer__body">
+    <div v-loading="stats.loading" class="stats-drawer__body">
       <!-- ── No data ── -->
-      <el-empty v-if="!statsStore.loading && (!statsStore.aggregatedStats || !statsStore.aggregatedStats.totalSessions)" description="还没有练习记录，快去练几道题吧！" />
+      <el-empty v-if="!stats.loading && (!stats.aggregatedStats || !stats.aggregatedStats.totalSessions)" description="还没有练习记录，快去练几道题吧！" />
 
-      <template v-if="statsStore.aggregatedStats && statsStore.aggregatedStats.totalSessions > 0">
+      <template v-if="stats.aggregatedStats && stats.aggregatedStats.totalSessions > 0">
         <!-- ── Overview cards ── -->
         <el-row :gutter="12" class="stats-cards">
           <el-col :span="12">
             <div class="stat-card">
-              <div class="stat-card__value">{{ statsStore.aggregatedStats.totalSessions }}</div>
+              <div class="stat-card__value">{{ stats.aggregatedStats.totalSessions }}</div>
               <div class="stat-card__label">练习次数</div>
             </div>
           </el-col>
           <el-col :span="12">
             <div class="stat-card">
-              <div class="stat-card__value">{{ statsStore.aggregatedStats.totalQuestions }}</div>
+              <div class="stat-card__value">{{ stats.aggregatedStats.totalQuestions }}</div>
               <div class="stat-card__label">总题数</div>
             </div>
           </el-col>
           <el-col :span="12">
             <div class="stat-card">
-              <div class="stat-card__value" :class="accuracyClass">{{ statsStore.overallAccuracyPercent }}%</div>
+              <div class="stat-card__value" :class="accuracyClass">{{ stats.overallAccuracyPercent }}%</div>
               <div class="stat-card__label">总正确率</div>
             </div>
           </el-col>
           <el-col :span="12">
             <div class="stat-card">
-              <div class="stat-card__value">{{ statsStore.aggregatedStats.dailyStreak }}</div>
+              <div class="stat-card__value">{{ stats.aggregatedStats.dailyStreak }}</div>
               <div class="stat-card__label">连续练习(天)</div>
             </div>
           </el-col>
@@ -94,14 +95,14 @@
           <h3 class="section-title">最近的练习</h3>
           <div class="session-list">
             <div
-              v-for="session in statsStore.sessions.slice(0, 10)"
+              v-for="session in stats.sessions.slice(0, 10)"
               :key="session.id"
               class="session-item"
-              @click="openSessionDetail(session.id)"
+              @click="stats.openSessionDetail(session.id)"
             >
               <div class="session-item__left">
-                <div class="session-item__date">{{ formatDate(session.createdAt) }}</div>
-                <div class="session-item__meta">{{ session.totalQuestions }} 题 · {{ formatDuration(session.totalDuration) }}</div>
+                <div class="session-item__date">{{ stats.formatDate(session.createdAt) }}</div>
+                <div class="session-item__meta">{{ session.totalQuestions }} 题 · {{ stats.formatDuration(session.totalDuration) }}</div>
               </div>
               <div class="session-item__right">
                 <el-tag
@@ -152,25 +153,22 @@ import {
   TrendCharts, ArrowRight, Download, Upload
 } from '@element-plus/icons-vue'
 import { Chart, registerables } from 'chart.js'
-import { useStatsStore } from '@/stores/stats'
-import { formatDuration } from '@/utils/timeFormat'
 import WeaknessV2Card from '@/components/profile/WeaknessV2Card.vue'
 import StrengthV2Card from '@/components/profile/StrengthV2Card.vue'
-// 修复 Bug 1: 引入中间档卡片组件
 import MidV2Card from '@/components/profile/MidV2Card.vue'
 import { useAbilityProfile } from '@/composables/useAbilityProfile'
+import { useStatsDrawer } from '@/composables/useStatsDrawer'
 import SessionDetail from './SessionDetail.vue'
 
 Chart.register(...registerables)
 
-const statsStore = useStatsStore()
+// ── 统计抽屉数据 + 操作（ARCH 合规：V 不直接读写 store / import U） ──
+const stats = useStatsDrawer()
+
 // P2 阶段 14: useAbilityProfile 传 options.answers = 全量历史
-// 之前 useAbilityProfile() 无参, 默认用本轮 adaptiveAnswers
-// → "你掌握得怎么样" 只显示本轮数字掌握度
-// 现在传 statsStore.allAnswers (db.answers 全量历史)
-// → 显示孩子长期掌握度 (符合 StatsDrawer 应展示全量历史的语义)
+// 显示孩子长期掌握度
 const profile = useAbilityProfile({
-  answers: computed(() => statsStore.allAnswers)
+  answers: computed(() => stats.allAnswers)
 })
 // 修复 Bug 1: 解构加 midByNumber, 让模板可访问中间档数据
 const { analysis, weaknessByNumber, strengthByNumber, midByNumber } = profile
@@ -182,44 +180,17 @@ let operatorChartInstance = null
 const exporting = ref(false)
 
 const accuracyClass = computed(() => {
-  const pct = statsStore.overallAccuracyPercent
+  const pct = stats.overallAccuracyPercent
   if (pct >= 80) return 'color-success'
   if (pct >= 60) return 'color-warning'
   return 'color-danger'
 })
 
-const weakNumbers = computed(() => {
-  return statsStore.aggregatedStats?.weakNumbers || []
-})
-
-const weakNumberSuggestion = computed(() => {
-  const items = weakNumbers.value
-  if (!items.length) return ''
-  const opSet = new Set(items.map(i => i.operator))
-  const ops = [...opSet].map(op => operatorLabel(op))
-  return ops.join('、')
-})
-
-function operatorLabel(op) {
-  const map = { '+': '加法', '-': '减法', '*': '乘法', '/': '除法' }
-  return map[op] || op
-}
-
-function formatDate(iso) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-}
-
-function openSessionDetail(sessionId) {
-  statsStore.loadSessionDetail(sessionId)
-}
-
 // ── Charts ──
 
 function buildTrendChart() {
   if (!trendChartRef.value) return
-  const data = statsStore.accuracyTrend
+  const data = stats.accuracyTrend
   if (!data.length) return
 
   if (trendChartInstance) trendChartInstance.destroy()
@@ -266,7 +237,7 @@ function buildTrendChart() {
 
 function buildOperatorChart() {
   if (!operatorChartRef.value) return
-  const data = statsStore.operatorBreakdown
+  const data = stats.operatorBreakdown
   if (!data.length) return
 
   if (operatorChartInstance) operatorChartInstance.destroy()
@@ -314,11 +285,11 @@ function buildOperatorChart() {
 async function handleOpen() {
   // P2 阶段 14: 抽屉打开时加载全量历史答案
   // - 放到 Promise.all 并发, 与 sessions/aggregatedStats 一起加载
-  // - 加载完后 useAbilityProfile({ answers: statsStore.allAnswers })
+  // - 加载完后 useAbilityProfile({ answers: stats.allAnswers })
   //   自动响应, 模板实时显示历史掌握度
   await Promise.all([
-    statsStore.refreshAll(),
-    statsStore.loadAllAnswers()
+    stats.refreshAll(),
+    stats.loadAllAnswers()
   ])
   await analysis.refreshMastery()
   await nextTick()
@@ -329,7 +300,7 @@ async function handleOpen() {
 async function handleExport() {
   exporting.value = true
   try {
-    await statsStore.exportData()
+    await stats.exportData()
     ElMessage.success('数据已导出')
   } catch {
     ElMessage.error('导出失败')
@@ -340,7 +311,7 @@ async function handleExport() {
 
 async function handleImport(file) {
   try {
-    const result = await statsStore.importData(file)
+    const result = await stats.importData(file)
     ElMessage.success(`导入完成：新增 ${result.imported} 条记录，跳过 ${result.skipped} 条重复`)
     await nextTick()
     buildTrendChart()
@@ -352,7 +323,7 @@ async function handleImport(file) {
   return false
 }
 
-watch(() => statsStore.drawerVisible, (visible) => {
+watch(() => stats.isDrawerOpen, (visible) => {
   if (!visible) {
     // Cleanup chart instances when drawer closes
     if (trendChartInstance) { trendChartInstance.destroy(); trendChartInstance = null }
