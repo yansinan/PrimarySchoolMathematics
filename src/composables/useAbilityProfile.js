@@ -2,7 +2,7 @@ import { computed, unref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { usePracticeStore } from '@/stores/practice'
 import { useAbilityAnalysis } from '@/composables/useAbilityAnalysis'
-import { DIFFICULTY_LEVELS, matchLevel } from '@/utils/algorithm/adaptiveEngine'
+import { DIFFICULTY_LEVELS, matchLevel, groupAnswersByLevel } from '@/utils/algorithm/adaptiveEngine'
 import { getAnswerScore, sumAnswerScores } from '@/utils/score'
 import { STRONG_THRESHOLD, WEAK_THRESHOLD } from '@/constants/practice'
 
@@ -78,7 +78,7 @@ export function useAbilityProfile(options = {}) {
    * 答完一题即更新（响应式依赖 answers.value）
    */
   const strongLevels = computed(() => {
-    const groups = _groupAnswersByLevel(answers.value)
+    const groups = groupAnswersByLevel(answers.value)
     return groups
       .filter((g) => g.accuracy >= STRONG_THRESHOLD)
       .map((g) => g.label)
@@ -88,32 +88,15 @@ export function useAbilityProfile(options = {}) {
    * 弱项等级：该档位正确率 < WEAK_THRESHOLD → 弱项
    */
   const weakLevels = computed(() => {
-    const groups = _groupAnswersByLevel(answers.value)
+    const groups = groupAnswersByLevel(answers.value)
     return groups
       .filter((g) => g.accuracy < WEAK_THRESHOLD)
       .map((g) => g.label)
   })
 
   /**
-   * 将 answers 按 matchLevel 分组，计算各组总题数/正确数/正确率
+   * 将 answers 按 matchLevel 分组（B8/B9: 已迁移到 adaptiveEngine.js，此处在 C 层通过 import 共用）
    */
-  function _groupAnswersByLevel(ans) {
-    const map = {}
-    for (const a of ans || []) {
-      const match = matchLevel(a)
-      if (!match) continue
-      const key = match.levelIdx
-      if (!map[key]) {
-        map[key] = { levelIdx: key, label: match.label, total: 0, correct: 0 }
-      }
-      map[key].total++
-      if (getAnswerScore(a) === 1) map[key].correct++
-    }
-    return Object.values(map).map((g) => ({
-      ...g,
-      accuracy: g.total > 0 ? g.correct / g.total : 0,
-    }))
-  }
 
   const hasMasteryData = computed(() => {
     const value = masteryByNumberFull.value || {}
