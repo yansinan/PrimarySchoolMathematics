@@ -282,6 +282,9 @@ export function useAdaptiveSession(options = {}) {
       practiceStore.setListPractices([])
 
       if (action === 'confirm') {
+        adaptiveEngine.value = null
+        adaptiveGroupIndex.value = 0
+        groupAnswerOffset.value = 0
         return 'restart'
       } else {
         // 'cancel' 或 'close' 都视为查看分析或返回首页
