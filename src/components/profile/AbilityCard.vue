@@ -27,7 +27,7 @@
       <div class="ability-card__accuracy">
         <span class="ability-card__label">整体准确率</span>
         <span class="ability-card__value" :class="accuracyClass">
-          {{ hasData ? `${Math.round(displayAccuracy * 100)}% (${scoreSum}/${totalAnswers})` : '—' }}
+          {{ hasData ? `${Math.round(displayAccuracy * 100)}%` : '—' }}
         </span>
       </div>
     </div>
