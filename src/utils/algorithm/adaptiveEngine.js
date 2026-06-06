@@ -622,7 +622,8 @@ export function pickWeakLevel(indices, currentDifficulty) {
 export function generateQuestionPlan(groupIndex, groupSize, engine, profile, isLastGroup = false) {
   const totalStrong = engine.strongLevelIndices.length
   const totalWeak = engine.weakLevelIndices.length
-  const hasBoth = totalStrong > 0 && totalWeak > 0
+  const canDoStrong = totalStrong > 0
+  const canDoWeak = totalWeak > 0
   const hasChallenge = engine.difficultyIdx < DIFFICULTY_LEVELS.length - 1
 
   // 确定组类型
@@ -644,19 +645,30 @@ export function generateQuestionPlan(groupIndex, groupSize, engine, profile, isL
   let weakPct
   if (cfg.weak != null) {
     weakPct = cfg.weak
+  } else if (!canDoWeak) {
+    weakPct = 0
   } else {
-    // 没有画像时全部归强项
-    if (!hasBoth) {
-      weakPct = 0
-    } else {
-      // 区间 [weakMin, weakMax]，弱项越严重占比越高
-      const weakSeverity = 1 - (profile.avgScore || 0.5)
-      const range = cfg.weakMax - cfg.weakMin
-      weakPct = cfg.weakMin + weakSeverity * range
-    }
+    // 区间 [weakMin, weakMax]，弱项越严重占比越高
+    const weakSeverity = 1 - (profile.avgScore || 0.5)
+    const range = cfg.weakMax - cfg.weakMin
+    weakPct = cfg.weakMin + weakSeverity * range
   }
 
-  const strongPct = cfg.strong
+  let strongPct
+  if (!canDoStrong && canDoWeak) {
+    // 无强项有弱项：弱项占满 strong 份额
+    strongPct = 0
+    weakPct = Math.min(1, (weakPct || 0) + cfg.strong)
+  } else if (!canDoStrong && !canDoWeak) {
+    // 无强项无弱项：全当前难度
+    strongPct = 1
+    weakPct = 0
+  } else {
+    strongPct = cfg.strong
+  }
+
+  if (weakPct == null) weakPct = 0
+  if (strongPct == null) strongPct = cfg.strong
   const challengePct = hasChallenge ? (cfg.challenge || 0) : 0
 
   // 按比例计算各类型题数
