@@ -182,10 +182,10 @@ export function analyzeAbility(answers) {
 }
 
 /**
- * 根据能力画像生成针对性练习配置（与 formData 兼容）
- * @param {{ weakLevels: string[], allCorrect: boolean }} profile
- * @returns {Object} formData-compatible config object
+ * @deprecated P5 v2.3.0: 已由 generateQuestionPlan + generateAdaptiveBatch 替代。
+ * 出题不再依赖此函数，保留代码仅作参考。
  */
+/* === START DEPRECATED (P5 v2.3.0) ===
 export function generatePracticeConfig(profile) {
   const { weakLevels, allCorrect } = profile
   const hasAddSub = true
@@ -215,7 +215,6 @@ export function generatePracticeConfig(profile) {
 
   // ── 各弱项对应的配置覆盖 ──
   if (weakLevels.includes('L1')) {
-    // 个位数基础薄弱 → 最简单，禁止进退位
     config.carry = '3'
     config.abdication = '3'
     config.formulaList[0] = { min: 1, max: 5, operators: null }
@@ -224,7 +223,6 @@ export function generatePracticeConfig(profile) {
   }
 
   if (weakLevels.includes('L2')) {
-    // 个位数进退位 → 1-9 范围，要求进退位
     config.carry = '1'
     config.abdication = '1'
     config.formulaList[0] = { min: 2, max: 9, operators: null }
@@ -233,25 +231,21 @@ export function generatePracticeConfig(profile) {
   }
 
   if (weakLevels.includes('L3') || weakLevels.includes('L4')) {
-    // 两位数 → 切换范围
     config.formulaList[0] = { min: 10, max: 99, operators: null }
     config.formulaList[1] = { min: 10, max: 99, operators: [1, 2] }
     config.resultMaxValue = 198
 
     if (weakLevels.includes('L3')) {
-      // 无进退位 → 禁止
       config.carry = '3'
       config.abdication = '3'
     }
     if (weakLevels.includes('L4') && !weakLevels.includes('L3')) {
-      // 仅进退位差 → 纯进退位练习
       config.carry = '1'
       config.abdication = '1'
     }
   }
 
   if (weakLevels.includes('L5')) {
-    // 混合弱 → 全范围混合
     config.formulaList[0] = { min: 1, max: 99, operators: null }
     config.formulaList[1] = { min: 1, max: 99, operators: [1, 2] }
     config.carry = '2'
@@ -259,7 +253,6 @@ export function generatePracticeConfig(profile) {
     config.resultMaxValue = 198
   }
 
-  // 全部答对 → 自动升级
   if (allCorrect) {
     config.formulaList[0] = { min: 10, max: 99, operators: null }
     config.formulaList[1] = { min: 10, max: 99, operators: [1, 2] }
@@ -271,3 +264,4 @@ export function generatePracticeConfig(profile) {
 
   return config
 }
+=== END DEPRECATED (P5 v2.3.0) */

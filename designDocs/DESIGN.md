@@ -395,3 +395,81 @@ src/
 - [ ] `feedbackType === 'wrong'` 弹窗后是否中止 → 阈值 `2` 由 `ASSESSMENT_ABORT_WRONG_STREAK` 控制
 - [ ] E1 提到 `psm.js:getRandomBracket` 有 `while(true)` 永真循环（虽然 diagnostic.js 不用 bracket）
 - [ ] 诊断题生成超过 30 次尝试则丢弃该题（理论极端情况）
+
+---
+
+## 12. [P5 v2.3.0] 画像驱动的智能出题策略
+
+> **目标**：让用户画像（strongLevels / weakLevels）从"展示用"变成"驱动出题"，
+> 按强/弱项比例生成题库，每答一题动态微调。
+>
+> 完整设计见 `PLAN-v2-roadmap.md § 5`。
+
+### 12.1 核心概念
+
+**画像数据**（来自 `useAbilityProfile.js`）：
+- `strongLevels: string[]` — DIFFICULTY_LEVELS 标签，准确率 ≥95%
+- `weakLevels: string[]`   — DIFFICULTY_LEVELS 标签，准确率 <100%
+
+**复用 matchLevel**：用已有反推函数将题目匹配到 DIFFICULTY_LEVELS 索引，
+强项/弱项/挑战类型的选级偏好由 `pickStrongLevel` / `pickWeakLevel` 控制。
+
+### 12.2 出题排列方案
+
+```
+[用户画像] → strongLevelIndices / weakLevelIndices
+     ↓
+[出题排列方案] ← 按组类型比例生成排列数组
+  G1 (confidence): strong 60%, weak 20~40%
+  G2 (repair):     strong 40%, weak 40~60%
+  G3..N-1 (mixed): strong 40%, weak 40%, challenge 20%
+  GN (confidence): strong 60%, weak 20~40%
+     ↓
+[按排列方案逐题生成]
+  strong slot → DIFFICULTY_LEVELS[strongIndices]
+                 选中概率：高索引 > 低索引（挑战更强）
+  weak slot   → DIFFICULTY_LEVELS[weakIndices]
+                 选中概率：低索引 > 高索引（从基础补起）
+  challenge   → DIFFICULTY_LEVELS[currentIdx + 1]
+     ↓ 去重 / 去错 / 去小数
+[题库 + 备用池 3 道]
+```
+
+### 12.3 动态微调（每答一题触发）
+
+```
+步骤 A — 换题：
+  检查下一题 matchLevel 是否落在当前组应出的类型范围
+  不符 → 从 reserve pool 取一道替换
+
+步骤 B — 调辅助力度：
+  历史弱项本轮 ≥95% → assistLevel + 1（减少辅助）
+  历史强项本轮 <50%  → assistLevel - 1（增加辅助）
+```
+
+### 12.4 ASSIST_LEVELS 顺序修正（P0 Bug Fix）
+
+**修正后**（从易→难）：
+```
+choice2(最简单) < choice4 < vertical_keypad(竖式标准) < horizontal_keypad(横式验证)
+```
+
+**连带修正**：
+- `pickInputMode` 概率表：assistLevel 0=vertical 主导 / 1=choice4 主导 / 2=choice2 主导
+- `evaluateGroup`：好→+1（减少辅助），差→-1（增加辅助）
+
+### 12.5 常量变更
+
+| 常量 | 旧值 | 新值 |
+|---|---|---|
+| `MIN_GROUPS_PER_DIMENSION` | 6 | 5 |
+| `ASSIST_LEVELS` 顺序 | vertical > choice4 > choice2 > horizontal | choice2 > choice4 > vertical > horizontal |
+| 新增 `PROFILE_RATIOS` | — | confidence / repair / mixed 三组比例 |
+| 新增 `RESERVE_POOL_SIZE` | — | 3 |
+
+### 12.6 不修改的部分
+
+- 三维调节引擎（`evaluateGroup`）核心逻辑
+- 题量公式（`getGroupSize` / `GROUP_SIZES`）
+- `diversifyBatch` / 输入模式概率表
+- 已有画像计算逻辑（`useAbilityProfile` / `useAbilityAnalysis`）

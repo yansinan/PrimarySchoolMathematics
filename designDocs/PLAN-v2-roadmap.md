@@ -3,14 +3,30 @@
 > 文档性质：行动说明书（Action Plan）
 > 范围：基于 `DESIGN.md` 的产品迭代规划
 > 维护人：项目组
-> **当前版本：v2.2.0**（2026-06-04，从 v2.1.1 升级）
-> 最近更新：2026-06-04
+> **当前版本：v2.3.0**（2026-06-06，从 v2.2.0 升级）
+> 最近更新：2026-06-06
 
 ---
 
 ## 变更日志
 
-### v2.2.0 (2026-06-04) — 本次发布
+### v2.3.0 (2026-06-06) — 本次发布
+
+**新增**
+- ✅ **P5** 画像驱动的智能出题策略 — 按排列方案生成题库，支持强/弱/挑战比例分配、按 DIFFICULTY_LEVELS 索引选级偏好、每答一题动态微调
+- ✅ **P0** 输入模式梯度重排（ASSIST_LEVELS 排序修正 + pickInputMode 概率重写 + evaluateGroup 加减方向修正）
+
+**修复**
+- `ASSIST_LEVELS` 阵列顺序颠倒（`vertical > choice4 > choice2` → `choice2 < choice4 < vertical < horizontal`）
+- `pickInputMode` 概率表对应错误的 assistLevel 语义
+- `evaluateGroup` 中 `assistLevel +/-` 符号与难度方向相反
+
+**常量变更**
+- `MIN_GROUPS_PER_DIMENSION` 6→5
+- 新增 `PROFILE_RATIOS`（强/弱/挑战 组比例配置变量）
+- 新增 `RESERVE_POOL_SIZE`（备用题池大小）
+
+### v2.2.0 (2026-06-04)
 
 **新增**
 - ✅ **P2** 用户画像/等级 UI（`AbilityCard` 全 props 化 + DB 实时持久化）
@@ -54,7 +70,8 @@
 
 | 优先级 | 项 | 模块 | 复杂度 | 状态 | 完成版本 |
 |---|---|---|---|---|---|
-| **P0** | 4. 输入模式梯度：竖式作标准，重排梯度 | adaptiveEngine / displayStrategy | 中 | 🕐 待开始 | — |
+| **P0** | 4. 输入模式梯度(已随 P5 修正) | adaptiveEngine / constants | 中 | ✅ 已完成 | v2.3.0 |
+| **P5** | 画像驱动的智能出题策略 | adaptiveEngine / adaptiveBatch / useAdaptiveSession / constants | 中-高 | ✅ 已完成 | v2.3.0 |
 | **P1** | 6/7/8. 错题强化练习体系 | adaptiveBatch / database | 中-高 | 🕐 待开始 | — |
 | **P2** | 2. 用户画像/等级 UI 展示 | Practice.vue / components | 低 | ✅ 已完成 | v2.2.0 |
 | **P3** | 1. 难度等级新增 L2.5 | diagnostic / adaptiveEngine | 中 | 🕐 待开始 | — |
@@ -62,7 +79,7 @@
 | P4 | 9. targetMin/Max 配置校验 | Generate.vue / formValidation | 低 | ✅ 已完成 | v2.2.0 |
 | **→** | 5. 填空位置变换（同等级最高难度） | adaptiveEngine.js | 中 | 🕐 P0 完成后启动 | — |
 
-**进度统计**：P 类共 5 项（P0/P1/P2/P3/→），已完成 1 项（P2），P4 子项 2 项均完成；总体进度 **3/7（43%）**。
+**进度统计**：P 类共 6 项（P0/P1/P2/P3/P5/→），已完成 3 项（P0/P2/P5），P4 子项 2 项均完成；总体进度 **5/8（63%）**。
 
 ---
 
@@ -110,6 +127,134 @@ src/components/question/HorizontalLayout.vue
    - 难度 2：竖式 30% / choice4 50% / choice2 20%
 5. 横式仅在最后一档（"已掌握"快速验证）出现
 6. 浏览器实测：诊断题全竖式显示
+
+---
+
+## P5 — 画像驱动的智能出题策略（v2.3.0）
+
+> **设计目标**：让用户画像（strongLevels / weakLevels / strengthByNumber / weaknessByNumber）从"展示用"变成"驱动出题"，按强/弱项比例生成题库，每答一题动态微调。
+>
+> **范围**：重写 adaptiveBatch 生成逻辑 + 修正 ASSIST_LEVELS 顺序 + 动态微调钩子
+
+### 5.1 设计依据
+
+**已有画像数据**（useAbilityProfile.js）：
+- `strongLevels: string[]` — DIFFICULTY_LEVELS 标签，准确率 ≥95%
+- `weakLevels: string[]` — DIFFICULTY_LEVELS 标签，准确率 <100%
+- `strengthByNumber` / `weaknessByNumber` — 数字 0-9 掌握度
+
+**已有题目反推函数**：`matchLevel(question)` → DIFFICULTY_LEVELS 索引
+
+**修正 Bug**：ASSIST_LEVELS 阵列顺序与难度方向相反。
+
+### 5.2 核心流程
+
+```
+[用户画像] → strongLevels / weakLevels (label[])
+     ↓ label → DIFFICULTY_LEVELS 索引映射
+[strongLevelIndices] / [weakLevelIndices]
+     ↓
+[出题排列方案] ← 按组类型比例生成排列数组
+  G1 (confidence): strong 60%, weak 20~40%
+  G2 (repair):     strong 40%, weak 40~60%
+  G3..N-1 (mixed): strong 40%, weak 40%, challenge 20%
+  GN (confidence): strong 60%, weak 20~40%
+     ↓
+[按排列方案逐题生成]
+  strong slot → 从 strongIndices 选越高 level 概率越大
+  weak slot   → 从 weakIndices   选越低 level 概率越大
+  challenge   → 从 DIFFICULTY_LEVELS[currentIdx + 1]
+     ↓ 去重 / 去错 / 去小数（原有兜底）
+[题库 + 备用池 3 道]
+     ↓
+[每答一题 → 动态微调]
+  ① 检查下一题难度级别与组比例是否相符 → 不符换题
+  ② 本轮已完成组 vs 历史画像：
+     - 弱项变强(≥95%) → 下题同级别 + assistLevel+1（减辅助）
+     - 强项变弱(<50%) → 下题同级别 + assistLevel-1（加辅助）
+```
+
+### 5.3 比例配置（constants/practice.js 新增）
+
+```js
+// 组比例固定部分
+PROFILE_RATIOS = {
+  confidence: { strong: 0.60, weak: [0.20, 0.40], challenge: 0 },
+  repair:     { strong: 0.40, weak: [0.40, 0.60], challenge: 0 },
+  mixed:      { strong: 0.40, weak: 0.40,          challenge: 0.20 },
+}
+
+// 弱项占比区间取值
+// weakPct = base + weakSeverity × range
+// weakSeverity = 1 - 该 weakLevel 历史准确率
+```
+
+### 5.4 DIFFICULTY_LEVELS 选级偏好
+
+```js
+// 强项选级：索引越高权重越大（挑战更强）
+function pickStrongLevel(strongIndices) {
+  const n = strongIndices.length
+  // 最后一项概率最高，指数级递增
+  const weights = Array.from({length: n}, (_, i) => Math.pow(1.5, i))
+  return weightedRandom(strongIndices, weights)
+}
+
+// 弱项选级：索引越低权重越大（从基础补起）
+function pickWeakLevel(weakIndices) {
+  const n = weakIndices.length
+  // 最前一项概率最高，指数级递减
+  const weights = Array.from({length: n}, (_, i) => Math.pow(1.5, n - 1 - i))
+  return weightedRandom(weakIndices, weights)
+}
+```
+
+### 5.5 动态微调（每答一题触发）
+
+**步骤 A — 换题**：
+1. 检查 `listPractices[nextIndex]` 的 `matchLevel` 是否落在当前组应该出的类型范围内
+2. 不符 → 从 `engine.reservePool` 取一道相符的题替换
+3. 同时补一道同类型的题入 reserve pool
+
+**步骤 B — 调辅助力度**：
+1. 收集本轮（已完成所有组）的答题 → 用 `_groupAnswersByLevel` 算当前 strongLevels/weakLevels
+2. 如果历史弱项在本轮准确率 ≥95% → `engine.assistLevel = Math.min(3, engine.assistLevel + 1)`（减少辅助）
+3. 如果历史强项在本轮准确率 <50% → `engine.assistLevel = Math.max(0, engine.assistLevel - 1)`（增加辅助）
+4. 辅助力度变更只影响下一题的 `pickInputMode`（一次覆盖，下一题恢复概率表）
+
+### 5.6 ASSIST_LEVELS 顺序修正（P0 Bug Fix）
+
+**修正前（错误）**：
+```js
+ASSIST_LEVELS = [
+  { key: 'vertical_keypad', ... },   // 索引 0
+  { key: 'choice4', ... },           // 索引 1
+  { key: 'choice2', ... },           // 索引 2
+  { key: 'horizontal_keypad', ... }, // 索引 3
+]
+```
+
+**修正后（正确）**：
+```js
+ASSIST_LEVELS = [
+  { key: 'choice2',           ... }, // 索引 0 = 最简单
+  { key: 'choice4',           ... }, // 索引 1
+  { key: 'vertical_keypad',   ... }, // 索引 2 = 标准
+  { key: 'horizontal_keypad', ... }, // 索引 3 = 最难
+]
+```
+
+**连带修正**：
+- `pickInputMode(engine)` — assistLevel 0/1/2 的概率表重写（现在 0=choice2 主导, 2=竖式主导）
+- `evaluateGroup` — 好→`assistLevel + 1`（减少辅助），差→`assistLevel - 1`（增加辅助）
+
+### 5.7 最后一组预测法
+
+生成下一组时，如果 `engine.totalAnswered + 下一组大小 × 1.5 >= engine.targetMax`，预测为该组可能是最后一组 → 按 confidence 比例出题。
+
+### 5.8 涉及模块
+
+```
 
 ---
 
@@ -415,8 +560,8 @@ function mixedBlank(equation, solution) {
                  ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  Utils                                                      │
-│  adaptiveEngine.js (改 DIFFICULTY_LEVELS / pickInputMode)   │
-│  adaptiveBatch.js (P1: 调 picker 替代 listResult)          │
+│  adaptiveEngine.js (P5: 排列方案 / 选级偏好 / adjustNextQuestion)   │
+│  adaptiveBatch.js (P5: 按排列方案生成 / reserve pool)              │
 │  displayStrategy.js (P0: 区分 layout)                       │
 │  diagnostic.js (P3: L2.5 + 进位规则)                       │
 │  formDefaults.js (P4: 校验 targetMin/Max)                  │
@@ -435,32 +580,31 @@ function mixedBlank(equation, solution) {
 ## 实施顺序与依赖
 
 ```
-P0 (输入模式梯度)
- ├─→ P3 (难度等级 L2.5)   [依赖 P0 重排后的梯度]
- ├─→ →  (填空位置 mixed)   [P0 完成后启动，依赖 P0 重新校准 ASSIST_LEVELS]
+P5 (画像出题 + ASSIST_LEVELS 修正)
+ ├─→ P1 (错题强化练习)   [依赖 P5 按排列方案生成的题库框架]
  │
-P1 (错题强化练习)         [与 P0 平行，可独立]
+P3 (难度等级 L2.5)         [可独立]
  │
-P2 (用户画像 UI)           [可独立]
+P4 (阈值 + 校验)           [可独立]
  │
-P4 (阈值 + 校验)          [可独立]
+→ (填空位置 mixed)         [P5 完成后启动，依赖 ASSIST_LEVELS 重新校准]
 ```
 
 ### 建议 PR 拆分
 
-| PR | 主题 | 模块 | 预计代码量 |
-|---|---|---|---|
-| #1 | P0: 输入模式梯度重排 | constants/practice + adaptiveEngine + displayStrategy + 组件 | ~200 行 | 🕐 |
-| #2 | P3: 新增 L2.5 难度 | diagnostic + adaptiveEngine | ~50 行 | 🕐 |
-| #3 | P2: AbilityCard 组件 | 新组件 + Practice 引用 | ~150 行 | ✅ v2.2.0 |
-| #4 | P4-1: 阈值上调 | constants/practice | ~10 行 | ✅ v2.2.0 |
-| #5 | P4-2: targetMin/Max 校验 | formDefaults + AutoGenerateFormulas | ~50 行 | ✅ v2.2.0 |
+| PR | 主题 | 模块 | 预计代码量 | |
+|---|---|---|---|---|---|
+| #1 | **P5**: ASSIST_LEVELS 顺序修正 + pickInputMode 重写 + evaluateGroup 符号修正 | constants/practice + adaptiveEngine | ~80 行 | ✅ v2.3.0 |
+| #2 | **P5**: 画像排列方案 + 选级偏好 + 按排列方案生成题库 + reserve pool | adaptiveEngine + adaptiveBatch | ~150 行 | ✅ v2.3.0 |
+| #3 | **P5**: 动态微调 + Practice.vue 串联 | adaptiveEngine + Practice.vue | ~120 行 | ✅ v2.3.0 |
+| #4 | **P5**: 弃用 generatePracticeConfig + baseConfig 简化 | diagnostic + adaptiveEngine | ~30 行 | ✅ v2.3.0 |
+| #5 | P3: 新增 L2.5 难度 | diagnostic + adaptiveEngine | ~50 行 | 🕐 |
 | #6 | P1-1: 错题查询 API | database 扩展 | ~50 行 | 🕐 |
 | #7 | P1-2: 实时调题 composable | useAdaptiveQuestionPicker + Practice 改造 | ~300 行 | 🕐 |
 | #8 | P1-3: 错题注入策略 | useAdaptiveQuestionPicker 扩展 | ~80 行 | 🕐 |
 | #9 | → : 填空位置 mixed | diagnostic + adaptiveEngine + 组件 | ~150 行 | 🕐 |
 
-> 进度：5/9 PR 完成（#3/#4/#5 已落地）
+> 进度：4/9 PR 完成（#1→#4 ✅ v2.3.0，#3/#4/#5 v2.2.0 已落地）
 
 总计：约 ~1000 行代码改动 + 6 个新文件
 
@@ -471,12 +615,14 @@ P4 (阈值 + 校验)          [可独立]
 完成所有 P0-P4 + → 后：
 
 | 维度 | 之前 | 之后 | 状态 |
-|---|---|---|---|
-| 输入模式梯度 | keypad → choice2 → choice4（语义模糊） | choice2 → choice4 → 竖式 → 横式（清晰） | 🕐 P0 |
+|---|---|---|---|---|
+| 输入模式梯度 | keypad → choice2 → choice4（语义模糊，顺序颠倒） | choice2 → choice4 → 竖式 → 横式（正确排序） | ✅ v2.3.0 |
+| 出题依据 | 静态 baseline（generatePracticeConfig 一次性） | 画像驱动：按强/弱/挑战比例排列方案，每答一题动态微调 | ✅ v2.3.0 |
+| 画像利用 | 仅诊断后生成一次 config，后续引擎不参考 | strongLevels/weakLevels 全程驱动出题选择，动态反馈 | ✅ v2.3.0 |
 | 填空位置 | 固定 result | result（标准）→ mixed（同等级最高） | 🕐 → |
 | 错题利用 | 干扰项用规则数 | 干扰项优先从错题库取 | 🕐 P1 |
 | 题目调整 | 一组生成整组 | 实时调题 + 20% 错题注入 | 🕐 P1 |
-| 难度等级 | 12 级 | 13 级（新增 L2.5）| 🕐 P3 |
+| 难度等级 | 12 级 | 13 级（新增 L2.5） | 🕐 P3 |
 | 速度阈值 | 4s/10s/16s | 6s/12s/18s | ✅ v2.2.0 |
 | 用户信息 | stage badge | AbilityCard 完整画像 | ✅ v2.2.0 |
 | 配置校验 | 无 | targetMin/Max 校验 | ✅ v2.2.0 |

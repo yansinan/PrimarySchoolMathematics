@@ -81,8 +81,8 @@ export const ACCURACY_THRESHOLDS = {
 export const ASSESSMENT_ABORT_WRONG_STREAK = 2
 
 // 自适应引擎：同一维度至少练 N 组才考虑变动
-// 2026-06-04：从 2 放宽到 6（与引擎实际行为对齐）
-export const MIN_GROUPS_PER_DIMENSION = 6
+// 2026-06-06：从 6 降到 5（配合画像出题策略 G1/G2/G3/G4/GN 五组节奏）
+export const MIN_GROUPS_PER_DIMENSION = 5
 
 // 自适应引擎：连续答好多组才升阶
 export const CONSECUTIVE_GOOD_TO_ADVANCE = 3
@@ -124,17 +124,34 @@ export function getGroupComment(rate, time, count) {
 }
 
 /* ============================================================
-   输入辅助模式 — 降低认知负荷，帮学生建立信心
+   画像出题策略 — 组比例配置（P5 v2.3.0）
    ============================================================ */
-// 每个 level 同时携带 layout/input 字段，让 pickInputMode 单点决策后渲染直接消费。
-// 索引顺序=难度顺序：0=最难(无辅助) → 2=最易(最多辅助)。
-// horizontal_keypad 是特殊 key，不进入概率表，仅由 mastery check 触发。
+// 各组的强/弱/挑战题比例
+// weak 为区间值 [base, max]：实际取值 = base + weakSeverity × (max - base)
+// weakSeverity = 1 - 该 weakLevel 历史准确率（越高越严重 → 弱项占比越高）
+export const PROFILE_RATIOS = {
+  confidence: { strong: 0.60, weakMin: 0.20, weakMax: 0.40, challenge: 0 },
+  repair:     { strong: 0.40, weakMin: 0.40, weakMax: 0.60, challenge: 0 },
+  mixed:      { strong: 0.40, weak: 0.40, challenge: 0.20 },
+}
+
+/** 出题时额外生成的备用题池大小（用于动态微调替换） */
+export const RESERVE_POOL_SIZE = 3
+
+/* ============================================================
+   输入辅助模式 — 降低认知负荷，帮学生建立信心
+//
+// 难度顺序（从易→难）：choice2(最简单) < choice4 < vertical_keypad(竖式标准) < horizontal_keypad(横式掌握验证)
+// 索引对应：0 = 最易（二选一），2 = 标准（竖式），3 = 横式验证（特殊触发）
+*/
 export const ASSIST_LEVELS = [
-  { key: 'vertical_keypad',   label: '竖式',   layout: 'vertical',   input: 'keypad',  optionCount: 0 },
-  { key: 'choice4',           label: '四选一', layout: 'horizontal', input: 'options', optionCount: 4 },
   { key: 'choice2',           label: '二选一', layout: 'horizontal', input: 'options', optionCount: 2 },
+  { key: 'choice4',           label: '四选一', layout: 'horizontal', input: 'options', optionCount: 4 },
+  { key: 'vertical_keypad',   label: '竖式',   layout: 'vertical',   input: 'keypad',  optionCount: 0 },
   { key: 'horizontal_keypad', label: '横式',   layout: 'horizontal', input: 'keypad',  optionCount: 0 },
 ]
+/** assistLevel 常规范围上限（排除 horizontal_keypad 特殊模式） */
+export const MAX_NORMAL_ASSIST_LEVEL = 2
 
 /* ============================================================
    横式掌握验证（Mastery Check）配置

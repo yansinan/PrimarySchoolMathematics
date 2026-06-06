@@ -13,14 +13,18 @@
  * 好 → 先试填空位置变化，再升级
  */
 
-import { generatePracticeConfig } from './diagnostic'
+// P5 v2.3.0: generatePracticeConfig 不再被 adaptiveEngine 调用
+// import { generatePracticeConfig } from './diagnostic'
 import {
   ACCURACY_THRESHOLDS,
   SPEED_THRESHOLDS,
   ASSIST_LEVELS,
+  MAX_NORMAL_ASSIST_LEVEL,
   MASTERY_CHECK_CONFIG,
   CONSECUTIVE_GOOD_TO_ADVANCE,
   MIN_GROUPS_PER_DIMENSION,
+  PROFILE_RATIOS,
+  RESERVE_POOL_SIZE,
 } from '../../constants/practice'
 
 // ─── 精细难度分阶（16级，每步变化微小） ───
@@ -111,9 +115,22 @@ export function getDifficultyLabel(engine) {
 
 /**
  * 创建自适应引擎实例
+ *
+ * P5 v2.3.0: 新增 strongLevelIndices / weakLevelIndices / reservePool
+ * 从 profile.strongLevels/weakLevels (label 数组) 反查 DIFFICULTY_LEVELS 索引
+ * baseConfig 使用最小默认值（出题完全由 DIFFICULTY_LEVELS + plan 驱动）
  */
 export function createAdaptiveEngine(profile, targetMin = 10, targetMax = 30) {
-  const baseConfig = generatePracticeConfig(profile)
+  // P5 v2.3.0: 从诊断答题用 matchLevel 实时计算 strong/weak 索引
+  // 不使用 profile.weakLevels/strongLevels（旧格式 L1-L5 ID）
+  const diagGroups = groupAnswersByLevel(profile.diagAnswers || [])
+  const strongLevelIndices = diagGroups
+    .filter(g => g.accuracy >= 0.95)
+    .map(g => g.levelIdx)
+  const weakLevelIndices = diagGroups
+    .filter(g => g.accuracy < 0.5)
+    .map(g => g.levelIdx)
+
   const startIdx = initialDifficulty(profile)
   return {
     difficultyIdx: startIdx,
@@ -127,6 +144,12 @@ export function createAdaptiveEngine(profile, targetMin = 10, targetMax = 30) {
     consecutiveBad: 0,
     targetMin,
     targetMax,
+    /** P5: 强项 DIFFICULTY_LEVELS 索引数组 */
+    strongLevelIndices,
+    /** P5: 弱项 DIFFICULTY_LEVELS 索引数组 */
+    weakLevelIndices,
+    /** P5: 备用题池 [{equation, solution, type}] */
+    reservePool: [],
     masteryCheck: {
       active: false,                // 当前是否处于横式验证中
       horizontalGood: 0,            // 横式答对累计
@@ -135,7 +158,11 @@ export function createAdaptiveEngine(profile, targetMin = 10, targetMax = 30) {
     lastGroupResult: null,  // 最后生成的组摘要
     lastEvaluation: null,   // 用户自评 1-5
     history: [],
-    baseConfig,
+    /** 最小基线配置（出课题型配置由 DIFFICULTY_LEVELS + plan 驱动） */
+    baseConfig: {
+      step: '1', whereIsResult: '0', enableBrackets: false,
+      remainder: '3', solution: '0', numberOfPapers: 1,
+    },
   }
 }
 
@@ -169,12 +196,13 @@ export function getGroupSize(engine) {
 /**
  * 基于引擎的辅助级别，决定单题的输入模式
  *
- * 新梯度（从易→难）：
+ * ASSIST_LEVELS 顺序（从易→难）：
  *   choice2(二选一) < choice4(四选一) < vertical_keypad(竖式标准) < horizontal_keypad(横式掌握验证)
- * 概率表：
- *   assistLevel 0 (标准，无辅助)：vertical_keypad 70% / choice4 20% / choice2 10%
- *   assistLevel 1 (轻度辅助)：     vertical_keypad 50% / choice4 35% / choice2 15%
- *   assistLevel 2 (重度辅助)：     vertical_keypad 30% / choice4 50% / choice2 20%
+ *
+ * 概率表（assistLevel 0=标准/无辅助, 1=轻度辅助, 2=重度辅助）：
+ *   assistLevel 2 (重度辅助)：choice2 70% / choice4 20% / vertical 10%
+ *   assistLevel 1 (轻度辅助)：choice4 50% / choice2 25% / vertical 25%
+ *   assistLevel 0 (标准)：vertical 70% / choice4 15% / choice2 15%
  * 特殊：masteryCheck.active === true 时强制返回 horizontal_keypad（跳过概率表）
  * @param {object} engine - 引擎实例
  * @returns {string} ASSIST_LEVELS 中的 key
@@ -186,23 +214,23 @@ function pickInputMode(engine) {
   }
 
   const r = Math.random()
-  const L = engine.assistLevel // 0=standard, 1=light, 2=heavy
+  const L = engine.assistLevel // 0=标准(竖式主导), 1=轻度辅助(choice4主导), 2=重度辅助(choice2主导)
 
-  if (L === 0) {
-    // vertical_keypad 主导：70% vertical, 20% choice4, 10% choice2
-    if (r < 0.70) return 'vertical_keypad'
+  if (L === 2) {
+    // 重度辅助 → choice2 主导
+    if (r < 0.70) return 'choice2'
     if (r < 0.90) return 'choice4'
-    return 'choice2'
+    return 'vertical_keypad'
   }
   if (L === 1) {
-    // 轻度辅助：50% vertical, 35% choice4, 15% choice2
-    if (r < 0.50) return 'vertical_keypad'
-    if (r < 0.85) return 'choice4'
-    return 'choice2'
+    // 轻度辅助 → choice4 主导
+    if (r < 0.50) return 'choice4'
+    if (r < 0.75) return 'choice2'
+    return 'vertical_keypad'
   }
-  // 重度辅助：30% vertical, 50% choice4, 20% choice2
-  if (r < 0.30) return 'vertical_keypad'
-  if (r < 0.80) return 'choice4'
+  // L === 0：标准 → vertical 主导
+  if (r < 0.70) return 'vertical_keypad'
+  if (r < 0.85) return 'choice4'
   return 'choice2'
 }
 
@@ -294,9 +322,10 @@ export function evaluateGroup(engine, groupAnswers) {
     next.consecutiveBad = 0
 
     if (!masteryActive && next.consecutiveGood >= CONSECUTIVE_GOOD_TO_ADVANCE && next.groupsAtThisLevel >= MIN_GROUPS_PER_DIMENSION) {
-      // 1) 先解除辅助（有辅助 → 减少辅助）
-      if (engine.assistLevel > 0) {
-        next.assistLevel = engine.assistLevel - 1
+      // P5 v2.3.0: assistLevel 方向修正（好→+1 减辅助, 差→-1 加辅助）
+      // 1) 先减少辅助（有辅助 → 往 harder 方向）
+      if (engine.assistLevel < MAX_NORMAL_ASSIST_LEVEL) {
+        next.assistLevel = engine.assistLevel + 1
         next.consecutiveGood = 0
         next.groupsAtThisLevel = 0
       }
@@ -328,9 +357,10 @@ export function evaluateGroup(engine, groupAnswers) {
     }
 
     if (next.consecutiveBad >= 2) {
+      // P5 v2.3.0: 差→assistLevel-1（增加辅助，往 easier 方向）
       // 1) 先增加辅助
-      if (engine.assistLevel < ASSIST_LEVELS.length - 1) {
-        next.assistLevel = engine.assistLevel + 1
+      if (engine.assistLevel > 0) {
+        next.assistLevel = engine.assistLevel - 1
         next.blankMode = 'result'
         next.consecutiveBad = 0
         next.groupsAtThisLevel = 0
@@ -355,46 +385,17 @@ export function evaluateGroup(engine, groupAnswers) {
     next.groupSizeIdx = Math.max(0, engine.groupSizeIdx + speedAdjust - 1)
   }
 
-  // ── Mastery check 状态机（横式掌握验证） ──
-  // 独立于上面的 3D 链（assistLevel / blankMode / difficulty），走额外路径。
-  // 只在 standard 模式（assistLevel=0）下触发，横式答对 N 道 = 直接升难度。
-  if (engine.masteryCheck) {
-    if (engine.masteryCheck.active) {
-      // ── 正在横式验证中 ──
-      // 遍历本组中横式答题，通过则累计，失败则取消
-      const hAnswers = groupAnswers.filter(a => a.inputMode === 'horizontal_keypad')
-      for (const a of hAnswers) {
-        if (a.isCorrect) {
-          next.masteryCheck.horizontalGood++
-        } else {
-          // 横式答错 → 验证失败，回 vertical
-          next.masteryCheck.active = false
-          next.masteryCheck.horizontalGood = 0
-          next.masteryCheck.consecutiveVerticalGood = 0
-          break
-        }
-      }
-      // 横式全部答对且达到通过数 → 直接升难度（跳过 blankMode 中间态）
-      if (next.masteryCheck.active && next.masteryCheck.horizontalGood >= MASTERY_CHECK_CONFIG.targetPasses) {
-        next.difficultyIdx = Math.min(DIFFICULTY_LEVELS.length - 1, engine.difficultyIdx + 1)
-        next.blankMode = 'result'
-        next.consecutiveGood = 0
-        next.groupsAtThisLevel = 0
-        next.masteryCheck.active = false
-        next.masteryCheck.horizontalGood = 0
-        next.masteryCheck.consecutiveVerticalGood = 0
-      }
-    } else if (accuracy >= GOOD && engine.assistLevel === MASTERY_CHECK_CONFIG.requiredAssistLevel) {
-      // ── 不在验证中，好的组表现 + 标准模式 → 尝试触发验证 ──
-      next.masteryCheck.consecutiveVerticalGood = (engine.masteryCheck.consecutiveVerticalGood || 0) + 1
-      if (next.masteryCheck.consecutiveVerticalGood >= MASTERY_CHECK_CONFIG.triggerThreshold) {
-        if (Math.random() < MASTERY_CHECK_CONFIG.triggerProbability) {
-          next.masteryCheck.active = true
-          next.masteryCheck.horizontalGood = 0
-        }
-        next.masteryCheck.consecutiveVerticalGood = 0
-      }
-    }
+  // ── Mastery check 兜底（P5 v2.3.0：改为每答一题触发，此处在 evaluateGroup 保留最小兜底） ──
+  // 旧版 mastery check 状态机已迁移至 adjustNextQuestion（per-question 触发）
+  // 此处仅保留：如果 masteryCheck.active 仍为 true（异常状态），确保不阻塞升级路径
+  if (engine.masteryCheck && engine.masteryCheck.active && engine.masteryCheck.horizontalGood >= MASTERY_CHECK_CONFIG.targetPasses) {
+    next.difficultyIdx = Math.min(DIFFICULTY_LEVELS.length - 1, engine.difficultyIdx + 1)
+    next.blankMode = 'result'
+    next.consecutiveGood = 0
+    next.groupsAtThisLevel = 0
+    next.masteryCheck.active = false
+    next.masteryCheck.horizontalGood = 0
+    next.masteryCheck.consecutiveVerticalGood = 0
   }
 
   // ── 结束条件：基于 targetMin ~ targetMax ══
@@ -547,4 +548,223 @@ function _isCarry(a, b) {
 function _isBorrow(a, b, opNum) {
   if (opNum !== 2) return false
   return (a % 10) < (b % 10)
+}
+
+// ═══════════════════════════════════════════════════════════
+// P5: 画像驱动的出题排列方案
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * 带权重的随机选择
+ * @param {any[]} items
+ * @param {number[]} weights 与 items 等长的权重数组
+ * @returns {any} 选中的元素
+ */
+function weightedRandom(items, weights) {
+  if (!items.length) return null
+  const total = weights.reduce((s, w) => s + w, 0)
+  let r = Math.random() * total
+  for (let i = 0; i < items.length; i++) {
+    r -= weights[i]
+    if (r <= 0) return items[i]
+  }
+  return items[items.length - 1]
+}
+
+/**
+ * 强项选级：索引越高的 level 选中概率越大（挑战更强）
+ * @param {number[]} indices - DIFFICULTY_LEVELS 索引数组
+ * @returns {number} 选中的 DIFFICULTY_LEVELS 索引
+ */
+export function pickStrongLevel(indices) {
+  if (!indices.length) return null
+  const n = indices.length
+  const weights = Array.from({ length: n }, (_, i) => Math.pow(1.5, i))
+  return weightedRandom(indices, weights)
+}
+
+/**
+ * 弱项选级：索引越低的 level 选中概率越大（从基础补起）
+ * @param {number[]} indices - DIFFICULTY_LEVELS 索引数组
+ * @returns {number} 选中的 DIFFICULTY_LEVELS 索引
+ */
+export function pickWeakLevel(indices) {
+  if (!indices.length) return null
+  const n = indices.length
+  const weights = Array.from({ length: n }, (_, i) => Math.pow(1.5, n - 1 - i))
+  return weightedRandom(indices, weights)
+}
+
+/**
+ * 根据组序号、当前引擎状态和画像，生成出题排列方案
+ *
+ * @param {number} groupIndex - 当前组序号（从 1 开始）
+ * @param {number} groupSize - 本组题数
+ * @param {object} engine - 当前引擎实例
+ * @param {object} profile - 用户画像
+ * @param {boolean} isLastGroup - 是否预测为最后一组
+ * @returns {string[]} 排列数组，每项为 'strong' | 'weak' | 'challenge'
+ */
+export function generateQuestionPlan(groupIndex, groupSize, engine, profile, isLastGroup = false) {
+  const totalStrong = engine.strongLevelIndices.length
+  const totalWeak = engine.weakLevelIndices.length
+  const hasBoth = totalStrong > 0 && totalWeak > 0
+  const hasChallenge = engine.difficultyIdx < DIFFICULTY_LEVELS.length - 1
+
+  // 确定组类型
+  let groupType
+  if (groupIndex === 1) {
+    groupType = 'confidence'
+  } else if (groupIndex === 2) {
+    groupType = 'repair'
+  } else if (isLastGroup) {
+    groupType = 'confidence'
+  } else {
+    groupType = 'mixed'
+  }
+
+  // 取比例配置
+  const cfg = PROFILE_RATIOS[groupType]
+
+  // 计算弱项占比（区间取值）
+  let weakPct
+  if (cfg.weak != null) {
+    weakPct = cfg.weak
+  } else {
+    // 没有画像时全部归强项
+    if (!hasBoth) {
+      weakPct = 0
+    } else {
+      // 区间 [weakMin, weakMax]，弱项越严重占比越高
+      const weakSeverity = 1 - (profile.avgScore || 0.5)
+      const range = cfg.weakMax - cfg.weakMin
+      weakPct = cfg.weakMin + weakSeverity * range
+    }
+  }
+
+  const strongPct = cfg.strong
+  const challengePct = hasChallenge ? (cfg.challenge || 0) : 0
+
+  // 按比例计算各类型题数
+  const challengeCount = Math.floor(groupSize * challengePct)
+  const weakCount = Math.floor((groupSize - challengeCount) * weakPct)
+  const strongCount = groupSize - challengeCount - weakCount
+
+  // 生成排列数组后随机打乱
+  const plan = []
+  for (let i = 0; i < strongCount; i++) plan.push('strong')
+  for (let i = 0; i < weakCount; i++) plan.push('weak')
+  for (let i = 0; i < challengeCount; i++) plan.push('challenge')
+
+  // Fisher-Yates 洗牌
+  for (let i = plan.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [plan[i], plan[j]] = [plan[j], plan[i]]
+  }
+
+  return plan
+}
+
+/**
+ * 将 answers 按 matchLevel 分组，计算各组总题数/正确数/正确率
+ * 供动态微调计算本轮 strongLevels/weakLevels
+ *
+ * @param {Array} answers - 答题记录数组
+ * @returns {Array<{levelIdx:number, label:string, total:number, correct:number, accuracy:number}>}
+ */
+export function groupAnswersByLevel(answers) {
+  const map = {}
+  for (const a of (answers || [])) {
+    const match = matchLevel(a)
+    if (!match) continue
+    const key = match.levelIdx
+    if (!map[key]) {
+      map[key] = { levelIdx: key, label: match.label, total: 0, correct: 0 }
+    }
+    map[key].total++
+    if (a.isCorrect) map[key].correct++
+  }
+  return Object.values(map).map((g) => ({
+    ...g,
+    accuracy: g.total > 0 ? g.correct / g.total : 0,
+  }))
+}
+
+/**
+ * P5: 每答完一题触发 — 检查 next 题类型 + 动态调辅助力度
+ *
+ * 步骤 A — 换题：
+ *   - 检查下一题 matchLevel 是否落在当前组应出的类型范围
+ *   - 不符 → 从 reserve pool 取一道相符的替换
+ *
+ * 步骤 B — 调辅助力度：
+ *   - 收集本轮（已完成所有组）答题 → groupAnswersByLevel
+ *   - 历史弱项本轮 ≥95% → assistLevel + 1（减少辅助）
+ *   - 历史强项本轮 <50%   → assistLevel - 1（增加辅助）
+ *
+ * @param {object} engine - 当前引擎实例（会被修改）
+ * @param {Array} roundAnswers - 本轮已完成所有组的答题
+ * @param {number} nextIdx - 下一题在 listPractices 中的索引
+ * @param {Array} listPractices - 当前题库（会被修改）
+ * @param {object} profile - 用户历史画像
+ */
+export function adjustNextQuestion(engine, roundAnswers, nextIdx, listPractices, profile) {
+  // ── 步骤 A: 换题 ──
+  if (nextIdx >= 0 && nextIdx < listPractices.length && engine.reservePool && engine.reservePool.length > 0) {
+    const nextQ = listPractices[nextIdx]
+    const nextMatch = nextQ ? matchLevel(nextQ) : null
+    const nextLevelIdx = nextMatch ? nextMatch.levelIdx : -1
+
+    // 检查是否在 strong/weak 范围内（挑战题直接保留）
+    const inStrong = engine.strongLevelIndices.includes(nextLevelIdx)
+    const inWeak = engine.weakLevelIndices.includes(nextLevelIdx)
+    const isChallenge = nextLevelIdx === engine.difficultyIdx + 1
+
+    if (!inStrong && !inWeak && !isChallenge) {
+      // 不匹配任何已知类型 → 从池中换一道
+      const poolQ = engine.reservePool.pop()
+      if (poolQ) {
+        listPractices[nextIdx] = poolQ
+      }
+    }
+  }
+
+  // ── 步骤 B: per-question Mastery Check（替代旧版 evaluateGroup 中的整体组判断） ──
+  // 连续答对 2 题（最后一个和当前组第一个）→ 下一题进横式，测试用户能否在更少辅助下掌握
+  // 规则：只看最近 2 题，答对且不是已横式 → 下一题横式
+  if (engine.assistLevel <= 1 && roundAnswers && roundAnswers.length >= 2) {
+    const recentTwo = roundAnswers.slice(-2)
+    const bothCorrect = recentTwo.every(a => a.isCorrect)
+    const notAlreadyHorizontal = listPractices[nextIdx] && 
+      listPractices[nextIdx].inputMode !== 'horizontal_keypad' &&
+      !recentTwo.some(a => a.inputMode === 'horizontal_keypad')
+    if (bothCorrect && notAlreadyHorizontal && nextIdx >= 0 && nextIdx < listPractices.length) {
+      // 把下一题强制设为横式
+      listPractices[nextIdx] = { ...listPractices[nextIdx], inputMode: 'horizontal_keypad' }
+      // 记录到引擎 masteryCheck 计数器（evaluateGroup 兜底可能会用到）
+      if (engine.masteryCheck) {
+        engine.masteryCheck.horizontalGood = (engine.masteryCheck.horizontalGood || 0) + 1
+      }
+    }
+  }
+
+  // ── 步骤 C: 调辅助力度 ──
+  if (!roundAnswers || roundAnswers.length < 3) return  // 数据不足
+
+  const groups = groupAnswersByLevel(roundAnswers)
+
+  // 历史弱项在本轮表现
+  const histWeakLabels = profile.weakLevels || []
+  for (const g of groups) {
+    if (g.total < 2) continue  // 样本不足
+    if (histWeakLabels.includes(g.label) && g.accuracy >= 0.95) {
+      // 弱项变强 → 减少辅助
+      engine.assistLevel = Math.min(MAX_NORMAL_ASSIST_LEVEL, engine.assistLevel + 1)
+      continue
+    }
+    if (!histWeakLabels.includes(g.label) && g.accuracy < 0.50) {
+      // 强项变弱 → 增加辅助
+      engine.assistLevel = Math.max(0, engine.assistLevel - 1)
+    }
+  }
 }

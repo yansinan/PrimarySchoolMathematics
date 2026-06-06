@@ -23,7 +23,7 @@ import { useStatsStore } from '@/stores/stats'
 import { usePracticeDialogs } from '@/composables/usePracticeDialogs'
 import { usePracticeSaver } from '@/composables/usePracticeSaver'
 import { generateDiagnosticQuestions, analyzeAbility } from '@/utils/algorithm/diagnostic'
-import { createAdaptiveEngine, getGroupSize, evaluateGroup, getDifficultyLabel } from '@/utils/algorithm/adaptiveEngine'
+import { createAdaptiveEngine, getGroupSize, evaluateGroup, getDifficultyLabel, generateQuestionPlan, adjustNextQuestion } from '@/utils/algorithm/adaptiveEngine'
 import { generateAdaptiveBatch } from '@/utils/algorithm/adaptiveBatch'
 import { getGroupComment, getCommentByRate } from '@/constants/practice'
 import { sumAnswerScores } from '@/utils/score'
@@ -134,7 +134,11 @@ export function useAdaptiveSession(options = {}) {
     practiceStore.setPhase('practice')
 
     const size = getGroupSize(engine)
-    const questions = generateAdaptiveBatch(engine, size)
+    // P5: 生成排列方案 → 按方案出题
+    // startNewAdaptiveSession 时 groupIndex=1（G1=confidence）
+    const plan = generateQuestionPlan(1, size, engine, profile, false)
+    const { questions, reservePool } = generateAdaptiveBatch(engine, size, plan)
+    adaptiveEngine.value.reservePool = reservePool
     practiceStore.setListPractices(questions)
 
     ElMessage({
@@ -179,10 +183,15 @@ export function useAdaptiveSession(options = {}) {
     adaptiveGroupIndex.value = 1
 
     const size = getGroupSize(engine)
-    const firstQuestions = generateAdaptiveBatch(engine, size)
+    // P5: 生成排列方案 → 按方案出题
+    const plan = generateQuestionPlan(1, size, engine, profile, false)
+    const { questions: firstQuestions, reservePool } = generateAdaptiveBatch(engine, size, plan)
+    adaptiveEngine.value.reservePool = reservePool
 
     // 传入 targetMin/targetMax 到 adaptiveConfig (之后 startNewAdaptiveSession 从这读)
     practiceStore.completeAssessment(profile, { targetMin, targetMax })
+    // P5 fix: 同步 currentDifficultyIdx 到引擎实际值（store 的 hardcode 0 不正确）
+    practiceStore.setCurrentDifficulty(engine.difficultyIdx, 1)
     practiceStore.setListPractices(firstQuestions)
   }
 
@@ -292,14 +301,36 @@ export function useAdaptiveSession(options = {}) {
     }
 
     // ── 生成下一组 ──
+    // P5: 预测是否为最后一组（totalAnswered + 组大小×1.5 >= targetMax）
     // 关键: 先把本轮答案写回 session.answers (确保组边界数据完整),
     // 再 setListPractices 触发 watch (watch 内 saved = [...session.answers] 拿到完整数据)。
-    const nextQuestions = generateAdaptiveBatch(result.engine, result.nextGroupSize)
+    const nextEngine = result.engine
+    const nextSize = result.nextGroupSize
+    const isLast = nextEngine.totalAnswered + nextSize * 1.5 >= nextEngine.targetMax
+    const nextPlan = generateQuestionPlan(adaptiveGroupIndex.value, nextSize, nextEngine, practiceStore.abilityProfile, isLast)
+    const { questions: nextQuestions, reservePool: nextPool } = generateAdaptiveBatch(nextEngine, nextSize, nextPlan)
+    adaptiveEngine.value.reservePool = nextPool
     groupAnswerOffset.value = allAnswers.length
     session.value.answers = [...allAnswers]
     practiceStore.resetCurrentIndex()
     practiceStore.setListPractices(nextQuestions)
     return 'continue'
+  }
+
+  /**
+   * P5: 答完一题后触发 — 封装动态微调（C 层中转，避免 V 层直接 import U 层）
+   * 由 Practice.vue handleNext 中调用
+   */
+  function afterAnswer() {
+    if (!adaptiveEngine.value || !practiceStore.abilityProfile) return
+    const roundAnswers = [...(practiceStore.adaptiveAnswers || []), ...session.value.answers]
+    adjustNextQuestion(
+      adaptiveEngine.value,
+      roundAnswers,
+      practiceStore.session.currentIndex,
+      practiceStore.listPractices,
+      practiceStore.abilityProfile
+    )
   }
 
   return {
@@ -316,5 +347,6 @@ export function useAdaptiveSession(options = {}) {
     startNewDiagnosticSession,  // P2.3: 替代 V 层 generateDiagnosticQuestions + startAssessment 直调
     completeAssessment,
     completeGroup,
+    afterAnswer,                // P5: 答完一题动态微调
   }
 }

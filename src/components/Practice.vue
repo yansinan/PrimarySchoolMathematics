@@ -172,6 +172,7 @@ const {
   startNewDiagnosticSession,  // P2.3: 替代 V 层 generateDiagnosticQuestions + startAssessment 直调
   completeAssessment,
   completeGroup,
+  afterAnswer,                // P5: 答完一题动态微调
 } = useAdaptiveSession({ dialogs, saver })
 
 /** 自适应引擎状态（注：adaptiveEngine / adaptiveGroupIndex / groupAnswerOffset
@@ -377,6 +378,8 @@ const handleNext = () => {
       nextLocked.value = false
       return
     }
+    // P5: 动态微调（C 层中转，架构合规）
+    afterAnswer()
     digitFocusIdx.value = -1  // 重置点击焦点
     nextLocked.value = false
   } else {

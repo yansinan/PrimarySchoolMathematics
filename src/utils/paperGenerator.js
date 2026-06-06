@@ -61,6 +61,6 @@ export function createFormulasGenerator(options, paperList) {
     })
   }
 
-  console.log('papers', papers);
+  // console.log('papers', papers);  // P5: 注释噪音日志
   return papers
 }

@@ -26,7 +26,7 @@ export class EquationSolver {
                 console.warn(`暴力法结果: ${result} (期望: ${expected}), isChecked: ${this.checkResult(equation, result)}`);
             }
         }
-        console.log(`求解结果: ${result} (期望: ${expected})`, `isChecked: ${isChecked}`);
+        // console.log(`求解结果: ${result} (期望: ${expected})`, `isChecked: ${isChecked}`);  // P5: 注释噪音日志
         return result;
     }
     
