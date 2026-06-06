@@ -121,7 +121,7 @@
             </div>
           </div>
           <div v-if="weaknessByNumber.length" class="num-section__block">
-            <span class="num-section__label">📒 还要练习的数字</span>
+            <span class="num-section__label">📒 还能提高的数字</span>
             <div class="num-section__items">
               <div
                 v-for="item in weaknessByNumber"
