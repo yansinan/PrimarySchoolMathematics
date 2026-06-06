@@ -277,6 +277,8 @@ async function handleOpen() {
   // 编排下沉到 composable.openDrawer（C 层，V 层不直接调 store）
   try {
     await openDrawer()
+    // 还要显式刷新数字掌握度（weaknessByNumber/strengthByNumber 依赖它）
+    await profile.refreshMasteryFromAnswers(allAnswers?.value || [])
     await nextTick()
     rebuildCharts()
   } catch (err) {
