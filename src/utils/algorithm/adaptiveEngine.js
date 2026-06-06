@@ -574,7 +574,7 @@ function weightedRandom(items, weights) {
 
 /**
  * 强项选级：索引越高的 level 选中概率越大（挑战更强）
- * 受 `currentDifficulty` 范围约束：只选 [current-1, current+2] 内的 level
+ * 受 `currentDifficulty` 范围约束：只选 [current-1, current+3] 内的 level
  * @param {number[]} indices - DIFFICULTY_LEVELS 索引数组
  * @param {number} currentDifficulty - 当前引擎难度索引
  * @returns {number} 选中的 DIFFICULTY_LEVELS 索引
@@ -582,7 +582,7 @@ function weightedRandom(items, weights) {
 export function pickStrongLevel(indices, currentDifficulty) {
   if (!indices.length) return null
   const constrained = indices.filter(i =>
-    i >= currentDifficulty - 1 && i <= currentDifficulty + 2)
+    i >= currentDifficulty - 1 && i <= currentDifficulty + 3)
   if (!constrained.length) return currentDifficulty
   const n = constrained.length
   const weights = Array.from({ length: n }, (_, i) => Math.pow(1.5, i))

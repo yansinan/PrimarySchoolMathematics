@@ -130,7 +130,7 @@ export function getGroupComment(rate, time, count) {
 // weak 为区间值 [base, max]：实际取值 = base + weakSeverity × (max - base)
 // weakSeverity = 1 - 该 weakLevel 历史准确率（越高越严重 → 弱项占比越高）
 export const PROFILE_RATIOS = {
-  confidence: { strong: 0.60, weakMin: 0.20, weakMax: 0.40, challenge: 0 },
+  confidence: { strong: 0.60, weakMin: 0.20, weakMax: 0.40, challenge: 0.15 },
   repair:     { strong: 0.40, weakMin: 0.40, weakMax: 0.60, challenge: 0 },
   mixed:      { strong: 0.40, weak: 0.40, challenge: 0.20 },
 }
