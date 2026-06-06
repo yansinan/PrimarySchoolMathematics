@@ -217,18 +217,20 @@ export function useAbilityAnalysis() {
    */
   function _deriveWeaknessAndStrength() {
     const entries = Object.entries(masteryByNumberFull.value)
+    // P5 v2.3.0 修复：用 accuracy（正确率）代替 score（含 retry 衰减）做分类
+    // score 在用户答对但非首答时会 < 1，导致 strength 永远空
     weaknessByNumber.value = entries
-      .filter(([, r]) => r.total > 0 && r.score < 0.5)
+      .filter(([, r]) => r.total > 0 && r.accuracy < 0.5)
       .map(([n, r]) => ({ number: Number(n), ...r }))
-      .sort((a, b) => a.score - b.score)
+      .sort((a, b) => a.accuracy - b.accuracy)
     midByNumber.value = entries
-      .filter(([, r]) => r.total >= 3 && r.score >= 0.5 && r.score < 1)
+      .filter(([, r]) => r.total >= 3 && r.accuracy >= 0.5 && r.accuracy < 0.95)
       .map(([n, r]) => ({ number: Number(n), ...r }))
-      .sort((a, b) => b.score - a.score)
+      .sort((a, b) => b.accuracy - a.accuracy)
     strengthByNumber.value = entries
-      .filter(([, r]) => r.total >= 3 && r.score >= 1)
+      .filter(([, r]) => r.total >= 3 && r.accuracy >= 0.95)
       .map(([n, r]) => ({ number: Number(n), ...r }))
-      .sort((a, b) => b.score - a.score)
+      .sort((a, b) => b.accuracy - a.accuracy)
   }
 
   /**
