@@ -23,7 +23,7 @@ import { useStatsStore } from '@/stores/stats'
 import { computeAndSaveAbilityProfile } from '@/utils/abilityProfile'
 // 修复 Bug 3: 直接 import db 实例, 用于 savePerQuestion 写单条 answer
 // (避免每题都 saveSessionToDB 产生 N 个 1 步 session 污染"最近练习"列表)
-import db from '@/utils/database'
+import db, { saveQuestion } from '@/utils/database'
 
 /**
  * 从 history 中提取 evaluations（{group, score}[]），转 JSON 字符串
@@ -71,6 +71,11 @@ export function usePracticeSaver() {
     const lastAnswer = answers[answers.length - 1]
     if (lastAnswer) {
       void db.answers.put(lastAnswer)
+      // ✨ B-2 修复：同步写入 questions 表（equation 唯一键去重，首次创建后续复用 id）
+      void saveQuestion({
+        ...lastAnswer,
+        operands: [lastAnswer.operandMin, lastAnswer.operandMax].filter(x => x > 0),
+      })
     }
   }
 

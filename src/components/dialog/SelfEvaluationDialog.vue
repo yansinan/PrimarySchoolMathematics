@@ -27,8 +27,6 @@
           class="eval-face"
           :class="{ 'eval-face--selected': selectedScore === face.score }"
           @click="selectScore(face.score)"
-          @mouseover="hoveredScore = face.score"
-          @mouseleave="hoveredScore = null"
         >
           {{ face.emoji }}
         </div>
@@ -101,7 +99,6 @@ const props = defineProps({
 const emit = defineEmits(['update:visible', 'select'])
 
 const selectedScore = ref(DEFAULT_EVAL_SCORE)  // 默认 = 刚刚好
-const hoveredScore = ref(null)
 
 // ── P2 阶段 11：v2 数字弱项/强项（与 StatsDrawer / AbilityCard UI 统一组件） ──
 // 数据范围：本组 answers（每组完成时调 refresh）
@@ -111,7 +108,6 @@ const { weaknessByNumberFlat, strengthByNumberFlat, refreshMasteryFromAnswers } 
 watch(() => props.visible, (v) => {
   if (v) {
     selectedScore.value = DEFAULT_EVAL_SCORE
-    hoveredScore.value = null
     // 弹窗打开时从本组 answers 算 mastery (经 composable 委托)
     refreshMasteryFromAnswers(props.groupAnswers)
   }
@@ -129,7 +125,6 @@ function selectScore(score) {
   // 延迟常量来自 constants/evaluation.js (原 400ms → 800ms 让用户看清选择)
   setTimeout(() => {
     emit('select', score)
-    emit('update:visible', false)
   }, SELECT_CONFIRM_DELAY_MS)
 }
 

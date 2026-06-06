@@ -102,6 +102,9 @@ export function usePracticeDialogs() {
       evalResolver(score)
       evalResolver = null
     }
+    // 在 select 事件处理（completeGroup）恢复之前关 dialog
+    // 避免 completeGroup 执行过程中 watch 重开 dialog
+    evalVisible.value = false
   }
 
   return {

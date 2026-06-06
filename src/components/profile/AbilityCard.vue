@@ -141,6 +141,9 @@ import WeaknessV2Card from './WeaknessV2Card.vue'
 import StrengthV2Card from './StrengthV2Card.vue'
 import { useAbilityProfile } from '@/composables/useAbilityProfile'
 
+// 定义组件 props（arch-v2.3-5.4 清理误删，v2.3 烟测补回）
+const { compact } = defineProps({ compact: Boolean })
+
 // 无参调用：composable 内部从 store + analysis 取默认数据源
 const profile = useAbilityProfile()
 

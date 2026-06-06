@@ -100,15 +100,11 @@ import NumberKeypad from '@/components/input/NumberKeypad.vue'
 import OptionButtons from '@/components/input/OptionButtons.vue'
 import PracticeSummaryDialog from '@/components/dialog/PracticeSummaryDialog.vue'
 import SelfEvaluationDialog from '@/components/dialog/SelfEvaluationDialog.vue'
-import { extractQuestionMetadata } from '@/utils/equationParser'
-import { generateDiagnosticQuestions, generatePracticeConfig } from '@/utils/diagnostic'
-import { decideDisplayMode, updateDisplayStats } from '@/utils/displayStrategy'  // decideDisplayMode / updateDisplayStats 仍在 V 层 (handleSubmit 用)
-import { getDifficultyLabel } from '@/utils/adaptiveEngine'  // ⚠️ PR-4.3 漏改修复: currentStage (L174) 仍用此函数, 后续应下沉到 useAdaptiveSession
+import { useAnswerBuilder } from '@/composables/useAnswerBuilder'
 import { useAdaptiveSession } from '@/composables/useAdaptiveSession'
 import { usePracticeDialogs } from '@/composables/usePracticeDialogs'
 import { usePracticeSaver } from '@/composables/usePracticeSaver'
 import { useDisplayStrategy } from '@/composables/useDisplayStrategy'  // 🆕 PR-4.2 抽离 displayStats + applyDisplayModeForCurrentQuestion + generateOptions
-import { buildAttemptScore } from '@/utils/score'
 import { FEEDBACK_DELAYS, ASSESSMENT_ABORT_WRONG_STREAK, getCommentByRate, ASSIST_LEVELS, MAX_ATTEMPT_PER_QUESTION } from '@/constants/practice'
 
 import { usePracticeStore } from '@/stores/practice'
@@ -136,12 +132,13 @@ const {
 } = storeToRefs(practiceStore)
 
 // ── 题目展示策略 composable (PR-4.2 抽离) ──
-// 封装 displayStats ref + applyDisplayModeForCurrentQuestion + generateOptions + resetDisplayStats
+// 封装 displayStats ref + applyDisplayModeForCurrentQuestion + generateOptions + resetDisplayStats + updateStats
 const {
   displayStats,
   applyDisplayModeForCurrentQuestion,
   generateOptions,
   resetDisplayStats,
+  updateStats,
 } = useDisplayStrategy(session, currentQuestion)
 
 // ── 弹窗 composable（替代 ElMessageBox 和 window.__evalSelect 桥） ──
@@ -149,6 +146,9 @@ const dialogs = usePracticeDialogs()
 
 // ── 持久化 composable（封装 4 处 saveSessionToDB 调用） ──
 const saver = usePracticeSaver()
+
+// ── 答题数据构造 composable（ARCH 合规：V 不直接 import U） ──
+const { buildAnswerMeta, buildScore } = useAnswerBuilder()
 
 // ── 自适应会话 composable ──
 // 响应式状态：adaptiveEngine / adaptiveGroupIndex / groupAnswerOffset / nextLocked
@@ -163,7 +163,9 @@ const {
   groupAnswerOffset,
   groupCorrectCount,
   nextLocked,
+  stageName,                  // P2.2: 替代 V 层 currentStage computed
   startNewAdaptiveSession,
+  startNewDiagnosticSession,  // P2.3: 替代 V 层 generateDiagnosticQuestions + startAssessment 直调
   completeAssessment,
   completeGroup,
 } = useAdaptiveSession({ dialogs, saver })
@@ -171,20 +173,8 @@ const {
 /** 自适应引擎状态（注：adaptiveEngine / adaptiveGroupIndex / groupAnswerOffset
  *  / groupCorrectCount / nextLocked 等已抽到 useAdaptiveSession） */
 
-const currentStage = computed(() => {
-  if (isAssessment.value) {
-    return `能力评估 ${session.value.answers.length}/${totalQuestions.value}`
-  }
-  if (adaptiveEngine.value) {
-    const label = getDifficultyLabel(adaptiveEngine.value)
-    const groupIdx = adaptiveGroupIndex.value
-    return `${label} · 第${groupIdx}组`
-  }
-  if (abilityProfile.value) {
-    return '智能练习'
-  }
-  return '一年级'
-})
+// currentStage 已抽到 useAdaptiveSession.stageName (P2.2)，模板继续用 currentStage 引用保持兼容
+const currentStage = stageName
 
 const layoutComponents = {
   horizontal: HorizontalLayout,
@@ -306,7 +296,7 @@ const handleSubmit = (answer) => {
   const responseTime = practiceStore.endQuestionTimer()
 
   // Extract metadata from the equation
-  const { operator, isCarry, isBorrow, stepCount, operandMin, operandMax } = extractQuestionMetadata(
+  const { operator, isCarry, isBorrow, stepCount, operandMin, operandMax } = buildAnswerMeta(
     currentQuestion.value.equation,
     currentQuestion.value
   )
@@ -320,7 +310,7 @@ const handleSubmit = (answer) => {
   const newQuestionIndex = groupAnswerOffset.value + currentIndex.value
   const existingIdx = session.value.answers.findIndex(a => a.questionIndex === newQuestionIndex)
   const previousAttemptCount = existingIdx >= 0 ? (session.value.answers[existingIdx].attemptCount || 1) : 0
-  const { attemptCount, score } = buildAttemptScore(previousAttemptCount, isCorrect)
+  const { attemptCount, score } = buildScore(previousAttemptCount, isCorrect)
   const answerEntry = {
     ...currentQuestion.value,
     userAnswer,
@@ -351,7 +341,7 @@ const handleSubmit = (answer) => {
   if (isCorrect) {
     session.value.streak++
     session.value.feedbackType = 'correct'
-    displayStats.value = updateDisplayStats(displayStats.value, true)
+    updateStats(true)
     ElMessage.success({
       message: '✓ 正确！',
       duration: FEEDBACK_DELAYS.correct,
@@ -373,7 +363,7 @@ const handleSubmit = (answer) => {
     })
 
     // 评估模式下连续错 N 次 → 提前结束评估
-    displayStats.value = updateDisplayStats(displayStats.value, isCorrect)
+    updateStats(isCorrect)
     const shouldAbortAssessment = isAssessment.value && displayStats.value.consecutiveWrong >= ASSESSMENT_ABORT_WRONG_STREAK
 
     // ── 错题重试上限 (PR-fix-7.1 新增) ──
@@ -535,10 +525,7 @@ watch(listPractices, (newPracticeList) => {
   } else if (phase.value === 'practice' && !abilityProfile.value) {
     // 普通练习模式完成：重新进入诊断模式
     practiceStore.setPhase('idle')
-    const questions = generateDiagnosticQuestions()
-    if (questions.length > 0) {
-      practiceStore.startAssessment(questions)
-    }
+    startNewDiagnosticSession()
   }
 })
 
@@ -725,10 +712,7 @@ if (typeof window !== 'undefined') {
 onMounted(() => {
   // 情况 1: 首次进入 → 自动诊断
   if (isIdle.value && listPractices.value.length === 0) {
-    const questions = generateDiagnosticQuestions()
-    if (questions.length > 0) {
-      practiceStore.startAssessment(questions)
-    }
+    startNewDiagnosticSession()
     return
   }
 
