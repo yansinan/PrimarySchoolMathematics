@@ -28,6 +28,11 @@
           <div class="level-bar-wrap">
             <div class="level-bar" :style="{ width: gameLevel.progress + '%', background: gameLevel.color }"></div>
           </div>
+          <!-- 技能标签 -->
+          <div class="skill-tags">
+            <el-tag v-for="s in strengthSkills" :key="s" size="small" class="skill-tag skill-tag--strong">{{ s }}</el-tag>
+            <el-tag v-for="s in weaknessSkills" :key="s" size="small" class="skill-tag skill-tag--weak">{{ s }}</el-tag>
+          </div>
         </div>
 
         <!-- ── Overview cards ── -->
@@ -58,45 +63,48 @@
           </el-col>
         </el-row>
 
-        <!-- ── Accuracy trend chart ── -->
-        <div class="chart-section">
+        <!-- ── Accuracy trend chart（仅在有数据时显示） ── -->
+        <div v-if="accuracyTrend.length > 1" class="chart-section">
           <h3 class="section-title">正确率趋势</h3>
           <div class="chart-container">
             <canvas ref="trendChartRef"></canvas>
           </div>
         </div>
 
-        <!-- ── Operator breakdown chart ── -->
-        <div class="chart-section">
+        <!-- ── Operator breakdown chart（仅在有数据时显示） ── -->
+        <div v-if="operatorBreakdown.length" class="chart-section">
           <h3 class="section-title">运算符正确率</h3>
           <div class="chart-container">
             <canvas ref="operatorChartRef"></canvas>
           </div>
         </div>
 
-        <!-- ── P2 阶段 14：数字弱项 / 强项 / 还行（孩子友好的简洁文案） ── -->
-        <!-- 修复 Bug 1: 增加 || midByNumber.length 让 section 在有 mid 时也显示 -->
+        <!-- ── P2 阶段 14：数字强弱项（左右布局，强项左弱项右） ── -->
         <div v-if="weaknessByNumber.length || strengthByNumber.length || midByNumber.length" class="weak-section">
-          <h3 class="section-title">你掌握得怎么 样</h3>
-          <StrengthV2Card
-            v-if="strengthByNumber.length"
-            :data="strengthByNumber"
-            :title="`🌟 你最拿手`"
-            :empty-text="''"
-            class="weak-section__v2-card"
-          />
-          <!-- 修复 Bug 1: 渲染中间档卡片 (🟢 还行) -->
+          <el-row :gutter="12">
+            <el-col :span="12">
+              <StrengthV2Card
+                v-if="strengthByNumber.length"
+                :data="strengthByNumber"
+                :title="`🌟 你最拿手`"
+                :empty-text="''"
+                class="weak-section__v2-card"
+              />
+            </el-col>
+            <el-col :span="12">
+              <WeaknessV2Card
+                v-if="weaknessByNumber.length"
+                :data="weaknessByNumber"
+                :title="`📒 多练习`"
+                :empty-text="''"
+                class="weak-section__v2-card"
+              />
+            </el-col>
+          </el-row>
           <MidV2Card
             v-if="midByNumber.length"
             :data="midByNumber"
             :title="`🟢 还行`"
-            :empty-text="''"
-            class="weak-section__v2-card"
-          />
-          <WeaknessV2Card
-            v-if="weaknessByNumber.length"
-            :data="weaknessByNumber"
-            :title="`📒 多练习`"
             :empty-text="''"
             class="weak-section__v2-card"
           />
@@ -230,7 +238,28 @@ const gameLevel = computed(() => {
   return { ...level, nextXP, progress }
 })
 
-// ── Charts ──
+// ── 技能标签（从 operatorStats 派生） ──
+const operatorLabels = { '+': '加法', '-': '减法', '*': '乘法', '÷': '除法' }
+
+/** 强项技能标签 e.g. '加法专精' */
+const strengthSkills = computed(() => {
+  const ops = aggregatedStats.value?.operatorStats
+  if (!ops) return []
+  return Object.entries(ops)
+    .filter(([, d]) => d.accuracy >= 0.9)
+    .sort(([, a], [, b]) => b.accuracy - a.accuracy)
+    .map(([op]) => `${operatorLabels[op] || op}专精`)
+})
+
+/** 弱项技能标签 e.g. '减法待提升' */
+const weaknessSkills = computed(() => {
+  const ops = aggregatedStats.value?.operatorStats
+  if (!ops) return []
+  return Object.entries(ops)
+    .filter(([, d]) => d.accuracy < 0.7)
+    .sort(([, a], [, b]) => a.accuracy - b.accuracy)
+    .map(([op]) => `${operatorLabels[op] || op}学徒`)
+})
 // V 层只传 canvas + 数据进 S 层 chartBuilder，Chart.js 生命周期不在此
 
 /** 建完图也跟踪实例（用于销毁） */
@@ -518,4 +547,8 @@ onBeforeUnmount(() => {
 .level-bar {
   height: 100%; border-radius: 5px; transition: width 0.5s ease;
 }
+.skill-tags { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 4px; }
+.skill-tag { border: none !important; }
+.skill-tag--strong { background: rgba(255,215,0,0.3) !important; color: #ffd700 !important; }
+.skill-tag--weak { background: rgba(180,180,180,0.25) !important; color: #ccc !important; }
 </style>
