@@ -3,7 +3,7 @@
 
 > **性质**: 基础架构文档(Architecture Constitution)  
 > **维护**: 项目组 / 所有 agent 必须遵守  
-> **版本**: v2.3 起点(2026-06-05)  
+> **版本**: v2.3 (2026-06-06)  
 > **作用**: 后续所有重构 / 新功能 / 修 bug 的**基础依据**. 违反本文档的 PR 需在描述中显式说明.  
 > **配套**: 执行计划见 [PLAN-v2-architecture-refactor.md](./PLAN-v2-architecture-refactor.md)
 
@@ -104,22 +104,21 @@ src/
 │  │                displayStrategy / equationCore / equationParser /
 │  │                EquationSolver / paperGenerator / psm
 │  ├ form/          formDefaults / formValidation
+│  ├ services/      analysis                   // 只读 query 服务层
 │  ├ store/         database / configStorage / persistedState
 │  ├ time/          timeFormat / timeConstants
 │  └ index.js
 │
 ├ services/                             ⭐ S 层(顶层,与 utils/components 同级)
-│  ├ analysis.js
-│  ├ sessionMetrics.js
 │  ├ chartBuilder.js
 │  ├ operatorMap.js
-│  ├ abilityProfile.js
 │  ├ __tests__/
 │  └ index.js
 │
 ├ composables/                          C 层
 │  ├ useAdaptiveSession.js
 │  ├ useAbilityAnalysis.js
+│  ├ useAbilityProfile.js
 │  ├ usePracticeSaver.js
 │  ├ usePracticeDialogs.js
 │  ├ useDisplayStrategy.js
@@ -274,5 +273,5 @@ src/
 
 - Vue 3 架构指南: https://cn.vuejs.org/guide/scaling-up/tooling.html
 - Pinia 风格指南: https://pinia.vuejs.org/cookbook/options-api.html
-- 现行服务层样板: `src/utils/services/analysis.js` (831 行, read-only query)
+- 现行服务层样板: `src/services/analysis.js` (read-only query)  
 - 现行 composable 样板: `src/composables/useAdaptiveSession.js` (98 行)

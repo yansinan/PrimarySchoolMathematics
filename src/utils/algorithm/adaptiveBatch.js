@@ -46,10 +46,10 @@ export function generateAdaptiveBatch(engine, count, plan) {
     let levelIdx
 
     if (slotType === 'strong') {
-      levelIdx = pickStrongLevel(engine.strongLevelIndices)
+      levelIdx = pickStrongLevel(engine.strongLevelIndices, engine.difficultyIdx)
       if (levelIdx == null) levelIdx = engine.difficultyIdx  // 兜底：用当前难度
     } else if (slotType === 'weak') {
-      levelIdx = pickWeakLevel(engine.weakLevelIndices)
+      levelIdx = pickWeakLevel(engine.weakLevelIndices, engine.difficultyIdx)
       if (levelIdx == null) levelIdx = engine.difficultyIdx  // 兜底
     } else {
       // challenge: 当前难度 + 1
@@ -68,10 +68,10 @@ export function generateAdaptiveBatch(engine, count, plan) {
     const type = ['strong', 'weak', 'challenge'][i % 3]
     let levelIdx
     if (type === 'strong') {
-      levelIdx = pickStrongLevel(engine.strongLevelIndices)
+      levelIdx = pickStrongLevel(engine.strongLevelIndices, engine.difficultyIdx)
       if (levelIdx == null) levelIdx = engine.difficultyIdx
     } else if (type === 'weak') {
-      levelIdx = pickWeakLevel(engine.weakLevelIndices)
+      levelIdx = pickWeakLevel(engine.weakLevelIndices, engine.difficultyIdx)
       if (levelIdx == null) levelIdx = engine.difficultyIdx
     } else {
       levelIdx = Math.min(engine.difficultyIdx + 1, DIFFICULTY_LEVELS.length - 1)

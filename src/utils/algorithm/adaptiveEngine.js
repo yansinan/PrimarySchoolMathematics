@@ -322,7 +322,8 @@ export function evaluateGroup(engine, groupAnswers) {
     next.consecutiveBad = 0
 
     if (!masteryActive && next.consecutiveGood >= CONSECUTIVE_GOOD_TO_ADVANCE && next.groupsAtThisLevel >= MIN_GROUPS_PER_DIMENSION) {
-      // P5 v2.3.0: assistLevel 方向修正（好→+1 减辅助, 差→-1 加辅助）
+      // P5 v2.3.0: assistLevel 方向（ASSIST_LEVELS: 0=choice2最易, 2=vertical最难）
+      // 好→assistLevel+1: 往更难方向(vertical), 减少辅助 ↓
       // 1) 先减少辅助（有辅助 → 往 harder 方向）
       if (engine.assistLevel < MAX_NORMAL_ASSIST_LEVEL) {
         next.assistLevel = engine.assistLevel + 1
@@ -357,8 +358,8 @@ export function evaluateGroup(engine, groupAnswers) {
     }
 
     if (next.consecutiveBad >= 2) {
-      // P5 v2.3.0: 差→assistLevel-1（增加辅助，往 easier 方向）
-      // 1) 先增加辅助
+      // P5 v2.3.0: 差→assistLevel-1（0=choice2最易+辅助最多, 2=vertical最难）
+      // 1) 先增加辅助（往 choice2 方向, 更易）
       if (engine.assistLevel > 0) {
         next.assistLevel = engine.assistLevel - 1
         next.blankMode = 'result'
@@ -573,26 +574,36 @@ function weightedRandom(items, weights) {
 
 /**
  * 强项选级：索引越高的 level 选中概率越大（挑战更强）
+ * 受 `currentDifficulty` 范围约束：只选 [current-1, current+2] 内的 level
  * @param {number[]} indices - DIFFICULTY_LEVELS 索引数组
+ * @param {number} currentDifficulty - 当前引擎难度索引
  * @returns {number} 选中的 DIFFICULTY_LEVELS 索引
  */
-export function pickStrongLevel(indices) {
+export function pickStrongLevel(indices, currentDifficulty) {
   if (!indices.length) return null
-  const n = indices.length
+  const constrained = indices.filter(i =>
+    i >= currentDifficulty - 1 && i <= currentDifficulty + 2)
+  if (!constrained.length) return currentDifficulty
+  const n = constrained.length
   const weights = Array.from({ length: n }, (_, i) => Math.pow(1.5, i))
-  return weightedRandom(indices, weights)
+  return weightedRandom(constrained, weights)
 }
 
 /**
  * 弱项选级：索引越低的 level 选中概率越大（从基础补起）
+ * 受 `currentDifficulty` 范围约束：只选 [current-2, current] 内的 level
  * @param {number[]} indices - DIFFICULTY_LEVELS 索引数组
+ * @param {number} currentDifficulty - 当前引擎难度索引
  * @returns {number} 选中的 DIFFICULTY_LEVELS 索引
  */
-export function pickWeakLevel(indices) {
+export function pickWeakLevel(indices, currentDifficulty) {
   if (!indices.length) return null
-  const n = indices.length
+  const constrained = indices.filter(i =>
+    i >= currentDifficulty - 2 && i <= currentDifficulty)
+  if (!constrained.length) return currentDifficulty
+  const n = constrained.length
   const weights = Array.from({ length: n }, (_, i) => Math.pow(1.5, n - 1 - i))
-  return weightedRandom(indices, weights)
+  return weightedRandom(constrained, weights)
 }
 
 /**
