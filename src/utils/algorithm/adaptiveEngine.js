@@ -15,6 +15,7 @@
 
 // P5 v2.3.0: generatePracticeConfig 不再被 adaptiveEngine 调用
 // import { generatePracticeConfig } from './diagnostic'
+import { getAnswerScore } from '../../score'
 import {
   ACCURACY_THRESHOLDS,
   SPEED_THRESHOLDS,
@@ -25,6 +26,8 @@ import {
   MIN_GROUPS_PER_DIMENSION,
   PROFILE_RATIOS,
   RESERVE_POOL_SIZE,
+  STRONG_THRESHOLD,
+  WEAK_THRESHOLD,
 } from '../../constants/practice'
 
 // ─── 精细难度分阶（16级，每步变化微小） ───
@@ -125,10 +128,10 @@ export function createAdaptiveEngine(profile, targetMin = 10, targetMax = 30) {
   // 不使用 profile.weakLevels/strongLevels（旧格式 L1-L5 ID）
   const diagGroups = groupAnswersByLevel(profile.diagAnswers || [])
   const strongLevelIndices = diagGroups
-    .filter(g => g.accuracy >= 0.95)
+    .filter(g => g.accuracy >= STRONG_THRESHOLD)
     .map(g => g.levelIdx)
   const weakLevelIndices = diagGroups
-    .filter(g => g.accuracy < 0.5)
+    .filter(g => g.accuracy < WEAK_THRESHOLD)
     .map(g => g.levelIdx)
 
   const startIdx = initialDifficulty(profile)
@@ -693,7 +696,7 @@ export function groupAnswersByLevel(answers) {
       map[key] = { levelIdx: key, label: match.label, total: 0, correct: 0 }
     }
     map[key].total++
-    if (a.isCorrect) map[key].correct++
+    if (getAnswerScore(a) >= 1) map[key].correct++
   }
   return Object.values(map).map((g) => ({
     ...g,

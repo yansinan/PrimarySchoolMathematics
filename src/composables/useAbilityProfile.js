@@ -2,12 +2,9 @@ import { computed, unref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { usePracticeStore } from '@/stores/practice'
 import { useAbilityAnalysis } from '@/composables/useAbilityAnalysis'
-import { DIFFICULTY_LEVELS } from '@/utils/algorithm/adaptiveEngine'
-import { matchLevel } from '@/utils/algorithm/adaptiveEngine'
+import { DIFFICULTY_LEVELS, matchLevel } from '@/utils/algorithm/adaptiveEngine'
 import { getAnswerScore, sumAnswerScores } from '@/utils/score'
-// 旧: 依赖 diagAnswers + DIAG_LEVELS 体系，改用 matchLevel 从任意 answers 派生
-// import { DIAG_LEVELS } from '@/utils/algorithm/diagnostic'
-// function evaluateLevelByScore(levelId, answers) { ... }
+import { STRONG_THRESHOLD, WEAK_THRESHOLD } from '@/constants/practice'
 
 function resolveSource(source, fallback) {
   return computed(() => {
@@ -73,11 +70,9 @@ export function useAbilityProfile(options = {}) {
     return Math.min(100, Math.max(0, (statsLevel.value / statsLevelTotal.value) * 100))
   })
 
-  // ── 判定阈值（可调参数，后续可挪到配置文件） ──
-/** 强项正确率下限：≥此值算强项 */
-const STRONG_THRESHOLD = 0.95
+  // ── 判定阈值（已迁移到 constants/practice.js: STRONG_THRESHOLD / WEAK_THRESHOLD） ──
 
-/**
+  /**
    * 强项等级：该档位所有题目的正确率 ≥ STRONG_THRESHOLD → 强项
    * 数据源：answers（已有答题数组），经 matchLevel 自动匹配档位
    * 答完一题即更新（响应式依赖 answers.value）
@@ -90,12 +85,12 @@ const STRONG_THRESHOLD = 0.95
   })
 
   /**
-   * 弱项等级：该档位存在任意错误 → 弱项
+   * 弱项等级：该档位正确率 < WEAK_THRESHOLD → 弱项
    */
   const weakLevels = computed(() => {
     const groups = _groupAnswersByLevel(answers.value)
     return groups
-      .filter((g) => g.accuracy < 1)
+      .filter((g) => g.accuracy < WEAK_THRESHOLD)
       .map((g) => g.label)
   })
 
