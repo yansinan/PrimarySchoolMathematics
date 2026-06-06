@@ -32,12 +32,8 @@
 
         <!-- ── 技能标签条（banner 下方独立一行） ── -->
         <div v-if="strengthSkills.length || weaknessSkills.length" class="skill-bar">
-          <el-tag v-for="s in strengthSkills" :key="'s-' + s" class="skill-tag skill-tag--strong" size="small" effect="dark">
-            {{ s }}
-          </el-tag>
-          <el-tag v-for="s in weaknessSkills" :key="'w-' + s" class="skill-tag skill-tag--weak" size="small" effect="plain">
-            {{ s }}
-          </el-tag>
+          <span v-for="s in strengthSkills" :key="'s-' + s" class="skill-tag skill-tag--strong">{{ s }}</span>
+          <span v-for="s in weaknessSkills" :key="'w-' + s" class="skill-tag skill-tag--weak">{{ s }}</span>
         </div>
 
         <!-- ── Overview cards ── -->
@@ -276,6 +272,9 @@ function rebuildCharts() {
   destroyChart(operatorChartInstance)
   trendChartInstance = buildTrendChart(trendChartRef.value, accuracyTrend)
   operatorChartInstance = buildOperatorChart(operatorChartRef.value, operatorBreakdown)
+  // 强制 resize（确保 canvas 有正确尺寸）
+  if (trendChartInstance) trendChartInstance.resize()
+  if (operatorChartInstance) operatorChartInstance.resize()
 }
 
 async function handleOpen() {
@@ -406,6 +405,12 @@ onBeforeUnmount(() => {
   padding: 12px;
   height: 180px;
   position: relative;
+  width: 100%;
+}
+.chart-container canvas {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 /* ── Session list ── */
