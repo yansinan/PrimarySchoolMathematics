@@ -268,6 +268,13 @@ const handleInput = (value) => {
   if (digit && layoutRef.value?.acceptDigit) {
     session.value.currentAnswer = layoutRef.value.acceptDigit(digit)
   }
+  // P5: keypad 模式输完正确答案后自动提交，无需再点"确认"
+  if (isKeypad() && currentQuestion.value) {
+    const numVal = Number(session.currentAnswer)
+    if (!isNaN(numVal) && numVal === currentQuestion.value.solution) {
+      handleSubmit(session.currentAnswer)
+    }
+  }
 }
 
 const handleBackspace = () => {
