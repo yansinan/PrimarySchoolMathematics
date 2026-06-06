@@ -157,16 +157,18 @@ import StrengthV2Card from '@/components/profile/StrengthV2Card.vue'
 import MidV2Card from '@/components/profile/MidV2Card.vue'
 import { useAbilityProfile } from '@/composables/useAbilityProfile'
 import { useStatsDrawer } from '@/composables/useStatsDrawer'
+// chartBuilder 抽离 Chart.js 实例管理（S 层）
 import { buildTrendChart, buildOperatorChart, destroyChart } from '@/services/chartBuilder'
 import SessionDetail from './SessionDetail.vue'
 
-// ── 统计抽屉数据 + 操作（ARCH 合规） ──
-// 顶层解构 → Vue 3 模板自动解包 ref（不用 .value）
+// ── 统计抽屉数据 + 操作（ARCH 合规：V 不经 C 层不直连 store） ──
+// 关键: 顶层解构 → Vue 3 模板自动解包 ref（不用 .value）
+// 坑: 若写成 const stats = useStatsDrawer(), 模板中 stats.xxx 是 Ref 对象不是值
 const {
   isDrawerOpen, toggleDrawer, loading, aggregatedStats,
   overallAccuracyPercent, sessions, accuracyTrend,
   operatorBreakdown, allAnswers,
-  openSessionDetail, refreshAll, loadAllAnswers,
+  openSessionDetail, refreshAll, loadAllAnswers, openDrawer,
   exportData, importData, formatDate, formatDuration
 } = useStatsDrawer()
 
@@ -204,12 +206,13 @@ function rebuildCharts() {
 }
 
 async function handleOpen() {
-  // 编排下沉到 composable.openDrawer
+  // 编排下沉到 composable.openDrawer（C 层，V 层不直接调 store）
   try {
     await openDrawer()
     await nextTick()
     rebuildCharts()
   } catch (err) {
+    // 捕获异步错误，避免 Vue 未处理事件处理器报黄
     console.error('[StatsDrawer] handleOpen failed:', err)
   }
 }
