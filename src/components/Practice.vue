@@ -68,7 +68,7 @@
       :icon="TrendCharts"
       size="large"
       circle
-      @click="statsStore.toggleDrawer()"
+      @click="dialogs.toggleStatsDrawer()"
     />
   </el-tooltip>
 
@@ -101,6 +101,7 @@ import OptionButtons from '@/components/input/OptionButtons.vue'
 import PracticeSummaryDialog from '@/components/dialog/PracticeSummaryDialog.vue'
 import SelfEvaluationDialog from '@/components/dialog/SelfEvaluationDialog.vue'
 import { useAnswerBuilder } from '@/composables/useAnswerBuilder'
+import { useSubmitHandler } from '@/composables/useSubmitHandler'
 import { useAdaptiveSession } from '@/composables/useAdaptiveSession'
 import { usePracticeDialogs } from '@/composables/usePracticeDialogs'
 import { usePracticeSaver } from '@/composables/usePracticeSaver'
@@ -149,6 +150,9 @@ const saver = usePracticeSaver()
 
 // ── 答题数据构造 composable（ARCH 合规：V 不直接 import U） ──
 const { buildAnswerMeta, buildScore } = useAnswerBuilder()
+
+// ── 答题提交处理 composable（ARCH 合规：V 层零业务规则） ──
+const { processAnswer } = useSubmitHandler({ practiceStore, saver })
 
 // ── 自适应会话 composable ──
 // 响应式状态：adaptiveEngine / adaptiveGroupIndex / groupAnswerOffset / nextLocked
@@ -282,136 +286,82 @@ const handleSelect = (option) => {
 }
 
 const handleSubmit = (answer) => {
-  const rawAnswer = String(session.value.currentAnswer || '').replace(/_/g, '')
-  const userAnswer = answer !== undefined ? answer : Number(rawAnswer)
+  const result = processAnswer({
+    answer,
+    currentQuestion: currentQuestion.value,
+    groupAnswerOffset: groupAnswerOffset.value,
+    currentIndex: currentIndex.value,
+    session: session.value,
+    endQuestionTimer: practiceStore.endQuestionTimer.bind(practiceStore),
+  })
 
-  if (isNaN(userAnswer)) {
+  if (result.feedbackType === 'invalid') {
     ElMessage.warning('请输入答案')
     return
   }
 
-  const isCorrect = userAnswer === currentQuestion.value.solution
-
-  // ── Timing & metadata ──
-  const responseTime = practiceStore.endQuestionTimer()
-
-  // Extract metadata from the equation
-  const { operator, isCarry, isBorrow, stepCount, operandMin, operandMax } = buildAnswerMeta(
-    currentQuestion.value.equation,
-    currentQuestion.value
-  )
-
-  // ── / metadata ──
-
-  // 按题号去重：如果已答过该题（重试），替换旧记录而非追加
-  // 注意：questionIndex = groupAnswerOffset + currentIndex（跨组全局唯一）
-  // 必须用 answerEntry.questionIndex 比较，不能用 currentIndex.value
-  // （后者只反映当前组内的题号，会跨组冲突导致后续题号累加失效）
-  const newQuestionIndex = groupAnswerOffset.value + currentIndex.value
-  const existingIdx = session.value.answers.findIndex(a => a.questionIndex === newQuestionIndex)
-  const previousAttemptCount = existingIdx >= 0 ? (session.value.answers[existingIdx].attemptCount || 1) : 0
-  const { attemptCount, score } = buildScore(previousAttemptCount, isCorrect)
-  const answerEntry = {
-    ...currentQuestion.value,
-    userAnswer,
-    isCorrect,
-    attemptCount,
-    score,
-    timestamp: Date.now(),
-    responseTime,
-    operator,
-    isCarry,
-    isBorrow,
-    stepCount,
-    operandMin,
-    operandMax,
-    questionIndex: newQuestionIndex
-  }
-  if (existingIdx >= 0) {
-    session.value.answers[existingIdx] = answerEntry
-  } else {
-    session.value.answers.push(answerEntry)
-  }
-
-  // ── 每道题立即写入数据库（fire-and-forget）──
-  // answerEntry 已在 session 中按 questionIndex 去重，
-  // 多次写入同一题会自动覆盖，统计时以最新为准
-  saver.savePerQuestion()
-
-  if (isCorrect) {
-    session.value.streak++
+  if (result.isCorrect) {
     session.value.feedbackType = 'correct'
     updateStats(true)
     ElMessage.success({
       message: '✓ 正确！',
       duration: FEEDBACK_DELAYS.correct,
       offset: 100,
-      customClass: 'feedback-message'
+      customClass: 'feedback-message',
     })
-
-    setTimeout(() => {
-      handleNext()
-    }, FEEDBACK_DELAYS.correct)
-  } else {
-    session.value.streak = 0
-    session.value.feedbackType = 'wrong'
-    ElMessage.error({
-      message: `✗ 正确答案是 ${currentQuestion.value.solution}`,
-      duration: FEEDBACK_DELAYS.wrong,
-      offset: 100,
-      customClass: 'feedback-message'
-    })
-
-    // 评估模式下连续错 N 次 → 提前结束评估
-    updateStats(isCorrect)
-    const shouldAbortAssessment = isAssessment.value && displayStats.value.consecutiveWrong >= ASSESSMENT_ABORT_WRONG_STREAK
-
-    // ── 错题重试上限 (PR-fix-7.1 新增) ──
-    // attemptCount 已经在 answerEntry 中更新 (见 L318-325)。
-    // 如果 attemptCount >= MAX_ATTEMPT_PER_QUESTION + 1 = 4, 强制跳下一题。
-    // (注意: buildAttemptScore 的 score 公式 attemptCount=4+ 已为 0, 语义一致)
-    if (attemptCount >= MAX_ATTEMPT_PER_QUESTION + 1) {
-      ElMessage.warning({
-        message: `本题已重试 ${MAX_ATTEMPT_PER_QUESTION} 次, 跳过`,
-        duration: FEEDBACK_DELAYS.wrong,
-        offset: 100,
-        customClass: 'feedback-message'
-      })
-      setTimeout(() => {
-        session.value.feedbackType = null
-        session.value.currentAnswer = ''
-        digitFocusIdx.value = -1
-        handleNext()  // 强制跳下一题
-      }, FEEDBACK_DELAYS.wrong)
-      return
-    }
-
-    if (shouldAbortAssessment) {
-      const nextFn = () => {
-        session.value.feedbackType = null
-        session.value.currentAnswer = ''
-        digitFocusIdx.value = -1
-        completeAssessment()
-      }
-
-      if (session.value.displayMode.input === 'keypad') {
-        setTimeout(nextFn, FEEDBACK_DELAYS.assessmentAbort)
-      } else {
-        setTimeout(nextFn, FEEDBACK_DELAYS.assessmentAbort)
-      }
-    } else {
-      setTimeout(() => {
-        if (session.value.displayMode.input === 'keypad') {
-          session.value.feedbackType = null
-          session.value.currentAnswer = ''
-          digitFocusIdx.value = -1
-        }
-      }, FEEDBACK_DELAYS.wrong)
-    }
-    return // skip the extra displayStats update call below
+    setTimeout(() => handleNext(), FEEDBACK_DELAYS.correct)
+    return
   }
 
-  // (isCorrect path also falls through — already handled above)
+  // ── 答错 ──
+  session.value.feedbackType = 'wrong'
+  ElMessage.error({
+    message: `✗ 正确答案是 ${currentQuestion.value.solution}`,
+    duration: FEEDBACK_DELAYS.wrong,
+    offset: 100,
+    customClass: 'feedback-message',
+  })
+  updateStats(false)
+
+  // 评估模式下连续错 N 次 → 提前结束评估
+  const shouldAbortAssessment = isAssessment.value && displayStats.value.consecutiveWrong >= ASSESSMENT_ABORT_WRONG_STREAK
+
+  // 错题重试上限
+  if (result.attemptCount >= MAX_ATTEMPT_PER_QUESTION + 1) {
+    ElMessage.warning({
+      message: `本题已重试 ${MAX_ATTEMPT_PER_QUESTION} 次, 跳过`,
+      duration: FEEDBACK_DELAYS.wrong,
+      offset: 100,
+      customClass: 'feedback-message',
+    })
+    setTimeout(() => {
+      session.value.feedbackType = null
+      session.value.currentAnswer = ''
+      handleNext()
+    }, FEEDBACK_DELAYS.wrong)
+    return
+  }
+
+  if (shouldAbortAssessment) {
+    setTimeout(() => {
+      session.value.feedbackType = null
+      session.value.currentAnswer = ''
+      completeAssessment()
+    }, FEEDBACK_DELAYS.assessmentAbort)
+    return
+  }
+
+  if (session.value.displayMode.input === 'keypad') {
+    setTimeout(() => {
+      session.value.feedbackType = null
+      session.value.currentAnswer = ''
+    }, FEEDBACK_DELAYS.wrong)
+  } else {
+    setTimeout(() => {
+      session.value.feedbackType = null
+      session.value.currentAnswer = ''
+    }, FEEDBACK_DELAYS.wrong)
+  }
 }
 
 const handleNext = () => {

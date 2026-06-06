@@ -14,6 +14,7 @@
  */
 
 import { ref } from 'vue'
+import { useStatsStore } from '@/stores/stats'
 
 export function usePracticeDialogs() {
   // ── PracticeSummaryDialog 状态 ──
@@ -107,6 +108,14 @@ export function usePracticeDialogs() {
     evalVisible.value = false
   }
 
+  /**
+   * 切换统计抽屉（ARCH 合规：V 不直接调 store mutation，经 C 层委托）
+   */
+  function toggleStatsDrawer() {
+    const statsStore = useStatsStore()
+    statsStore.toggleDrawer()
+  }
+
   return {
     // 汇总弹窗
     summaryVisible,
@@ -118,5 +127,7 @@ export function usePracticeDialogs() {
     evalProps,
     showSelfEvaluationDialog,
     onEvalSelect,
+    // 统计抽屉（ARCH 合规委托）
+    toggleStatsDrawer,
   }
 }
