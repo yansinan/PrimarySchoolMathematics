@@ -199,7 +199,7 @@ const profile = useAbilityProfile({
   answers: computed(() => allAnswers)
 })
 // 修复 Bug 1: 解构加 midByNumber, 让模板可访问中间档数据
-const { weaknessByNumber, strengthByNumber, midByNumber } = profile
+const { weaknessByNumber, strengthByNumber, midByNumber, strongLevels, weakLevels } = profile
 
 const trendChartRef = ref(null)
 const operatorChartRef = ref(null)
@@ -239,27 +239,17 @@ const gameLevel = computed(() => {
   return { ...level, nextXP, progress }
 })
 
-// ── 技能标签（从 operatorStats 派生） ──
-const operatorLabels = { '+': '加法', '-': '减法', '*': '乘法', '÷': '除法' }
-
-/** 强项技能标签 e.g. '加法专精' */
+// ── 技能标签（从 strongLevels/weakLevels 等级强弱项派生） ──
+/** 强项技能标签 e.g. '混合进退位① · 专精' */
 const strengthSkills = computed(() => {
-  const ops = aggregatedStats.value?.operatorStats
-  if (!ops) return []
-  return Object.entries(ops)
-    .filter(([, d]) => d.accuracy >= 0.9)
-    .sort(([, a], [, b]) => b.accuracy - a.accuracy)
-    .map(([op]) => `${operatorLabels[op] || op}专精`)
+  const labels = strongLevels?.value || []
+  return labels.map(l => `${l} · 专精`)
 })
 
-/** 弱项技能标签 e.g. '减法待提升' */
+/** 弱项技能标签 e.g. '进退位入门 · 待提升' */
 const weaknessSkills = computed(() => {
-  const ops = aggregatedStats.value?.operatorStats
-  if (!ops) return []
-  return Object.entries(ops)
-    .filter(([, d]) => d.accuracy < 0.7)
-    .sort(([, a], [, b]) => a.accuracy - b.accuracy)
-    .map(([op]) => `${operatorLabels[op] || op}学徒`)
+  const labels = weakLevels?.value || []
+  return labels.map(l => `${l} · 待提升`)
 })
 // V 层只传 canvas + 数据进 S 层 chartBuilder，Chart.js 生命周期不在此
 
