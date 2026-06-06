@@ -284,29 +284,47 @@ const operatorSkills = computed(() => {
 let trendChartInstance = null
 let operatorChartInstance = null
 
+/** 在创建 Chart.js 前设置 canvas 实际尺寸，避免 stuck 在 300×150 默认值 */
+function initCanvasSize(canvas) {
+  if (!canvas || !canvas.parentElement) return
+  const parentW = canvas.parentElement.clientWidth
+  const parentH = canvas.parentElement.clientHeight
+  if (parentW > 0) canvas.width = parentW * (window.devicePixelRatio || 1)
+  if (parentH > 0) canvas.height = parentH * (window.devicePixelRatio || 1)
+  canvas.style.width = parentW + 'px'
+  canvas.style.height = parentH + 'px'
+}
+
 function rebuildCharts() {
   destroyChart(trendChartInstance)
   destroyChart(operatorChartInstance)
   const tc = trendChartRef.value
   const oc = operatorChartRef.value
+  // P5 fix: accuracyTrend/operatorBreakdown 是 ComputedRef，传 .value 取实际数据
+  const trendData = accuracyTrend?.value || accuracyTrend || []
+  const opData = operatorBreakdown?.value || operatorBreakdown || []
   // 确保 canvas 在 DOM 中且有尺寸
   if (tc && tc.parentElement && tc.parentElement.clientWidth > 0) {
-    trendChartInstance = buildTrendChart(tc, accuracyTrend)
+    initCanvasSize(tc)
+    trendChartInstance = buildTrendChart(tc, trendData)
     if (trendChartInstance) trendChartInstance.resize()
   }
   if (oc && oc.parentElement && oc.parentElement.clientWidth > 0) {
-    operatorChartInstance = buildOperatorChart(oc, operatorBreakdown)
+    initCanvasSize(oc)
+    operatorChartInstance = buildOperatorChart(oc, opData)
     if (operatorChartInstance) operatorChartInstance.resize()
   }
   // 若 canvas 尺寸不对，延迟重试（抽屉动画可能还未完全结束）
   if (!trendChartInstance || !operatorChartInstance) {
     setTimeout(() => {
       if (!trendChartInstance && tc?.parentElement?.clientWidth > 0) {
-        trendChartInstance = buildTrendChart(tc, accuracyTrend)
+        initCanvasSize(tc)
+        trendChartInstance = buildTrendChart(tc, trendData)
         if (trendChartInstance) trendChartInstance.resize()
       }
       if (!operatorChartInstance && oc?.parentElement?.clientWidth > 0) {
-        operatorChartInstance = buildOperatorChart(oc, operatorBreakdown)
+        initCanvasSize(oc)
+        operatorChartInstance = buildOperatorChart(oc, opData)
         if (operatorChartInstance) operatorChartInstance.resize()
       }
     }, 500)
