@@ -708,7 +708,9 @@ export function groupAnswersByLevel(answers) {
       map[key] = { levelIdx: key, label: match.label, total: 0, correct: 0 }
     }
     map[key].total++
-    if (getAnswerScore(a) >= 1) map[key].correct++
+    // P5 v2.3.0：用 a.isCorrect 替代 getAnswerScore>=1（retry 衰减后得分 2/3 1/3
+    // 不等于 1，会被排除，导致准确率永远是 0）
+    if (a.isCorrect) map[key].correct++
   }
   return Object.values(map).map((g) => ({
     ...g,
