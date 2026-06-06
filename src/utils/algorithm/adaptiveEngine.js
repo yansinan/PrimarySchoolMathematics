@@ -726,12 +726,13 @@ export function adjustNextQuestion(engine, roundAnswers, nextIdx, listPractices,
     const nextMatch = nextQ ? matchLevel(nextQ) : null
     const nextLevelIdx = nextMatch ? nextMatch.levelIdx : -1
 
-    // 检查是否在 strong/weak 范围内（挑战题直接保留）
+    // 检查是否在 strong/weak 范围内（挑战题和当前难度题直接保留）
     const inStrong = engine.strongLevelIndices.includes(nextLevelIdx)
     const inWeak = engine.weakLevelIndices.includes(nextLevelIdx)
     const isChallenge = nextLevelIdx === engine.difficultyIdx + 1
+    const isCurrent = nextLevelIdx === engine.difficultyIdx
 
-    if (!inStrong && !inWeak && !isChallenge) {
+    if (!inStrong && !inWeak && !isChallenge && !isCurrent) {
       // 不匹配任何已知类型 → 从池中换一道
       const poolQ = engine.reservePool.pop()
       if (poolQ) {

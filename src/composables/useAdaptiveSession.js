@@ -257,7 +257,7 @@ export function useAdaptiveSession(options = {}) {
     if (result.done || forceDone) {
       // ── 全部完成 → 弹汇总弹窗 ──
       const finalAnswers = practiceStore.adaptiveAnswers
-      const totalCorrect = sumAnswerScores(finalAnswers)
+      const totalCorrect = Math.round(sumAnswerScores(finalAnswers))
       const totalTime = finalAnswers.reduce((s, a) => s + (a.responseTime || 0), 0)
       const totalRate = Math.round((totalCorrect / finalAnswers.length) * 100)
       const { emoji, comment, color: rateColor2 } = getCommentByRate(totalRate)
