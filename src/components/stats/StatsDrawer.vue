@@ -164,7 +164,14 @@ import SessionDetail from './SessionDetail.vue'
 Chart.register(...registerables)
 
 const statsStore = useStatsStore()
-const profile = useAbilityProfile()
+// P2 阶段 14: useAbilityProfile 传 options.answers = 全量历史
+// 之前 useAbilityProfile() 无参, 默认用本轮 adaptiveAnswers
+// → "你掌握得怎么样" 只显示本轮数字掌握度
+// 现在传 statsStore.allAnswers (db.answers 全量历史)
+// → 显示孩子长期掌握度 (符合 StatsDrawer 应展示全量历史的语义)
+const profile = useAbilityProfile({
+  answers: computed(() => statsStore.allAnswers)
+})
 // 修复 Bug 1: 解构加 midByNumber, 让模板可访问中间档数据
 const { analysis, weaknessByNumber, strengthByNumber, midByNumber } = profile
 
@@ -305,7 +312,14 @@ function buildOperatorChart() {
 }
 
 async function handleOpen() {
-  await statsStore.refreshAll()
+  // P2 阶段 14: 抽屉打开时加载全量历史答案
+  // - 放到 Promise.all 并发, 与 sessions/aggregatedStats 一起加载
+  // - 加载完后 useAbilityProfile({ answers: statsStore.allAnswers })
+  //   自动响应, 模板实时显示历史掌握度
+  await Promise.all([
+    statsStore.refreshAll(),
+    statsStore.loadAllAnswers()
+  ])
   await analysis.refreshMastery()
   await nextTick()
   buildTrendChart()

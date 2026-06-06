@@ -5,7 +5,10 @@ import {
   getAggregatedStats,
   deleteSession,
   exportAllData,
-  importAllData
+  importAllData,
+  // P2 阶段 14: StatsDrawer 需要全量历史答案, 改走 database 层
+  // (M 层可引 D 层 — database.js 是数据层, 合规)
+  getAllAnswers
 } from '@/utils/database'
 
 /**
@@ -19,6 +22,11 @@ export const useStatsStore = defineStore('stats', {
     sessions: [],
     selectedSession: null,
     aggregatedStats: null,
+    // P2 阶段 14: 全量历史答案缓存
+    // - 由 StatsDrawer 打开时触发 loadAllAnswers() 填充
+    // - 供 useAbilityProfile(options.answers) 用, 让"你掌握得怎么样"显示
+    //   所有答题历史而非仅本轮 adaptiveAnswers
+    allAnswers: [],
     drawerVisible: false,
     loading: false
   }),
@@ -103,6 +111,27 @@ export const useStatsStore = defineStore('stats', {
 
     closeDrawer() {
       this.drawerVisible = false
+    },
+
+    /**
+     * P2 阶段 14: 加载全量历史答案 (从 db.answers 全表读)
+     * - 用于 StatsDrawer 打开时一次性拉取所有答题历史
+     * - 内部通过 getAllAnswers(studentId) 走 database 层
+     *   (database.js 已 join practiceSessions 过滤 studentId)
+     * - V→S→D 链合规: V 不直连 D
+     *
+     * @param {string} studentId
+     */
+    async loadAllAnswers(studentId = 'default') {
+      this.loading = true
+      try {
+        this.allAnswers = await getAllAnswers(studentId)
+      } catch (err) {
+        console.error('[StatsStore] Failed to load all answers:', err)
+        // 失败保持上次缓存, 不清空
+      } finally {
+        this.loading = false
+      }
     },
 
     /**
