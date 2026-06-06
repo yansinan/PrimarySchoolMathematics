@@ -46,22 +46,8 @@
       <div class="summary-footer">继续加油，每天进步一点点 ✨</div>
     </div>
 
-    <!-- 全部数据通过 Props 传给 AbilityCard（避免 template 对嵌套 ref 的解包问题） -->
-    <AbilityCard
-      :stats-total="totalAnswers"
-      :stats-correct="correctAnswers"
-      :stats-strong="strongLevels"
-      :stats-weak="weakLevels"
-      :stats-level="totalAnswers > 0 ? levelCurrentDisplay : 0"
-      :stats-level-total="statsLevelTotal"
-      :stats-level-label="currentLevelLabel"
-      :stats-mastery-by-number="masteryByNumber"
-      :stats-weakness-v2="profile.weaknessV2Flat.value"
-      :stats-strength-v2="profile.strengthV2Flat.value"
-      :stats-wrong-priority="wrongPriorityList"
-      :stats-weakness-by-number="weaknessByNumber"
-      :stats-strength-by-number="strengthByNumber"
-    />
+    <!-- AbilityCard 内部通过 useAbilityProfile() 自取数据，dialog 不再透传 12 个 props -->
+    <AbilityCard />
 
     <template #footer>
       <el-button @click="handleSelect('cancel')">{{ cancelText }}</el-button>
@@ -105,23 +91,13 @@ const props = defineProps({
   cancelText: { type: String, default: '🏠 首页' },
 })
 
-// ── 从 composable 读取能力画像数据（V→C，业务编排下沉到 C 层） ──
+// ── 从 composable 读取 dialog 自己用到的数据（V→C，业务编排下沉到 C 层） ──
+// 能力画像的所有展示数据都由 <AbilityCard /> 内部自取，
+// dialog 这里只保留：① 模板用的 strengthEncouragement ② 弹窗打开时的一键刷新
 const profile = useAbilityProfile()
 const {
-  strongLevels,
-  weakLevels,
-  levelCurrentDisplay,
-  currentLevelLabel,
-  masteryByNumber,
-  weaknessByNumber,
-  strengthByNumber,
-  wrongPriorityList,
-  statsLevelTotal,
-  // 新增：V 模板不用 .value（顶层包成 computed）
-  weaknessV2Flat,
-  strengthV2Flat,
-  // 新增：弹窗打开时一键刷新（业务编排下沉到 C 层）
-  refreshForSummary,
+  strengthEncouragement,  // 鼓励文案（顶部绿色 tag）
+  refreshForSummary,      // 弹窗打开时一键刷新（业务编排下沉到 C 层）
 } = profile
 
 // ── 弹窗打开时才触发查询，避免常驻计算 + 页面污染 ──

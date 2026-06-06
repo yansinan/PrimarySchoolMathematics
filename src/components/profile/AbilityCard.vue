@@ -45,15 +45,15 @@
     </div>
 
     <div v-if="!compact" class="ability-card__row ability-card__row--tags">
-      <div v-if="statsStrong.length" class="ability-card__tags ability-card__tags--strong">
+      <div v-if="strongLevels.length" class="ability-card__tags ability-card__tags--strong">
         <span class="ability-card__tags-label">✓ 强项：</span>
-        <span v-for="lv in statsStrong" :key="lv" class="ability-card__tag">{{ lv }}</span>
+        <span v-for="lv in strongLevels" :key="lv" class="ability-card__tag">{{ lv }}</span>
       </div>
-      <div v-if="statsWeak.length" class="ability-card__tags ability-card__tags--weak">
+      <div v-if="weakLevels.length" class="ability-card__tags ability-card__tags--weak">
         <span class="ability-card__tags-label">⚠ 薄弱：</span>
-        <span v-for="lv in statsWeak" :key="lv" class="ability-card__tag">{{ lv }}</span>
+        <span v-for="lv in weakLevels" :key="lv" class="ability-card__tag">{{ lv }}</span>
       </div>
-      <div v-if="!statsStrong.length && !statsWeak.length" class="ability-card__tags ability-card__tags--empty">
+      <div v-if="!strongLevels.length && !weakLevels.length" class="ability-card__tags ability-card__tags--empty">
         <span class="ability-card__tags-label">完成诊断后这里会显示你的强项/薄弱</span>
       </div>
     </div>
@@ -82,9 +82,9 @@
     </div>
 
     <!-- ── P2 阶段 14：弱项 v2 top 3（孩子友好的简洁文案） ── -->
-    <div v-if="!compact && statsWeaknessByNumber.length" class="ability-card__row ability-card__row--v2-weak">
+    <div v-if="!compact && weaknessByNumber.length" class="ability-card__row ability-card__row--v2-weak">
       <WeaknessV2Card
-        :data="statsWeaknessByNumber"
+        :data="weaknessByNumber"
         :limit="3"
         :title="`📒 多练习`"
         :empty-text="''"
@@ -92,9 +92,9 @@
     </div>
 
     <!-- ── P2 阶段 14：强项 v2 top 3（孩子友好的简洁文案） ── -->
-    <div v-if="!compact && statsStrengthByNumber.length" class="ability-card__row ability-card__row--v2-strong">
+    <div v-if="!compact && strengthByNumber.length" class="ability-card__row ability-card__row--v2-strong">
       <StrengthV2Card
-        :data="statsStrengthByNumber"
+        :data="strengthByNumber"
         :limit="3"
         :title="`🌟 你最拿手`"
         :empty-text="''"
@@ -102,11 +102,11 @@
     </div>
 
     <!-- 错题优先级 top 5：按 priority 降序 + 改正状态 -->
-    <div v-if="!compact && statsWrongPriority.length" class="ability-card__row ability-card__row--wrong-priority">
+    <div v-if="!compact && wrongPriorityList.length" class="ability-card__row ability-card__row--wrong-priority">
       <div class="ability-card__wrong-label">📌 需重点关注（前 5）</div>
       <ol class="ability-card__wrong-list">
         <li
-          v-for="(item, idx) in statsWrongPriority.slice(0, priorityLimit)"
+          v-for="(item, idx) in wrongPriorityList.slice(0, priorityLimit)"
           :key="item.questionId"
           class="ability-card__wrong-item"
           :class="{ 'ability-card__wrong-item--resolved': item.isResolved }"
@@ -125,67 +125,50 @@
 </template>
 
 <script setup>
+/**
+ * AbilityCard.vue
+ * 用户能力画像展示卡片
+ *
+ * 数据源：内部 useAbilityProfile() composable
+ *   - 不再接收 12 个 legacy props（arch-v2.3-5.4 清理）
+ *   - 模板里的所有 ref 全部从 profile 解构
+ *   - 上层（PracticeSummaryDialog 等）只控制 visible，不再喂数据
+ *
+ * 架构层级：V (本组件) → C (useAbilityProfile) → S (store) / D (database)
+ * 约束：V 不直接 import S / D，跨层通过 composable
+ */
 import WeaknessV2Card from './WeaknessV2Card.vue'
 import StrengthV2Card from './StrengthV2Card.vue'
 import { useAbilityProfile } from '@/composables/useAbilityProfile'
 
-// 保留 props 定义(向后兼容: PracticeSummaryDialog 仍在传值, 下轮清理)
-// arch-v2.3-5.4: 内部不再用 props 喂 composable, 改为无参 useAbilityProfile()
-// 由 composable 内部从 store + analysis 取默认数据源
-const props = defineProps({
-  compact:         { type: Boolean,   default: false },
-  statsTotal:      { type: Number,    default: 0 },
-  statsCorrect:    { type: Number,    default: 0 },
-  statsStrong:     { type: Array,     default: () => [] },
-  statsWeak:       { type: Array,     default: () => [] },
-  statsLevel:      { type: Number,    default: 0 },
-  statsLevelTotal: { type: Number,    default: 12 },
-  statsLevelLabel: { type: String,    default: '' },
-  // ── 以下 4 个 props 为 P2 阶段 7 扩展（向后兼容：v2.0 不渲染，仅扩展 props 列表）
-  // ── 数据来源：useAbilityAnalysis composable（阶段 8 由 saver 触发，阶段 9+ 接入 UI）
-  /**
-   * 数字 0-9 掌握度（聚合 accuracy，值域 0-1）
-   * 来源：useAbilityAnalysis.masteryByNumber
-   * 形状示例：{ 0: 0.85, 1: 0.6, ..., 9: 0.7 }
-   * @type {Object<number, number>}
-   */
-  statsMasteryByNumber: { type: Object,  default: () => ({}) },
-  /**
-   * 错题优先级列表（limit=20，按优先级排序）
-   * 来源：useAbilityAnalysis.wrongAnswersPriority
-   * 元素形状：{ questionId, equation, priority, lastWrong, ... }
-   * @type {Array<Object>}
-   */
-  statsWrongPriority:   { type: Array,   default: () => [] },
-  // ── P2 阶段 11：弱项 v2 / 强项 v2（单数字聚合） ──
-  /**
-   * 弱项 v2 数字列表（accuracy < 0.7）
-   * 来源：useAbilityAnalysis.weaknessByNumber
-   * 形状：[{ number, accuracy, total, correct, questionsCount }, ...]
-   * @type {Array<Object>}
-   */
-  statsWeaknessByNumber: { type: Array, default: () => [] },
-  /**
-   * 强项 v2 数字列表（accuracy >= 0.8 且 total >= 3）
-   * 来源：useAbilityAnalysis.strengthByNumber
-   * 形状：[{ number, accuracy, total, correct, questionsCount }, ...]
-   * @type {Array<Object>}
-   */
-  statsStrengthByNumber: { type: Array, default: () => [] },
-})
-
-// 走 composable 默认 fallback (从 store + analysis 自取), 不再透传 12 个 props
+// 无参调用：composable 内部从 store + analysis 取默认数据源
 const profile = useAbilityProfile()
 
+// 完整解构：覆盖模板用到的所有 ref（ref 在模板中自动解包，无需 .value）
 const {
-  hasData,
-  displayAccuracy,
-  accuracyClass,
-  progressPercent,
+  // 顶层数据
+  totalAnswers,        // 答题总数（来自 statsTotal）
+  scoreSum,            // 正确分合计（来自 statsCorrect）
+  hasData,             // 是否有答题数据
+  displayAccuracy,     // 0-1 准确率
+  accuracyClass,       // 准确率等级 class
+  // 等级相关
+  levelCurrentDisplay, // 当前等级数字（1-based）
+  currentLevelLabel,   // 当前等级文案
+  progressPercent,     // 等级进度条百分比
+  statsLevelTotal,     // 等级总数（DIFFICULTY_LEVELS.length）
+  // 强项 / 弱项（按 level 维度）
+  strongLevels,        // 强项等级 label 列表
+  weakLevels,          // 薄弱等级 label 列表
+  // 数字掌握度（按 number 维度）
   hasMasteryData,
   masteryPercent,
   masteryCellClass,
-  priorityLimit,  // 🆕 新增: 错题优先级截取上限（fallback 5, 见 useAbilityProfile L55）
+  // v2 弱项 / 强项 / 错题
+  weaknessByNumber,    // 弱项 v2 数字列表
+  strengthByNumber,    // 强项 v2 数字列表
+  wrongPriorityList,   // 错题优先级列表
+  priorityLimit,       // 错题优先级截取上限（fallback 5）
 } = profile
 </script>
 
