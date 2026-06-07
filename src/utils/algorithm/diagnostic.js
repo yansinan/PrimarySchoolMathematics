@@ -172,7 +172,7 @@ export function analyzeAbility(answers) {
     const data = byLevel[level.id] || { correct: 0, total: 0 }
     const acc = data.total > 0 ? data.correct / data.total : 0
     levelScores[level.id] = { ...data, accuracy: acc }
-    if (acc < WEAK_THRESHOLD) weakLevels.push(level.id)
+    if (data.total > 0 && acc < WEAK_THRESHOLD) weakLevels.push(level.id)
   }
 
   // 无一等级低于阈值即为全部达标

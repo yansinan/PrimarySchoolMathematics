@@ -161,9 +161,9 @@ export function useAdaptiveSession(options = {}) {
    * @returns {Promise<void>}
    */
   async function completeAssessment() {
-    const answers = session.value.answers
-    const profile = analyzeAbility(answers)
-    const answeredCount = answers.length
+    const snapshot = [...session.value.answers]  // 立即快照，防异步竞态导致漏存
+    const answeredCount = snapshot.length
+    const profile = analyzeAbility(snapshot)
 
     ElMessage({
       message: `📊 评估完成！共 ${answeredCount} 题，正确 ${correctCount.value} 题`,
@@ -216,7 +216,8 @@ export function useAdaptiveSession(options = {}) {
   async function completeGroup() {
     const allAnswers = [...session.value.answers]
     const engine = adaptiveEngine.value
-    const size = getGroupSize(engine)
+    // 用持久化的 lastGroupSize，不重新调 getGroupSize（防随机抖动导致切片错位）
+    const size = engine.lastGroupSize || getGroupSize(engine)
     const groupAnswers = allAnswers.slice(-size)
     const groupCorrect = groupAnswers.filter(a => a.isCorrect).length
     const groupTime = groupAnswers.reduce((s, a) => s + (a.responseTime || 0), 0)

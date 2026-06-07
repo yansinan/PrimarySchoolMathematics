@@ -160,6 +160,7 @@ export function createAdaptiveEngine(profile, targetMin = 10, targetMax = 30) {
     },
     lastGroupResult: null,  // 最后生成的组摘要
     lastEvaluation: null,   // 用户自评 1-5
+    lastGroupSize: 0,       // 上一组实际生成的题数（getGroupSize 持久化，防切片错位）
     history: [],
     /** 最小基线配置（出课题型配置由 DIFFICULTY_LEVELS + plan 驱动） */
     baseConfig: {
@@ -193,7 +194,9 @@ export function getGroupSize(engine) {
   const x = engine.groupSizeIdx || 0
   const base = 2 + 4 * x
   const jitter = Math.floor(Math.random() * 5) - 2  // -2 ~ +2
-  return Math.max(4, base + jitter * 2)  // jitter*2 使波动幅度为 ±4
+  const size = Math.max(4, base + jitter * 2)  // jitter*2 使波动幅度为 ±4
+  engine.lastGroupSize = size  // 持久化到引擎，completeGroup 用此值切片
+  return size
 }
 
 /**
@@ -577,36 +580,32 @@ function weightedRandom(items, weights) {
 
 /**
  * 强项选级：索引越高的 level 选中概率越大（挑战更强）
- * 受 `currentDifficulty` 范围约束：只选 [current-1, current+3] 内的 level
+ * 不设硬窗口，所有强项等级参与，权重偏高处
  * @param {number[]} indices - DIFFICULTY_LEVELS 索引数组
  * @param {number} currentDifficulty - 当前引擎难度索引
  * @returns {number} 选中的 DIFFICULTY_LEVELS 索引
  */
 export function pickStrongLevel(indices, currentDifficulty) {
   if (!indices.length) return null
-  const constrained = indices.filter(i =>
-    i >= currentDifficulty - 1 && i <= currentDifficulty + 3)
-  if (!constrained.length) return currentDifficulty
-  const n = constrained.length
+  // 全量参与，权重向高索引偏斜
+  const n = indices.length
   const weights = Array.from({ length: n }, (_, i) => Math.pow(1.5, i))
-  return weightedRandom(constrained, weights)
+  return weightedRandom(indices, weights)
 }
 
 /**
  * 弱项选级：索引越低的 level 选中概率越大（从基础补起）
- * 受 `currentDifficulty` 范围约束：只选 [current-2, current] 内的 level
+ * 不设硬窗口，所有弱项等级参与，权重偏低处
  * @param {number[]} indices - DIFFICULTY_LEVELS 索引数组
  * @param {number} currentDifficulty - 当前引擎难度索引
  * @returns {number} 选中的 DIFFICULTY_LEVELS 索引
  */
 export function pickWeakLevel(indices, currentDifficulty) {
   if (!indices.length) return null
-  const constrained = indices.filter(i =>
-    i >= currentDifficulty - 2 && i <= currentDifficulty)
-  if (!constrained.length) return currentDifficulty
-  const n = constrained.length
+  // 全量参与，权重向低索引偏斜
+  const n = indices.length
   const weights = Array.from({ length: n }, (_, i) => Math.pow(1.5, n - 1 - i))
-  return weightedRandom(constrained, weights)
+  return weightedRandom(indices, weights)
 }
 
 /**

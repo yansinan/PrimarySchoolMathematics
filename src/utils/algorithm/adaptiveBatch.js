@@ -113,7 +113,7 @@ function generateOneQuestion(levelIdx, engine, seen, type) {
 
   const paperList = [{
     step: config.step,
-    numberOfFormulas: 3,  // 一次生成多道，直到找到一道可用
+    numberOfFormulas: 8,  // 一次生成多道，直到找到一道可用（B12: 3→8 降 slot 浪费率）
     whereIsResult: config.whereIsResult,
     formulaList: config.formulaList,
     resultMinValue: config.resultMinValue,
@@ -137,8 +137,9 @@ function generateOneQuestion(levelIdx, engine, seen, type) {
     // B12: 验证 matchLevel 反推是否匹配预期 levelIdx
     // paperGenerator 可能不严格遵循 carry/abdication 约束
     // 导致 L5(禁进位) 出进位题被 matchLevel 反推到 L7
+    // 容差从 ±1 放宽到 ±2，配合 numberOfFormulas 3→8 降拒绝率
     const matched = matchLevel(result)
-    if (matched && Math.abs(matched.levelIdx - levelIdx) > 1) {
+    if (matched && Math.abs(matched.levelIdx - levelIdx) > 2) {
       continue  // 不匹配 → 跳过，继续试下一道
     }
     return result
