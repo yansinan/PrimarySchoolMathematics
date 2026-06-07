@@ -313,6 +313,7 @@ export function useAdaptiveSession(options = {}) {
     const isLast = nextEngine.totalAnswered + nextSize * 1.5 >= nextEngine.targetMax
     const nextPlan = generateQuestionPlan(adaptiveGroupIndex.value, nextSize, nextEngine, practiceStore.abilityProfile, isLast)
     const { questions: nextQuestions, reservePool: nextPool } = generateAdaptiveBatch(nextEngine, nextSize, nextPlan)
+    nextEngine.lastGroupSize = nextQuestions.length  // 持久化实际生成题数，供下次 completeGroup 切片用
     adaptiveEngine.value.reservePool = nextPool
     groupAnswerOffset.value = allAnswers.length
     session.value.answers = [...allAnswers]
@@ -327,6 +328,9 @@ export function useAdaptiveSession(options = {}) {
    */
   function afterAnswer() {
     if (!adaptiveEngine.value || !practiceStore.abilityProfile) return
+    const eng = adaptiveEngine.value
+    // DEBUG BUG-1: 验证画像等级索引实际值
+    // console.log('[DEBUG] strong:', eng.strongLevelIndices, 'weak:', eng.weakLevelIndices, 'difficulty:', eng.difficultyIdx)
     const roundAnswers = [...(practiceStore.adaptiveAnswers || []), ...session.value.answers]
     adjustNextQuestion(
       adaptiveEngine.value,
