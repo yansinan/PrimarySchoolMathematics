@@ -172,13 +172,13 @@ export function useAdaptiveSession(options = {}) {
       customClass: 'feedback-message'
     })
 
-    // 创建自适应引擎, 生成第 1 组
-    // 使用固定默认值 (targetMin=10, targetMax=30),
-    // 不读 configSnapshot (属于 Generate.vue, 已被多次污染)。
-    // completeAssessment 会把这些默认值写入 adaptiveConfig, 后续组从那读。
+    // 重要: 先存 store（completeAssessment 会把 diagAnswers 填充到 store.abilityProfile），
+    // 再创建自适应引擎（createAdaptiveEngine 依赖 profile.diagAnswers 计算 strong/weak 索引）。
     const targetMin = 10
     const targetMax = 30
-    const engine = createAdaptiveEngine(profile, targetMin, targetMax)
+    practiceStore.completeAssessment(profile, { targetMin, targetMax })
+
+    const engine = createAdaptiveEngine(practiceStore.abilityProfile, targetMin, targetMax)
     adaptiveEngine.value = engine
     adaptiveGroupIndex.value = 1
 
