@@ -70,7 +70,7 @@ A 组 6 个子任务：A6/A7/A3/A1/A2 + A4b（升 service）全部落地。**A5 
 - `src/services/operatorMap.js` (S, 34 行) — 单一来源消除 operator label 重复
 
 ### 浏览器烟测结果
-12/12 项通过，0 遗留 P0/P1 问题。详见 [TODO-browser-smoke-test-v2.3.md](TODO-browser-smoke-test-v2.3.md)。
+12/12 项通过，0 遗留 P0/P1 问题。详见 [TODO-browser-smoke-test-v2.3.md](12-TODO-browser-smoke-test-v2.3.md)。
 
 ### UI 可见性：**🟡 0 视觉变化**（纯底层/服务层）
 详见 § "UI 可见性清单"。
@@ -89,7 +89,7 @@ A 组 6 个子任务：A6/A7/A3/A1/A2 + A4b（升 service）全部落地。**A5 
 - ✅ Stats drawer `openDrawer` 编排后图表正常
 
 ### 已知遗留（arch-v2.3 阶段 7+）
-详见 [PLAN-v2-architecture-refactor.md](PLAN-v2-architecture-refactor.md)：
+详见 [PLAN-v2-architecture-refactor.md](04-PLAN-v2-architecture-refactor.md)：
 1. 阶段 1.3 路径统一 — 删 utils 8 个根 stub
 2. 阶段 2 `services/analysis.js` 升顶层
 3. 阶段 3 `useChart` / `usePrintPreview` / `useStatsQuery` 未建
@@ -147,7 +147,7 @@ A 组 6 个子任务：A6/A7/A3/A1/A2 + A4b（升 service）全部落地。**A5 
 - ❌ **未在真浏览器测过**（dev server 在跑但用户没走完流程验收）
 
 ### 已知遗留（v2.x）
-详见 [PLAN-v2-ability-analysis.md](PLAN-v2-ability-analysis.md) § 8 "未来扩展" + [PLAN-browser-smoke-test.md](PLAN-browser-smoke-test.md)：
+详见 [PLAN-v2-ability-analysis.md](06-PLAN-v2-ability-analysis.md) § 8 "未来扩展" + [PLAN-browser-smoke-test.md](11-PLAN-browser-smoke-test.md)：
 1. AbilityCard 4 v2 props 在 UI 接线（**未做，是 P2 阶段 10**）
 2. `getDynamicWeakness({ buckets })` 时间桶参数
 3. 1-strike 软规则实现

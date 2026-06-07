@@ -637,7 +637,7 @@ P4 (阈值 + 校验)           [可独立]
 
 ### 🆕 P2 细化：能力分析与错题强化（数据 + 服务层）
 
-**新文档**：[PLAN-v2-ability-analysis.md](PLAN-v2-ability-analysis.md)（v2.0，2026-06-05）
+**新文档**：[PLAN-v2-ability-analysis.md](06-PLAN-v2-ability-analysis.md)（v2.0，2026-06-05）
 
 **范围**：
 - 数据库 schema 升级（version 3）：新增 `questions` 表 + `answers` 表加字段
@@ -660,11 +660,11 @@ P4 (阈值 + 校验)           [可独立]
 
 ---
 
-### 错题计数规则 — 详细设计见 [PLAN-v2-ability-analysis.md](PLAN-v2-ability-analysis.md)
+### 错题计数规则 — 详细设计见 [PLAN-v2-ability-analysis.md](06-PLAN-v2-ability-analysis.md)
 - 本次**只打数据 + 服务基础**，不实现 1-strike
 - 字段定义、迁移策略、扩展点在独立文档
 
-### 弱项判定 v2 — 详细设计见 [PLAN-v2-ability-analysis.md](PLAN-v2-ability-analysis.md)
+### 弱项判定 v2 — 详细设计见 [PLAN-v2-ability-analysis.md](06-PLAN-v2-ability-analysis.md)
 - v2 简化版：单桶全时间聚合 + 最小样本门槛（决策 4）
 - 见独立文档 § 3.4（γ 算法章节）
 
@@ -685,9 +685,9 @@ P4 (阈值 + 校验)           [可独立]
 
 ## 相关设计文档
 
-- **[PLAN-v2-ability-analysis.md](PLAN-v2-ability-analysis.md)** — P2 细化（能力分析与错题强化，数据 + 服务层）
-- [IdeaByUser.md](IdeaByUser.md) — 用户错题设计初稿
-- [DESIGN.md](DESIGN.md) — 产品总设计
+- **[PLAN-v2-ability-analysis.md](06-PLAN-v2-ability-analysis.md)** — P2 细化（能力分析与错题强化，数据 + 服务层）
+- [IdeaByUser.md](10-IdeaByUser.md) — 用户错题设计初稿
+- [DESIGN.md](09-DESIGN.md) — 产品总设计
 
 ---
 

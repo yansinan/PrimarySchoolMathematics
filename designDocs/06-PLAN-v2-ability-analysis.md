@@ -2,8 +2,8 @@
 
 > 文档性质：详细设计 (Detailed Design)
 > 范围：服务层 + 数据层改造；UI 和做题流程暂不动
-> 父文档：[PLAN-v2-roadmap.md](PLAN-v2-roadmap.md) — P2 章节细化
-> 原始需求：[IdeaByUser.md](IdeaByUser.md) — 用户错题设计初稿
+> 父文档：[PLAN-v2-roadmap.md](03-PLAN-v2-roadmap.md) — P2 章节细化
+> 原始需求：[IdeaByUser.md](10-IdeaByUser.md) — 用户错题设计初稿
 > 维护人：项目组
 > 起始日期：2026-06-05
 > 分支：`feat/p2-refinement`
@@ -446,9 +446,9 @@ export function useAbilityAnalysis() {
 
 ## 9. 相关文档
 
-- [PLAN-v2-roadmap.md](PLAN-v2-roadmap.md) — 父路线图
-- [DESIGN.md](DESIGN.md) — 产品总设计
-- [IdeaByUser.md](IdeaByUser.md) — 用户错题设计初稿
+- [PLAN-v2-roadmap.md](03-PLAN-v2-roadmap.md) — 父路线图
+- [DESIGN.md](09-DESIGN.md) — 产品总设计
+- [IdeaByUser.md](10-IdeaByUser.md) — 用户错题设计初稿
 
 ---
 

@@ -3,11 +3,11 @@
 > 文档性质: 测试报告 (Smoke Test Report)
 > 范围: `refactor/architecture-v2.3` 分支全量 refactor + 关联 bug 修复的浏览器端到端验证
 > 测试策略: 使用 `window.__psm_debug` 调试接口 (commit `37c02ab` 引入, `fde6fbf` 收紧) 绕过 DOM 点击脆弱性
-> 配套清单: [TODO-browser-smoke-test-v2.3.md](./TODO-browser-smoke-test-v2.3.md) (512 行, 16 个 T-1~T-16 项)
+> 配套清单: [12-TODO-browser-smoke-test-v2.3.md](./12-12-TODO-browser-smoke-test-v2.3.md) (512 行, 16 个 T-1~T-16 项)
 > 维护人: 项目组
 > 状态: 🟡 **已合并到 TODO** — 12/16 项通过（含本轮 5 个 commit 的 12 项），详见 TODO § 8 问题汇总（全部 ✅ 已修复）
 
-> **2026-06-07 更新**: 本报告被更详细的 [TODO-browser-smoke-test-v2.3.md](./TODO-browser-smoke-test-v2.3.md) 取代。
+> **2026-06-07 更新**: 本报告被更详细的 [12-TODO-browser-smoke-test-v2.3.md](./12-12-TODO-browser-smoke-test-v2.3.md) 取代。
 > 报告 § 2.4 T-1/T-3 仍记为 PASS，但 12 项浏览器实测（评估→自适应→SelfEvaluationDialog→group 推进→PracticeSummaryDialog→AbilityCard→Stats drawer）均通过，无遗留 P0/P1 问题。
 
 ---
@@ -21,7 +21,7 @@
 | 范围 | `refactor/architecture-v2.3` 分支 v2.3 系列 commits |
 | 分支起点 | `4acc809` |
 | 分支 HEAD | `a7868f5` "fix(stats): StatsDrawer 数据源改全量历史 (db.answers)" |
-| 配套清单 | [`designDocs/TODO-browser-smoke-test-v2.3.md`](./TODO-browser-smoke-test-v2.3.md) (512 行, 16 项) |
+| 配套清单 | [`designDoc./12-12-TODO-browser-smoke-test-v2.3.md`](./12-12-TODO-browser-smoke-test-v2.3.md) (512 行, 16 项) |
 | 状态 | 🟡 进行中 (暂停) — 2 项 T-1/T-3 跑过, 12 项未跑 |
 | 总 commits | 26 (从起点 `4acc809` 到 HEAD `a7868f5`, 报告大纲基于 `fde6fbf` 时仅 24; 后续新增 2 个 fix) |
 
@@ -106,7 +106,7 @@ __psm_debug.answerN(n, isCorrect = true)  // 异步
 | V-2 | 1 组完成后弹 SelfEvaluationDialog | `a6d96b5` + `37c02ab` | ✅ PASS | snapshot 看到 dialog "💬 给这组题点个评" |
 | V-3 | PR-7.3 setup 时序 (`useAdaptiveSession` 注入 dialogs/saver) | `37c02ab` | ✅ PASS | 浏览器 console 无 ReferenceError |
 
-> 完整 16 项清单见 [`TODO-browser-smoke-test-v2.3.md`](./TODO-browser-smoke-test-v2.3.md)。
+> 完整 16 项清单见 [`12-TODO-browser-smoke-test-v2.3.md`](./12-12-TODO-browser-smoke-test-v2.3.md)。
 
 ---
 
@@ -200,7 +200,7 @@ $ git status
 尚未暂存以备提交的变更:
         修改:     dockers/node.alpine.docker (submodule 修改)
 未跟踪的文件:
-        designDocs/TODO-browser-smoke-test-v2.3.md   (本报告配套清单)
+        designDoc./12-12-TODO-browser-smoke-test-v2.3.md   (本报告配套清单)
 ```
 
 ### 6.3 综合判断
@@ -293,7 +293,7 @@ c61ff98 refactor(arch-v2.3-5.4): AbilityCard 去 useAbilityProfile props 透传
 - [ ] B-1 AbilityCard compact prop 修复 + commit
 - [ ] B-2 saver 持久化修复 + commit (加 `.catch` 日志 + 修字段)
 
-### 9.2 测试项 (来自 [TODO-browser-smoke-test-v2.3.md](./TODO-browser-smoke-test-v2.3.md))
+### 9.2 测试项 (来自 [12-TODO-browser-smoke-test-v2.3.md](./12-12-TODO-browser-smoke-test-v2.3.md))
 
 - [ ] T-2 (单独跑 handlePracticeComplete → PracticeSummaryDialog)
 - [ ] T-4 / T-5 / T-6 (P0 端到端剩余 3 项)
@@ -313,7 +313,7 @@ c61ff98 refactor(arch-v2.3-5.4): AbilityCard 去 useAbilityProfile props 透传
 
 ## 10. 元信息
 
-- 与 [`designDocs/TODO-browser-smoke-test-v2.3.md`](./TODO-browser-smoke-test-v2.3.md) § 7 测试记录 + § 8 问题汇总 衔接
-- 与 [`designDocs/PLAN-v2-architecture-refactor.md`](./PLAN-v2-architecture-refactor.md) § 验收标准 衔接
-- 与 [`designDocs/PROGRESS.md`](./PROGRESS.md) arch-v2.3 节点 5/6 衔接
+- 与 [`designDoc./12-12-TODO-browser-smoke-test-v2.3.md`](./12-12-TODO-browser-smoke-test-v2.3.md) § 7 测试记录 + § 8 问题汇总 衔接
+- 与 [`designDoc./04-PLAN-v2-architecture-refactor.md`](./04-PLAN-v2-architecture-refactor.md) § 验收标准 衔接
+- 与 [`designDoc./02-PROGRESS.md`](./02-PROGRESS.md) arch-v2.3 节点 5/6 衔接
 - 本报告**只整理, 不修代码**; 修复见 commit `fix(arch-v2.3-5.4): 补回 AbilityCard 的 compact prop 定义` + saver 调试 commit

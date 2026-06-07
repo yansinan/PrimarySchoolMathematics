@@ -2,7 +2,7 @@
 
 > 文档性质：测试设计 (Test Plan)
 > 范围：在真实浏览器中验证 `AbilityCard` 4 个 v2 props 的端到端行为
-> 父文档：[PLAN-v2-ability-analysis.md](PLAN-v2-ability-analysis.md) § 5 § 7
+> 父文档：[PLAN-v2-ability-analysis.md](06-PLAN-v2-ability-analysis.md) § 5 § 7
 > 维护人：项目组
 > 日期：2026-06-05
 > 阶段定位：**v2.2 准备期 smoke test**（UI 尚未接线，验证数据流不破 + props 接收不出错）

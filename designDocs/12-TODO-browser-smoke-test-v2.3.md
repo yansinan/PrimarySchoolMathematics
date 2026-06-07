@@ -3,7 +3,7 @@
 > 文档性质：测试执行清单 (Smoke Test Checklist)
 > 范围：refactor/architecture-v2.3 分支上 refactor 引入的所有改动 + 2 bug 修复的浏览器端到端验证
 > 测试策略：使用 `window.__psm_debug` 调试接口（commit 37c02ab 在 `src/components/Practice.vue` L542-617 引入），绕过 DOM 点击的脆弱性
-> 父文档：[PLAN-v2-architecture-refactor.md](PLAN-v2-architecture-refactor.md) § 验收标准
+> 父文档：[PLAN-v2-architecture-refactor.md](04-PLAN-v2-architecture-refactor.md) § 验收标准
 > 维护人：项目组
 > 日期：2026-06-06
 
@@ -373,7 +373,7 @@ await __psm_debug.answerN(10, true)
 
 ## 6. P3 — AbilityCard props 边界场景
 
-> 来自 [PLAN-browser-smoke-test.md](PLAN-browser-smoke-test.md) § 3 场景 1-4。
+> 来自 [PLAN-browser-smoke-test.md](11-PLAN-browser-smoke-test.md) § 3 场景 1-4。
 > v2.3 接入后，本节从"props 接收验证"升级为"props 真实数据 + 渲染验证"。
 
 ### T-13 · props 4 全传
