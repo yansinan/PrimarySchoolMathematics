@@ -1,20 +1,21 @@
 # PrimarySchoolMathematics 进度记录
 
-> 跟踪版本、阶段、UI 可见性。最后更新：2026-06-07（v2.3 A 组死代码清理）
+> 跟踪版本、阶段、UI 可见性。最后更新：2026-06-07（v2.3 A 组 A4b 落地）
 
 ---
 
 ## v2.3 A 组死代码清理（2026-06-07）
 
 ### 范围
-A 组 5 个子任务全部落地：删 5 个文件 + 3 个死 import + 1 个调试注释。
+A 组 6 个子任务：A6/A7/A3/A1/A2 + A4b（升 service）全部落地。**A5 与 A4 合并、A8 不执行**。
 
-分支：`chore/cleanup-a-group`（1 个 commit）
+分支：`chore/cleanup-a-group`（2 个 commits）
 
 ### Commits
 | hash | 范围 |
 |------|------|
 | `793056e` | A6 删 `views/Home.vue` + A7 删 `apis/paper.js` + `utils/request.js` + `utils/download.js` + A3 清 Generate.vue 死 import + A1 删 `components/index.js` + A2 删 `utils/enum.js` 死导出 + router 调试注释 |
+| `b69aac4` | A4b 升 `utils/abilityProfile.js` → `services/abilityProfile.js` (R 79%) |
 
 ### 净增 / 减
 **9 files changed, 3 insertions(+), 459 deletions(-)**
@@ -39,11 +40,9 @@ A 组 5 个子任务全部落地：删 5 个文件 + 3 个死 import + 1 个调�
 2. **`stores/app.js` 仍被 Generate.vue:84 引用**（`useAppStore().navigateToPrint` 在 line 157 实际使用），`printPreviewPapers` 字段活。`app.js` 不能删，需等 D1（`usePrintPreview` composable）落地。
 3. **Layout.vue 是 `@/components` 桶的唯一用户**：A1 删桶时直接改 Layout.vue 为 `Generate` + `Practice` 两个直接路径 import。
 
-### 已知遗留（A4 / A5 / A8 下一轮）
-详见 [TODO-cleanup-a-group.md](TODO-cleanup-a-group.md) § 3：
-- A4 删 `utils/abilityProfile.js` (91 行重复实现)
-- A5 删 `utils/algorithm/diagnostic.js` 的 `evaluateLevel` 函数
-- A8 删 §3.4 调试残留 6 处 console.log
+### 已知遗留（A4 已落地，A8 不执行）
+- ✅ ~~A4 删 `utils/abilityProfile.js` (91 行重复实现)~~ **2026-06-07 已升 `services/abilityProfile.js`**
+- ~~A8 删 §3.4 调试残留 6 处 console.log~~ **已从计划中删除**（用户 2026-06-07 决议：低优先级，跳过）
 
 ---
 

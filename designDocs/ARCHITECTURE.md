@@ -225,7 +225,7 @@ src/
 | ✅ | `src/utils/database.js`（根目录 stub） | 11 | 真实实现已迁 `store/database.js`，本文件仅 `export { default }` 兜底 |
 | ✅ | `src/utils/configStorage.js`（根目录 stub） | 10 | 真实实现已迁 `store/configStorage.js` |
 | ✅ | `src/utils/adaptiveBatch.js`/`adaptiveEngine.js`/`diagnostic.js`/`displayStrategy.js`/`formDefaults.js`/`timeFormat.js`（6 个根 stub） | 各 10 | 真实实现已迁对应子目录 |
-| ✅ | `src/utils/abilityProfile.js` | 91 | **新确认**（2026-06）— 与 `composables/useAbilityProfile.js` 重复，仅 usePracticeSaver 1 处引用，可直接合并到后者或新建 service |
+| ✅ | `src/utils/abilityProfile.js` | 91 | **新确认**（2026-06）— 已升 `services/abilityProfile.js`（A4b 落地，仅 1 处引用同步改）|
 | ✅ | `src/utils/algorithm/diagnostic.js` 的 `evaluateLevel` 函数 | — | 与 `composables/useAbilityProfile.js:18-25` `evaluateLevelByScore` 重复实现 |
 | ✅ | `src/utils/EquationSolver.js` 的 `checkResult` | — | 未在任何 UI 路径调用 |
 | ✅ | `src/utils/EquationSolver.js` 的 `solveByBruteForce` | — | 兜底, 正常路径不走 |
@@ -245,12 +245,16 @@ src/
 
 ### 3.4 调试残留
 
+> 状态更新（2026-06-07）：Home.vue 死代码清理后，剩 4 个文件含 `console.log` 调试输出。
+> 用户决议（2026-06-07）：**§3.4 调试残留清理从计划中删除**（低优先级，dev 价值可接受，留 v2.4+）。
+> 下面仅作历史记录，不作执行项。
+
 | 文件 | 内容 | 状态 |
 |------|------|:----:|
 | ✅ ~~`src/views/Home.vue`~~ | ~~`debugger`(近末尾)~~ | 随 Home 删（2026-06-07）|
-| `src/utils/paperGenerator.js:64` | `console.log('papers', papers)` | ⏳ 留 v2.4（随 paperGenerator 迁 services 时清）|
-| `src/views/Print.vue:56,71,75,80` | 4 处 console.log | ⏳ 留 v2.4 |
-| `src/utils/database.js:215` | `console.log('[PracticeStore] Session saved to DB...')` | ⏳ 留 v2.4（数据库层调试输出）|
+| `src/utils/paperGenerator.js:64` | `console.log('papers', papers)` | ⏸ 暂不清理 |
+| `src/views/Print.vue:56,71,75,80` | 4 处 console.log | ⏸ 暂不清理 |
+| `src/utils/database.js:215` | `console.log('[PracticeStore] Session saved to DB...')` | ⏸ 暂不清理 |
 | ✅ ~~`src/router/index.js:33`~~ | ~~`// console.log(baseUrl)`~~ | 注释清掉（2026-06-07）|
 
 ### 3.5 重复实现

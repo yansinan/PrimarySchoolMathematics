@@ -311,7 +311,7 @@ include: [
 | `src/utils/psm.js` | `src/utils/algorithm/psm.js` | ✅ |
 | `src/utils/formDefaults.js` | `src/utils/form/formDefaults.js` | ✅ |
 | `src/utils/timeFormat.js` | `src/utils/time/timeFormat.js` | ✅ |
-| `src/utils/abilityProfile.js` | `src/services/abilityProfile.js` (升层) | ⏳ 留 v2.4 |
+| `src/utils/abilityProfile.js` | `src/services/abilityProfile.js` (升层) | ✅ **2026-06-07 A4b 落地** |
 | `src/utils/enum.js` | `src/constants/enums.js` (升层) | ⏳ 留 v2.4 |
 | `src/components/PracticeSummaryDialog.vue` | `src/components/dialog/PracticeSummaryDialog.vue` | ✅ 已迁 (PR 7bcd58a) |
 | `src/components/SelfEvaluationDialog.vue` | `src/components/dialog/SelfEvaluationDialog.vue` | ✅ 已迁 |
@@ -332,7 +332,7 @@ include: [
 | `src/services/sessionMetrics.js` | computeSessionTotalDuration | ⏳ 阶段 2 |
 | **`src/services/chartBuilder.js`** | buildTrendChart / buildOperatorChart | ✅ **2026-06-07 新建** |
 | **`src/services/operatorMap.js`** | OPERATOR_DISPLAY / OPERATOR_NAME | ✅ **2026-06-07 新建** |
-| `src/services/abilityProfile.js` | 从 utils/ 升来 | ⏳ 留 v2.4 |
+| `src/services/abilityProfile.js` | 从 utils/abilityProfile.js 升来 | ✅ **2026-06-07 A4b 落地** |
 | `src/services/index.js` | services 桶导出 | ✅ 已有（仅 export * from utils/services/analysis） |
 | `src/composables/useDisplayStrategy.js` | 响应式 displayStats 状态 | ✅ 已有 (PR-4.2) |
 | `src/composables/useChart.js` | chart.js 通用封装 | ⏳ 留 v2.4 |
@@ -405,9 +405,9 @@ include: [
 
 **已确认 (✅ 2026-06-07 审计)**:
 - 整文件：`apis/paper.js` / `utils/request.js` / `utils/download.js` / `views/Home.vue` (147 行)
-- 死符号：`utils/enum.js` `httpContentTypeExtensionsMappingEnum` / `utils/abilityProfile.js` (与 composables/useAbilityProfile.js 重复) / 8 个根目录 stub / 8 个 `EquationSolver` 死函数 + 重复评估函数
+- 死符号：`utils/enum.js` `httpContentTypeExtensionsMappingEnum` / `utils/abilityProfile.js` (已升 `services/abilityProfile.js` via A4b) / 8 个根目录 stub / 8 个 `EquationSolver` 死函数 + 重复评估函数
 - 重复：operator label 全部统一到 `services/operatorMap.js` / `formatDate` 全部到 composable / `generateOptions` 下沉
-- 调试残留：6 处 `console.log` + 1 处 `debugger`
+- ~~调试残留：6 处 `console.log` + 1 处 `debugger`~~ → **2026-06-07 决议**：从计划中删除（低优先级，dev 价值可接受）
 
 **保留活跃引用 (🔴)**:
 - `TestView.vue` / `TestComponentView.vue` / `TestHorizontalLayout.vue` — 测试 UI 组件，router 仍引用
