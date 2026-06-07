@@ -13,20 +13,29 @@
 
 按 **7 阶段** 渐进迁移, 每阶段独立可发布. 总预计 **7-10 个 PR**, 跨度 4-6 周.
 
-| 阶段 | 内容 | 风险 | 净行数 |
-|---|---|---|---|
-| 1 | utils 内部子目录化 | 🟡 路径变动 | 0 |
-| 2 | services 升顶层 + 新增 | 🟡 需补单测 | +200 |
-| 3 | composables 补齐 | 🟠 续抽 250 行 | +300 |
-| 4 | stores 瘦身 + 删 app.js | 🟠 业务迁移 | -20 |
-| 5 | components 目录归位 | 🟡 纯移动 | 0 |
-| 6 | 测试分区 | 🟢 加目录 | 0 |
-| 7 | 验证 + 文档更新 | 🟢 | 0 |
+| 阶段 | 内容 | 风险 | 净行数 | 状态（2026-06-07） |
+|---|---|---|---|---|
+| 1 | utils 内部子目录化 | 🟡 路径变动 | 0 | ✅ **部分完成**（子目录化 + 桶导出 + 8 个 stub 过渡） |
+| 2 | services 升顶层 + 新增 | 🟡 需补单测 | +200 | 🟡 **部分完成**（`chartBuilder` / `operatorMap` 新建；`analysis` 仍未升） |
+| 3 | composables 补齐 | 🟠 续抽 250 行 | +300 | 🟡 **部分完成**（`useAnswerBuilder` / `useSubmitHandler` / `useStatsDrawer` 新建；`useChart` / `usePrintPreview` / `useStatsQuery` 未建） |
+| 4 | stores 瘦身 + 删 app.js | 🟠 业务迁移 | -20 | ⬜ 未开始（`app.js` 仍被引用，需先建 `usePrintPreview`） |
+| 5 | components 目录归位 | 🟡 纯移动 | 0 | 🟡 **部分完成**（`dialog/` 已建；`generate/` / `dev/` 已部分迁移） |
+| 6 | 测试分区 | 🟢 加目录 | 0 | ⬜ 未开始 |
+| 7 | 验证 + 文档更新 | 🟢 | 0 | 🟡 **部分完成**（本轮 ARCH §2.1 / §3 / §4 + PROGRESS 落地） |
 
 > **不在本轮**:
 > - 死代码清理(见 [ARCHITECTURE.md § 3](./ARCHITECTURE.md))
 > - bug 修复(totalDuration 等单独排期)
 > - 大型 `Practice.vue` 拆分(放 v2.4)
+
+### 0.1 本轮（2026-06-07）落地的 5 个 commits
+| hash | 范围 |
+|------|------|
+| `0cbcdce` | B-1/B-2/B-3 烟测 bug + Practice.vue 违规①②（V→U 整改 useAnswerBuilder）|
+| `51e6478` | Practice.vue 违规③④（V→M/V→C 整改 useSubmitHandler）|
+| `be7aabc` | StatsDrawer.vue 违规①②③⑤（useStatsDrawer + operatorMap）|
+| `f9d235e` | StatsDrawer.vue 违规④（chartBuilder service + openDrawer 编排）|
+| `cfcfdad` | StatsDrawer openDrawer 未解构（1 行 fix）|
 
 ---
 
@@ -99,7 +108,7 @@ src/
 
 ## 2. 迁移路线(7 阶段)
 
-### 阶段 1 — utils 内部子目录化(🟡 路径变动)
+### 阶段 1 — utils 内部子目录化(🟡 路径变动) → 🟡 **部分完成**
 
 **目标**: `utils/` 内部分目录, 加桶导出兜底兼容旧 import
 
@@ -119,12 +128,17 @@ src/utils/
 - `utils/index.js` 用桶导出, **老的 `import { xxx } from '@/utils/xxx'` 全部仍可用**
 - 旧文件**先复制**到子目录, **暂不删**, 验证通过后再删
 - 渐进式: 一个文件一个 PR(避免一次 12 个文件改路径)
+- **现状 (2026-06-07)**: 12 个文件全部已迁子目录，但 8 个根目录 stub 仍保留作过渡兼容
+  - `utils/database.js` / `configStorage.js` (default 导出桥接) — 2 个
+  - `utils/EquationSolver.js` / `adaptiveBatch.js` / `adaptiveEngine.js` / `diagnostic.js` / `displayStrategy.js` / `formDefaults.js` / `timeFormat.js` (named export 桥接) — 7 个
+  - 共 9 个 stub，~90 行可减
+- **下一 PR (阶段 1.3)**: 改上游 import 路径到子目录，删全部 9 个 stub，简化 `utils/index.js` 到 4 行
 
 **验证**:
 ```bash
 npm run build   # exit 0
 npm test        # 33/33 通过
-grep -r "from '@/utils/" src/   # 应仍能找到
+grep -r "from '@/utils/'" src/   # 应仍能找到
 ```
 
 **预计**: 0 净增(纯移动)
@@ -209,32 +223,35 @@ src/stores/
 
 **预计**: -20 行
 
-### 阶段 5 — components 目录归位(🟡 纯移动)
+### 阶段 5 — components 目录归位(🟡 纯移动) → 🟡 **部分完成**
 
 **目标**: 顶层 `components/` 收敛为"通用 widget"目录
 
 ```
 src/components/
-├ index.js                             统一导出
+├ index.js                            🟡 顶层桶没人用(待删)
 ├ layout/        (现有 4 文件)
 ├ question/      (现有 4 文件)
 ├ input/         (现有 2 文件)
-├ dialog/        ⭐ 新建: PracticeSummaryDialog / SelfEvaluationDialog
+├ dialog/        ✅ **已建** — PracticeSummaryDialog / SelfEvaluationDialog
 ├ stats/         (现有 2 文件)
-├ profile/       (现有 3 文件)
-├ generate/      ⭐ 新建: Generate + 原 home/* 全部
-└ dev/           ⭐ 新建: TestComponentView / TestHorizontalLayout
+├ profile/       (现有 4 文件)
+├ generate/      ⏳ 留 v2.4 — Generate + 原 home/* 全部
+└ dev/           ⏳ 留 v2.4 — TestComponentView / TestHorizontalLayout
+                  ✅ 已建 — DebugPanel / QuestionDetail
 ```
 
 **移动清单**:
-| 当前 | 目标 |
-|---|---|
-| `components/PracticeSummaryDialog.vue` | `components/dialog/PracticeSummaryDialog.vue` |
-| `components/SelfEvaluationDialog.vue` | `components/dialog/SelfEvaluationDialog.vue` |
-| `components/Generate.vue` | `components/generate/Generate.vue` |
-| `components/home/*` (7 文件) | `components/generate/*` |
-| `components/TestComponentView.vue` | `components/dev/TestComponentView.vue` |
-| `components/TestHorizontalLayout.vue` | `components/dev/TestHorizontalLayout.vue` |
+| 当前 | 目标 | 状态 |
+|---|---|:---:|
+| `components/PracticeSummaryDialog.vue` | `components/dialog/PracticeSummaryDialog.vue` | ✅ 已迁 (PR 7bcd58a) |
+| `components/SelfEvaluationDialog.vue` | `components/dialog/SelfEvaluationDialog.vue` | ✅ 已迁 |
+| `components/Generate.vue` | `components/generate/Generate.vue` | ⏳ 留 v2.4 |
+| `components/home/*` (7 文件) | `components/generate/*` | ⏳ 留 v2.4 |
+| `components/TestComponentView.vue` | `components/dev/TestComponentView.vue` | ⏳ 留 v2.4 |
+| `components/TestHorizontalLayout.vue` | `components/dev/TestHorizontalLayout.vue` | ⏳ 留 v2.4 |
+| `components/DebugPanel.vue` | `components/dev/DebugPanel.vue` | ✅ 已建 (PR dev 隔离) |
+| `components/QuestionDetail.vue` | `components/dev/QuestionDetail.vue` | ✅ 已建 |
 
 **预计**: 0 净增(纯移动), 改 import 路径
 
@@ -277,61 +294,64 @@ include: [
 
 ### 3.1 移动(不删, 改路径)
 
-| 当前 | 目标 |
-|---|---|
-| `src/utils/services/analysis.js` | `src/services/analysis.js` |
-| `src/utils/services/__tests__/analysis.spec.js` | `src/services/__tests__/analysis.spec.js` |
-| `src/utils/database.js` | `src/utils/store/database.js` |
-| `src/utils/database/__tests__/migration.spec.js` | `src/utils/store/database/__tests__/migration.spec.js` |
-| `src/utils/configStorage.js` | `src/utils/store/configStorage.js` |
-| `src/utils/adaptiveEngine.js` | `src/utils/algorithm/adaptiveEngine.js` |
-| `src/utils/adaptiveBatch.js` | `src/utils/algorithm/adaptiveBatch.js` |
-| `src/utils/diagnostic.js` | `src/utils/algorithm/diagnostic.js` |
-| `src/utils/displayStrategy.js` | `src/utils/algorithm/displayStrategy.js` |
-| `src/utils/equationParser.js` | `src/utils/algorithm/equationParser.js` |
-| `src/utils/EquationSolver.js` | `src/utils/algorithm/EquationSolver.js` |
-| `src/utils/paperGenerator.js` | `src/utils/algorithm/paperGenerator.js` |
-| `src/utils/psm.js` | `src/utils/algorithm/psm.js` |
-| `src/utils/formDefaults.js` | `src/utils/form/formDefaults.js` |
-| `src/utils/timeFormat.js` | `src/utils/time/timeFormat.js` |
-| `src/utils/abilityProfile.js` | `src/services/abilityProfile.js` (升层) |
-| `src/utils/enum.js` | `src/constants/enums.js` (升层) |
-| `src/components/PracticeSummaryDialog.vue` | `src/components/dialog/PracticeSummaryDialog.vue` |
-| `src/components/SelfEvaluationDialog.vue` | `src/components/dialog/SelfEvaluationDialog.vue` |
-| `src/components/Generate.vue` | `src/components/generate/Generate.vue` |
-| `src/components/home/*` | `src/components/generate/*` |
-| `src/components/TestComponentView.vue` | `src/components/dev/TestComponentView.vue` |
-| `src/components/TestHorizontalLayout.vue` | `src/components/dev/TestHorizontalLayout.vue` |
+| 当前 | 目标 | 状态 |
+|---|---|:---:|
+| `src/utils/services/analysis.js` | `src/services/analysis.js` | ⏳ 阶段 2 未开始 |
+| `src/utils/services/__tests__/analysis.spec.js` | `src/services/__tests__/analysis.spec.js` | ⏳ |
+| `src/utils/database.js` | `src/utils/store/database.js` | ✅ 已迁 (子目录化 PR 1.1) |
+| `src/utils/database/__tests__/migration.spec.js` | `src/utils/store/database/__tests__/migration.spec.js` | ✅ |
+| `src/utils/configStorage.js` | `src/utils/store/configStorage.js` | ✅ |
+| `src/utils/adaptiveEngine.js` | `src/utils/algorithm/adaptiveEngine.js` | ✅ |
+| `src/utils/adaptiveBatch.js` | `src/utils/algorithm/adaptiveBatch.js` | ✅ |
+| `src/utils/diagnostic.js` | `src/utils/algorithm/diagnostic.js` | ✅ |
+| `src/utils/displayStrategy.js` | `src/utils/algorithm/displayStrategy.js` | ✅ |
+| `src/utils/equationParser.js` | `src/utils/algorithm/equationParser.js` | ✅ |
+| `src/utils/EquationSolver.js` | `src/utils/algorithm/EquationSolver.js` | ✅ |
+| `src/utils/paperGenerator.js` | `src/utils/algorithm/paperGenerator.js` | ✅ |
+| `src/utils/psm.js` | `src/utils/algorithm/psm.js` | ✅ |
+| `src/utils/formDefaults.js` | `src/utils/form/formDefaults.js` | ✅ |
+| `src/utils/timeFormat.js` | `src/utils/time/timeFormat.js` | ✅ |
+| `src/utils/abilityProfile.js` | `src/services/abilityProfile.js` (升层) | ⏳ 留 v2.4 |
+| `src/utils/enum.js` | `src/constants/enums.js` (升层) | ⏳ 留 v2.4 |
+| `src/components/PracticeSummaryDialog.vue` | `src/components/dialog/PracticeSummaryDialog.vue` | ✅ 已迁 (PR 7bcd58a) |
+| `src/components/SelfEvaluationDialog.vue` | `src/components/dialog/SelfEvaluationDialog.vue` | ✅ 已迁 |
+| `src/components/Generate.vue` | `src/components/generate/Generate.vue` | ⏳ 留 v2.4 |
+| `src/components/home/*` | `src/components/generate/*` | ⏳ 留 v2.4 |
+| `src/components/TestComponentView.vue` | `src/components/dev/TestComponentView.vue` | ⏳ 留 v2.4 |
+| `src/components/TestHorizontalLayout.vue` | `src/components/dev/TestHorizontalLayout.vue` | ⏳ 留 v2.4 |
 
 ### 3.2 新增
 
-| 路径 | 职责 |
-|---|---|
-| `src/utils/algorithm/equationCore.js` | 合并 equationParser/EquationSolver 重复段 |
-| `src/utils/form/formValidation.js` | validateTotalQuestions |
-| `src/utils/store/persistedState.js` | localStorage 安全读写 |
-| `src/utils/time/timeConstants.js` | 时区/格式化选项 |
-| `src/utils/index.js` | utils 桶导出 |
-| `src/services/sessionMetrics.js` | computeSessionTotalDuration |
-| `src/services/chartBuilder.js` | buildTrendChart / buildOperatorChart |
-| `src/services/operatorMap.js` | OPERATOR_DISPLAY / OPERATOR_NAME |
-| `src/services/abilityProfile.js` | 从 utils/ 升来 |
-| `src/services/index.js` | services 桶导出 |
-| `src/composables/useDisplayStrategy.js` | 响应式 displayStats 状态 |
-| `src/composables/useChart.js` | chart.js 通用封装 |
-| `src/composables/usePrintPreview.js` | 替代 stores/app.js |
-| `src/composables/useStatsQuery.js` | 替代 stats.js 业务规则 |
-| `src/composables/index.js` | composables 桶导出 |
-| `src/composables/__tests__/` | composable 单测目录 |
-| `src/stores/index.js` | stores 桶导出 |
-| `src/constants/thresholds.js` | FAST/SLOW/GOOD/BAD/MIN_GROUPS |
-| `src/constants/enums.js` | 从 utils/enum.js 升来 |
-| `src/constants/index.js` | constants 桶导出 |
-| `src/components/dialog/index.js` | dialog 桶导出 |
-| `src/components/generate/index.js` | generate 桶导出 |
-| `src/components/dev/index.js` | dev 桶导出 |
-| `tests/` | 顶层测试目录 |
-| `tests/integration/fullSessionFlow.spec.js` | 端到端测试 |
+| 路径 | 职责 | 状态 |
+|------|------|:---:|
+| `src/utils/algorithm/equationCore.js` | 合并 equationParser/EquationSolver 重复段 | ⏳ 留 v2.4 |
+| `src/utils/form/formValidation.js` | validateTotalQuestions | ⏳ |
+| `src/utils/store/persistedState.js` | localStorage 安全读写 | ⏳ |
+| `src/utils/time/timeConstants.js` | 时区/格式化选项 | ⏳ |
+| `src/utils/index.js` | utils 桶导出 | ✅ |
+| `src/services/sessionMetrics.js` | computeSessionTotalDuration | ⏳ 阶段 2 |
+| **`src/services/chartBuilder.js`** | buildTrendChart / buildOperatorChart | ✅ **2026-06-07 新建** |
+| **`src/services/operatorMap.js`** | OPERATOR_DISPLAY / OPERATOR_NAME | ✅ **2026-06-07 新建** |
+| `src/services/abilityProfile.js` | 从 utils/ 升来 | ⏳ 留 v2.4 |
+| `src/services/index.js` | services 桶导出 | ✅ 已有（仅 export * from utils/services/analysis） |
+| `src/composables/useDisplayStrategy.js` | 响应式 displayStats 状态 | ✅ 已有 (PR-4.2) |
+| `src/composables/useChart.js` | chart.js 通用封装 | ⏳ 留 v2.4 |
+| `src/composables/usePrintPreview.js` | 替代 stores/app.js | ⏳ 留 v2.4 |
+| `src/composables/useStatsQuery.js` | 替代 stats.js 业务规则 | ⏳ 留 v2.4 |
+| **`src/composables/useAnswerBuilder.js`** | 封 U 调 (extractQuestionMetadata + buildAttemptScore) | ✅ **2026-06-07 新建** |
+| **`src/composables/useSubmitHandler.js`** | 封 handleSubmit 编排 | ✅ **2026-06-07 新建** |
+| **`src/composables/useStatsDrawer.js`** | 封 stats drawer 状态/操作/格式化 | ✅ **2026-06-07 新建** |
+| `src/composables/index.js` | composables 桶导出 | ✅ 已有（待补 3 个新 composable） |
+| `src/composables/__tests__/` | composable 单测目录 | ⏳ 留 v2.4 |
+| `src/stores/index.js` | stores 桶导出 | ⏳ 留 v2.4 |
+| `src/constants/thresholds.js` | FAST/SLOW/GOOD/BAD/MIN_GROUPS | ⏳ |
+| `src/constants/enums.js` | 从 utils/enum.js 升来 | ⏳ 留 v2.4 |
+| `src/constants/index.js` | constants 桶导出 | ✅ 已有 |
+| `src/components/dialog/index.js` | dialog 桶导出 | ✅ 已有 |
+| `src/components/generate/index.js` | generate 桶导出 | ⏳ 留 v2.4 |
+| `src/components/dev/index.js` | dev 桶导出 | ⏳ 留 v2.4 |
+| `tests/` | 顶层测试目录 | ⏳ 阶段 6 |
+| `tests/integration/fullSessionFlow.spec.js` | 端到端测试 | ⏳ |
 
 ### 3.3 修改(不删不挪, 只改内容)
 
@@ -380,15 +400,26 @@ include: [
 
 ## 6. 不在本轮范围
 
-### 6.1 死代码(见架构 § 3)
+### 6.1 死代码
+**完整目录** 见 [ARCHITECTURE.md § 3](./ARCHITECTURE.md)。本节只列当前已确认 + 待办分类。
 
-- 整文件死代码(`apis/paper.js` / `utils/request.js` / `utils/download.js` / `views/Home.vue`)
-- 死符号(`enum.httpMapping` / `TestView.vue` / `stores/app.js` / `checkResult` / `solveByBruteForce` / `get_time` / `load()`)
-- 死 import / 调试残留 / `console.log` 噪音
-- 重复实现(9 项)
-- 注释噪音
+**已确认 (✅ 2026-06-07 审计)**:
+- 整文件：`apis/paper.js` / `utils/request.js` / `utils/download.js` / `views/Home.vue` (147 行)
+- 死符号：`utils/enum.js` `httpContentTypeExtensionsMappingEnum` / `utils/abilityProfile.js` (与 composables/useAbilityProfile.js 重复) / 8 个根目录 stub / 8 个 `EquationSolver` 死函数 + 重复评估函数
+- 重复：operator label 全部统一到 `services/operatorMap.js` / `formatDate` 全部到 composable / `generateOptions` 下沉
+- 调试残留：6 处 `console.log` + 1 处 `debugger`
 
-**清理时间**: 后续安排, 不与本轮重构耦合
+**保留活跃引用 (🔴)**:
+- `TestView.vue` / `TestComponentView.vue` / `TestHorizontalLayout.vue` — 测试 UI 组件，router 仍引用
+- `stores/app.js` — Generate/Home/Print 仍引用 `navigateToPrint`，需先建 `usePrintPreview`
+
+**待办 (⏳) 留 v2.4+**:
+- `extractOperandNumbers` 重复（`utils/database.js` vs `utils/equationParser.parseEquation`）
+- 进位/退位判断重复（`equationParser.getCarryType` vs `psm.is_addcarry`）
+- `paperGenerator` 重复（`utils/paperGenerator.js` vs `apis/paper.js`，迁 services 后消）
+- `equationCore.js` 抽取（合并 equationParser/EquationSolver/psm 重复段）
+
+**清理时间**: 留 v2.4+ 一次性清理。当前不参与本轮（PR 1.3 路径统一只删 8 个根 stub，~90 行可减）
 
 ### 6.2 bug 修复
 
@@ -460,9 +491,10 @@ PROGRESS.md
 ### 7.3 文档演进
 
 - v2.3 起点 (2026-06-05): 草案, 待审
-- 阶段 N 落地后: 在 § 2 对应阶段加 "✅" 标记
-- 每完成一个阶段: 更新 § 3 文件总表(标记 ✅)
+- 阶段 1-3 部分落地 (2026-06-07): 标 ✅/⏳，新增本轮落地的 5 个 commits
+- 每完成一个阶段: 更新 § 2 对应阶段加 "✅" 标记 + § 3 文件总表(标记 ✅/⏳)
 - 大版本变化时: 重新评审整套架构
+- **2026-06-07**: § 0 加"状态列"、§ 0.1 加本轮 commits 表、§ 3.1/3.2 加状态列（✅已迁 / ⏳留 v2.4）、§ 6.1 链接到 ARCH § 3 详细目录
 
 ---
 

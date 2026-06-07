@@ -5,7 +5,10 @@
 > 测试策略: 使用 `window.__psm_debug` 调试接口 (commit `37c02ab` 引入, `fde6fbf` 收紧) 绕过 DOM 点击脆弱性
 > 配套清单: [TODO-browser-smoke-test-v2.3.md](./TODO-browser-smoke-test-v2.3.md) (512 行, 16 个 T-1~T-16 项)
 > 维护人: 项目组
-> 状态: 🟡 进行中 (暂停)
+> 状态: 🟡 **已合并到 TODO** — 12/16 项通过（含本轮 5 个 commit 的 12 项），详见 TODO § 8 问题汇总（全部 ✅ 已修复）
+
+> **2026-06-07 更新**: 本报告被更详细的 [TODO-browser-smoke-test-v2.3.md](./TODO-browser-smoke-test-v2.3.md) 取代。
+> 报告 § 2.4 T-1/T-3 仍记为 PASS，但 12 项浏览器实测（评估→自适应→SelfEvaluationDialog→group 推进→PracticeSummaryDialog→AbilityCard→Stats drawer）均通过，无遗留 P0/P1 问题。
 
 ---
 
