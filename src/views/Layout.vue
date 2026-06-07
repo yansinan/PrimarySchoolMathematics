@@ -10,7 +10,8 @@
 </template>
 
 <script setup>
-import { Generate, Practice } from '@/components'
+import Generate from '@/components/Generate.vue'
+import Practice from '@/components/Practice.vue'
 import StatsDrawer from '@/components/stats/StatsDrawer.vue'
 import DebugPanel from '@/components/dev/DebugPanel.vue'
 </script>
