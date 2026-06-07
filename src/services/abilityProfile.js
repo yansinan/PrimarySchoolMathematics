@@ -1,11 +1,16 @@
 /**
- * 用户能力画像 — 实时计算 + 持久化
+ * 用户能力画像 — 实时计算 + 持久化（service 层）
  *
- * **架构合规修正**（P2 阶段 16）：
- * - 原本：U 层引 M 层 store（U→M 违规）
- * - 现在：纯函数化，caller 传 store 数据进来（符合 § 1.2 U 不引 M）
+ * 路径演进：
+ *  - 2026-06-07: 升层自 `utils/abilityProfile.js`（U 层），为落实 ARCH § 1.2 "M 只放字段"
+ *    与 § 2.1 目标树 `services/abilityProfile.js`
+ *  - 原 U 层文件 2026-06-07 删除
  *
- * 使用：
+ * 职责：
+ *  - 纯函数 + 单一副作用（写 abilitySnapshots 表）
+ *  - caller 传 store 数据进来，service 不引 M 层
+ *
+ * 用法：
  *   // caller（composable）从 store 拿数据后传进来
  *   computeAndSaveAbilityProfile({
  *     diagAnswers: store.abilityProfile?.diagAnswers,
@@ -28,16 +33,16 @@ import { sumAnswerScores } from '@/utils/score'
  * 单等级评估辅助函数
  */
 function evaluateLevel(levelId, answers) {
-  const la = answers.filter(a => a.level === levelId)
+  const la = answers.filter((a) => a.level === levelId)
   if (!la.length) return { correct: 0, total: 0, accuracy: 0, hasData: false }
-  const correct = la.filter(a => a.isCorrect === true).length
+  const correct = la.filter((a) => a.isCorrect === true).length
   const total = la.length
   return { correct, total, accuracy: sumAnswerScores(la) / total, hasData: true }
 }
 
 /**
  * 计算当前用户画像并持久化到 DB
- * 纯函数：caller 传 store 数据，U 层不引 M 层
+ * 纯函数：caller 传 store 数据，service 层不引 M 层
  *
  * @param {object} opts
  * @param {Array} [opts.diagAnswers=[]]

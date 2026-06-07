@@ -12,3 +12,5 @@
 export * from '@/utils/services/analysis'
 // 统一 operator 映射 (ARCHITECTURE.md §2.1 目标树)
 export * from './operatorMap'
+// 能力画像计算 (2026-06-07 升层自 utils/abilityProfile.js)
+export * from './abilityProfile'
