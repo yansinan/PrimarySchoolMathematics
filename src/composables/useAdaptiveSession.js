@@ -176,7 +176,7 @@ export function useAdaptiveSession(options = {}) {
     // 再创建自适应引擎（createAdaptiveEngine 依赖 profile.diagAnswers 计算 strong/weak 索引）。
     const targetMin = 10
     const targetMax = 30
-    practiceStore.completeAssessment(profile, { targetMin, targetMax })
+    practiceStore.completeAssessment(profile, snapshot, { targetMin, targetMax })
 
     const engine = createAdaptiveEngine(practiceStore.abilityProfile, targetMin, targetMax)
     adaptiveEngine.value = engine
@@ -188,9 +188,7 @@ export function useAdaptiveSession(options = {}) {
     const { questions: firstQuestions, reservePool } = generateAdaptiveBatch(engine, size, plan)
     adaptiveEngine.value.reservePool = reservePool
 
-    // 传入 targetMin/targetMax 到 adaptiveConfig (之后 startNewAdaptiveSession 从这读)
-    practiceStore.completeAssessment(profile, { targetMin, targetMax })
-    // P5 fix: 同步 currentDifficultyIdx 到引擎实际值（store 的 hardcode 0 不正确）
+    // P5 fix: 同步 currentDifficultyIdx 到引擎实际值
     practiceStore.setCurrentDifficulty(engine.difficultyIdx, 1)
     practiceStore.setListPractices(firstQuestions)
   }

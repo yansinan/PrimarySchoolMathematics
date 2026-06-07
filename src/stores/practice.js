@@ -141,11 +141,12 @@ export const usePracticeStore = defineStore('practice', {
      *  - session.adaptiveConfig 诊断完成时设置，自适应引擎专用，不受 Generate.vue 污染
      *  - resetPracticeSession 时清空 adaptiveAnswers 和 adaptiveConfig（新一轮开始）
      */
-    completeAssessment(profile, adaptiveOptions = {}) {
+    completeAssessment(profile, diagAnswers, adaptiveOptions = {}) {
       // 把诊断答题（含 level 字段）保存到 abilityProfile.diagAnswers
+      // diagAnswers 是调用方传来（防异步竞态），不用 this.session.answers
       const enrichedProfile = {
         ...profile,
-        diagAnswers: [...this.session.answers],
+        diagAnswers: [...(diagAnswers || this.session.answers)],
       }
       this.abilityProfile = enrichedProfile
       this.phase = 'practice'
