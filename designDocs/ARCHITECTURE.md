@@ -204,16 +204,17 @@ src/
 
 | 状态 | 路径 | 行 | 原因 |
 |:----:|------|---:|------|
-| ✅ | `src/apis/paper.js` | 59 | 仅 Generate/Home 引用，Home 死则仅 Generate 1 处，迁到 services 即可删 apis 目录 |
-| ✅ | `src/utils/request.js` | 61 | 仅 apis/paper 引用（apis 死则它也死）|
-| ✅ | `src/utils/download.js` | 168 | 仅 Home.vue 引用（Home 死）|
-| ✅ | `src/views/Home.vue` | 147 | router 未引用 + 与 Generate.vue 重复 |
+| ✅ ~~**🟠 留 v2.4+**~~ | `src/views/Home.vue` | 147 | router 仍未引用 + 与 Generate.vue 重复。**2026-06-07 chore/cleanup-a-group 删除** |
+| ✅ | `src/apis/paper.js` | 59 | 仅 Generate/Home 引用，Home 死则仅 Generate 1 处，**2026-06-07 chore/cleanup-a-group 删除**（Generate 中 import 但从未调用）|
+| ✅ | `src/utils/request.js` | 61 | 仅 apis/paper 引用，**2026-06-07 随 apis/paper 删除** |
+| ✅ | `src/utils/download.js` | 168 | 仅 Home.vue 引用（Home 死则它也死）。**2026-06-07 随 Home 删除** |
 | 🔴 | `src/views/TestView.vue` | 51 | **router 仍引用** — 测试页保留 |
 | 🔴 | `src/components/TestComponentView.vue` | 209 | **TestView 引用** — 布局组件测试页 |
 | 🔴 | `src/components/TestHorizontalLayout.vue` | 115 | **TestComponentView 引用** — 布局测试用例 |
 | 🔴 | `src/components/home/index.js` | 5 | **未列入**（桶仍被 Generate.vue 等引用）|
 | 🔴 | `src/stores/app.js` | 20 | **未列入**（Generate/Home/Print 仍引用 navigateToPrint，迁 usePrintPreview 前不删）|
-| ⏳ | `src/utils/paperGenerator.js` | 65 | Generate+Home 引用；Home 死则 Generate 单引用，可迁 services |
+| ✅ ~~**⏳ 待查**~~ | `src/utils/paperGenerator.js` | 65 | Generate+Home 引用；Home 死则 Generate 单引用，可迁 services。**2026-06-07 确认**：仅 Generate 1 处，可迁到 `services/paperGenerator.js` 后删 |
+| ✅ | `src/components/index.js` | 10 | 没人用（仅 Layout.vue 用了桶，已改直接路径），**2026-06-07 chore/cleanup-a-group 删除** |
 
 ### 3.2 死符号
 
@@ -235,21 +236,22 @@ src/
 
 | 文件 | import | 备注 |
 |------|--------|------|
-| `src/views/Home.vue:49-53` | `download` / `generatePaper` / `httpContentTypeExtensionsMappingEnum` / `createFormulasGenerator` | Home 删后自动消失 |
-| `src/components/Generate.vue:81` | `httpContentTypeExtensionsMappingEnum` | import 但未用，可删 |
-| `src/components/Generate.vue:83` | `generatePaper` from `@/apis/paper` | 待迁移到 services |
-| `src/components/Generate.vue:86` | `createFormulasGenerator` from `@/utils/paperGenerator` | 待迁移到 services |
-| `src/views/Home.vue:93` | `console.log('少年，我看你骨骼精奇...')` | 彩蛋, 删 Home.vue 后消失 |
+| ~~`src/views/Home.vue:49-53`~~ | ~~`download` / `generatePaper` / `httpContentTypeExtensionsMappingEnum` / `createFormulasGenerator`~~ | ~~Home 删后自动消失（2026-06-07）~~ |
+| ✅ ~~`src/components/Generate.vue:81`~~ | ~~`httpContentTypeExtensionsMappingEnum`~~ | import 但未用，**2026-06-07 已删** |
+| ✅ ~~`src/components/Generate.vue:82`~~ | ~~`download`~~ | import 但未用，源文件已删，**2026-06-07 已清** |
+| ✅ ~~`src/components/Generate.vue:83`~~ | ~~`generatePaper`~~ | import 但未用，源文件已删，**2026-06-07 已清** |
+| ~~`src/components/Generate.vue:86`~~ | ~~`createFormulasGenerator` from `@/utils/paperGenerator`~~ | 待迁移到 services（留 v2.4） |
+| ~~`src/views/Home.vue:93`~~ | ~~`console.log('少年，我看你骨骼精奇...')`~~ | 彩蛋，Home 删后消失（2026-06-07）|
 
 ### 3.4 调试残留
 
-| 文件 | 内容 |
-|------|------|
-| `src/views/Home.vue` | `debugger`(近末尾) |
-| `src/utils/paperGenerator.js:64` | `console.log('papers', papers)` |
-| `src/views/Print.vue:56,71,75,80` | 4 处 console.log |
-| `src/utils/database.js:215` | `console.log('[PracticeStore] Session saved to DB...')` |
-| `src/router/index.js` | 潜在 `console.log(baseUrl)` |
+| 文件 | 内容 | 状态 |
+|------|------|:----:|
+| ✅ ~~`src/views/Home.vue`~~ | ~~`debugger`(近末尾)~~ | 随 Home 删（2026-06-07）|
+| `src/utils/paperGenerator.js:64` | `console.log('papers', papers)` | ⏳ 留 v2.4（随 paperGenerator 迁 services 时清）|
+| `src/views/Print.vue:56,71,75,80` | 4 处 console.log | ⏳ 留 v2.4 |
+| `src/utils/database.js:215` | `console.log('[PracticeStore] Session saved to DB...')` | ⏳ 留 v2.4（数据库层调试输出）|
+| ✅ ~~`src/router/index.js:33`~~ | ~~`// console.log(baseUrl)`~~ | 注释清掉（2026-06-07）|
 
 ### 3.5 重复实现
 

@@ -1,6 +1,49 @@
 # PrimarySchoolMathematics 进度记录
 
-> 跟踪版本、阶段、UI 可见性。最后更新：2026-06-07（v2.3 arch-v2.3 阶段 5/6 整改）
+> 跟踪版本、阶段、UI 可见性。最后更新：2026-06-07（v2.3 A 组死代码清理）
+
+---
+
+## v2.3 A 组死代码清理（2026-06-07）
+
+### 范围
+A 组 5 个子任务全部落地：删 5 个文件 + 3 个死 import + 1 个调试注释。
+
+分支：`chore/cleanup-a-group`（1 个 commit）
+
+### Commits
+| hash | 范围 |
+|------|------|
+| `793056e` | A6 删 `views/Home.vue` + A7 删 `apis/paper.js` + `utils/request.js` + `utils/download.js` + A3 清 Generate.vue 死 import + A1 删 `components/index.js` + A2 删 `utils/enum.js` 死导出 + router 调试注释 |
+
+### 净增 / 减
+**9 files changed, 3 insertions(+), 459 deletions(-)**
+
+| 类型 | 详情 |
+|------|------|
+| 整文件删 | `views/Home.vue` (147) + `apis/paper.js` (59) + `utils/request.js` (61) + `utils/download.js` (168) + `components/index.js` (10) |
+| 死导出删 | `utils/enum.js` 的 `httpContentTypeExtensionsMappingEnum` |
+| 死 import 删 | `Generate.vue:81-83` 共 3 行（`httpContentTypeExtensionsMappingEnum` / `download` / `generatePaper`）|
+| 调试残留清 | `router/index.js:33` `// console.log(baseUrl)` |
+| 依赖补 | `views/Layout.vue` 由 `@/components` 桶 → `@/components/Generate.vue` + `@/components/Practice.vue` 直接路径 |
+
+### UI 可见性：**🟡 0 视觉变化**（删的全是非活跃引用）
+
+### 验证状态
+- ✅ `npx vitest run` 44/45 通过（1 预存失败无关）
+- ✅ 浏览器实测：评估→自适应→答题正常（已用 `__psm_debug` 验证 groupIdx 推进）
+- ✅ 0 JS error，0 死 import 残留
+
+### 关键发现与决策
+1. **`utils/download.js` 仍被 Generate.vue:82 引用**：原审计数据陈旧，实际是 `download` 和 `generatePaper` 都被 Generate.vue import 但**从未在 body 中调用**。A7 删除源文件后必须立即清理 A3 的死 import（已合并处理）。
+2. **`stores/app.js` 仍被 Generate.vue:84 引用**（`useAppStore().navigateToPrint` 在 line 157 实际使用），`printPreviewPapers` 字段活。`app.js` 不能删，需等 D1（`usePrintPreview` composable）落地。
+3. **Layout.vue 是 `@/components` 桶的唯一用户**：A1 删桶时直接改 Layout.vue 为 `Generate` + `Practice` 两个直接路径 import。
+
+### 已知遗留（A4 / A5 / A8 下一轮）
+详见 [TODO-cleanup-a-group.md](TODO-cleanup-a-group.md) § 3：
+- A4 删 `utils/abilityProfile.js` (91 行重复实现)
+- A5 删 `utils/algorithm/diagnostic.js` 的 `evaluateLevel` 函数
+- A8 删 §3.4 调试残留 6 处 console.log
 
 ---
 
