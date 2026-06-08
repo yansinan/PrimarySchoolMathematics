@@ -74,7 +74,7 @@
 
 <script setup>
 import { ref } from 'vue'
-import HorizontalLayout from './question/HorizontalLayout.vue'
+import HorizontalLayout from '../question/HorizontalLayout.vue'
 
 const showAnswer1 = ref(false)
 const showAnswer2 = ref(false)

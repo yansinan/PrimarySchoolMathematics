@@ -16,7 +16,7 @@
 </template>
 
 <script setup>
-import TestComponentView from '@/components/TestComponentView.vue'
+import TestComponentView from '@/components/dev/TestComponentView.vue'
 </script>
 
 <style scoped>

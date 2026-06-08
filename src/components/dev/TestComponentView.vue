@@ -83,9 +83,9 @@
 
 <script setup>
 import { reactive } from 'vue'
-import HorizontalLayout from './question/HorizontalLayout.vue'
-import VerticalLayout from './question/VerticalLayout.vue'
-import DigitInput from './question/DigitInput.vue'
+import HorizontalLayout from '../question/HorizontalLayout.vue'
+import VerticalLayout from '../question/VerticalLayout.vue'
+import DigitInput from '../question/DigitInput.vue'
 
 const horizontalCases = reactive([
   { label: '1. 正常算式：3+4=__',    equation: '3+4=7',   answer: '7', show: false },

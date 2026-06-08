@@ -128,7 +128,7 @@ import { computed, ref, unref, toRaw, getCurrentInstance, watch } from 'vue';
 import { v4 as uuidv4 } from "uuid";
 import { cloneDeep } from "lodash";
 import ConfigStorage from '@/utils/store/configStorage';
-import { OptionsDrawer } from "@/components/home";
+import { OptionsDrawer } from "@/components/generate";
 import { validateTargetRange, TARGET_LIMITS } from '@/utils/form/formDefaults';
 
 const { proxy } = getCurrentInstance()

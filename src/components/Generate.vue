@@ -76,7 +76,7 @@
 <script setup>
 import { ref, onMounted, unref, toRaw, getCurrentInstance, computed } from 'vue';
 import { useRouter } from "vue-router";
-import { CustomFormulas, AutoGenerateFormulas, ConfigurationList } from "@/components/home";
+import { CustomFormulas, AutoGenerateFormulas, ConfigurationList } from "@/components/generate";
 import ConfigStorage from "@/utils/store/configStorage";
 import { fileNameGeneratedRuleEnum } from '@/utils/enum';
 import { useAppStore } from '@/stores/app';
