@@ -18,8 +18,9 @@ v3 架构调优落地后，3 项未完成业务功能重组到本计划：
 
 | Phase | 内容 | 净行 | 风险 | 起点 |
 |-------|------|------|------|------|
-| **v4.0 前置** | S 层错题模块 `services/wrongAnswerService.js`（CRUD + 查）| +80 | 🟢 独立 | **用户推荐的前置** |
-| **v4.1** | P1.6 + P1.8 错题注入（基于 v4.0 模块）| +106 | 🟡 | v4.0 完成后 |
+| **v4.0a 前置** | S 层数据库代理 `services/database.js`（薄封装 re-export）| +18 | 🟢 独立 | **立即** |
+| **v4.0b 前置** | S 层错题模块 `services/wrongAnswerService.js`（基于 v4.0a）| +80 | 🟢 独立 | v4.0a 完成后 |
+| **v4.1** | P1.6 + P1.8 错题注入（基于 v4.0b）| +56 | 🟡 | v4.0b 完成后 |
 | **v4.2** | P3 L2.5 难度等级 | +57 | 🟡 | v4.1 之后 |
 
 **预计总时间**：2-3 周（含 S 层前置 2-3 天）
@@ -28,26 +29,80 @@ v3 架构调优落地后，3 项未完成业务功能重组到本计划：
 
 ## 1. 总体路线与依赖
 
-v4 分 3 个 phase，每个都**渐进可达**（每做完一个都可独立上线/生产观察）：
+v4 分 4 个 phase，每个都**渐进可达**：
 
 ```
-v4.0 前置: S 层错题模块
-  └── 独立于 engine/stores，安全演进
+v4.0a: S 层数据库代理 services/database.js（10 分钟 ⚡）
+  └── 薄封装 re-export @/utils/store/database，零逻辑
        │
-       ↓ (v4.0 为 v4.1 提供查询基础)
+       ↓ (v4.0a 为下层提供 S 层 DB 入口)
+v4.0b: S 层错题模块 services/wrongAnswerService.js
+  └── 引 services/database（不直接引 utils/），有错题可逐步迁移其他 @/utils/store/database 调用者
+       │
+       ↓ (v4.0b 为引擎提供错题数据源)
 v4.1 错题注入
-  ├── P1.6 干扰项错题库（用 v4.0 的 getWrongAnswers 做优先候选）
-  └── P1.8 20% 错题注入（用 v4.0 的 getWrongAnswers 做错题来源）
+  ├── P1.6 干扰项错题库（调 v4.0b.getWrongAnswers）
+  └── P1.8 20% 错题注入（调 v4.0b.getWrongAnswers）
        │
        ↓ (v4.1 后 engine 稳定)
-v4.2 P3 L2.5 难度等级（独立不影响 engine 错题逻辑）
+v4.2 P3 L2.5 难度等级
+
+平行推进（不阻塞）:
+  v4.0c: 逐步改 9 处 @/utils/store/database 引用 → @/services/database
+  v4.0d: 全部迁移完成后，services/database.js 从 re-export 改为原生实现，删 utils/store/database.js
 ```
 
 ---
 
-## 2. v4.0 前置：S 层错题模块（用户推荐）
+## 2. v4.0a 前置：S 层数据库代理（✅ 已建）
 
 ### 2.1 目标
+
+在 `services/database.js` 建一层**薄封装**——直接把 `utils/store/database.js` 所有 export 原样 re-export。
+
+**零逻辑，10 分钟完成。**
+
+```js
+// src/services/database.js (18 行)
+export {
+  default as DB,
+  saveSession, getSessions, getSessionDetail, deleteSession,
+  saveAbilitySnapshot, getLatestAbilitySnapshot,
+  getAggregatedStats, exportAllData, importAllData,
+  getAllAnswers, clearAllData, saveQuestion, getQuestion,
+  getQuestionByEquation,
+} from '@/utils/store/database'
+```
+
+### 2.2 用途
+
+| 用途 | 描述 |
+|------|------|
+| **v4.0b 用** | `wrongAnswerService` 引 `@/services/database` 不直接引 U 层——将来 U 层 database 迁移时错题模块**不用改** |
+| **v4.0c 迁移用** | 逐步改 9 处 `@/utils/store/database` → `@/services/database`（有错题先改，其他后改）|
+| **v4.0d 最终态** | 全部迁移完成 → `services/database.js` 从 re-export 改为原生实现 → 删 `utils/store/database.js` |
+
+### 2.3 迁移清单（9 处 import 站点）
+
+| 文件 | import | 迁移优先级 |
+|------|--------|-----------|
+| `utils/services/analysis.js:13` | `import db from '@/utils/store/database'` | 🟢 v4.0c |
+| `composables/usePracticeSaver.js:26` | `import db, { saveQuestion } from '@/utils/store/database'` | 🟢 v4.0c |
+| `stores/practice.js:3` | `import { saveSession } from '@/utils/store/database'` | 🟡 v4.0c（小心）|
+| `stores/stats.js:3-12` | `import { getSessions, ... } from '@/utils/store/database'` | 🟡 v4.0c（小心）|
+| `services/abilityProfile.js:27` | `import { saveAbilitySnapshot } from '@/utils/store/database'` | 🟢 v4.0c |
+| `services/sessionPersistence.js:30` | `import db, { saveSession } from '@/utils/store/database'` | 🟢 v4.0c |
+| `views/ResetData.vue:32` | `import { clearAllData } from '@/utils/store/database'` | 🟢 v4.0c |
+| `utils/services/__tests__/analysis.spec.js:10` | `import db from '@/utils/store/database'` | 🟢 v4.0c |
+| `services/__tests__/analysis.spec.js:10` | `import db from '@/utils/store/database'` | 🟢 v4.0c |
+
+**优先级策略**：`wrongAnswerService` 直接建在 v4.0a 上；`services/xxx` 层文件优先迁移（`sessionPersistence`、`abilityProfile`）；`stores/*` 和 `composables/*` 可后迁（安全第一）。
+
+---
+
+## 3. v4.0b 前置：S 层错题模块（用户推荐）
+
+### 3.1 目标
 
 独立于 `analysis.js` 和引擎逻辑的**错题专用服务**。从 U 层 database 查询 → 组织成错题服务：增删改查 + 灵活条件过滤。
 
