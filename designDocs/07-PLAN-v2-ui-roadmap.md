@@ -240,4 +240,4 @@ v3.0.0（强化出题 + 曲线 + profile）— 3 天+
 - [PLAN-v2-ability-analysis.md](06-PLAN-v2-ability-analysis.md) — 数据层设计（§ 3.4 弱项/强项）
 - [PLAN-browser-smoke-test.md](11-PLAN-browser-smoke-test.md) — 真浏览器测试计划
 - [IdeaByUser.md](10-IdeaByUser.md) — 用户原始设计
-- [PROGRESS.md](02-PROGRESS.md) — 进度记录
+- [_ARCHIVED_02-PROGRESS.md](_ARCHIVED_02-PROGRESS.md) — 进度记录（v3 收尾前日志）
