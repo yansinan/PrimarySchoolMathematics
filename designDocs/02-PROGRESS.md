@@ -203,9 +203,79 @@ analysis.js (887 行) + analysis.spec.js (733 行) 整体从 `utils/services/` �
 4. **sumResponseTimes 兜底较严**：除 `null/0/缺失` 外，**负数** 也兜底为 0（异常数据保护）。
 
 ### 已知遗留
-- C6 `paperGenerator.js` 升层待执行（用户决议跳过：单文件 1 函数移 1 改 3 性价比低）
+- C6 `paperGenerator.js` 升层跳过（单函数不值当挪动，v2.4+ 聚合 paperGenerator+psm+EquationSolver+equationParser+diagnostic+adaptiveBatch+formDefaults 7 个文件到 `services/questionGen/` 子目录）
 - `utils/score.js` 和 `utils/enum.js` 仍为根目录直留文件
 - 旧 session `totalDuration` 字段（写于 bug 期间）数据脏，历史显示不修（低优先级）
+
+---
+
+## v3 D2 useStatsQuery（2026-06-08）
+
+### 范围
+抽 `stores/stats.js` 8 个 action 到 `composables/useStatsQuery.js`：5 read（Phase 1）+ 3 write/IO（Phase 2）。store 退化为 state + getter + 3 个 drawer UI toggle。
+
+分支：`chore/cleanup-d-group`（基于 c-group，3 个 commit）
+
+### Commits
+| hash | 范围 |
+|------|------|
+| `399e3ba` | feat: D2 Phase 1 — 抽 5 个 stats DB 加载 action 到 useStatsQuery |
+| `3340700` | docs: D2 Phase 1 useStatsQuery 落地 — PROGRESS/05-PLAN-v3 同步 |
+| `4525335` | feat: D2 Phase 2 — 抽 3 个 stats write/IO action 到 useStatsQuery |
+
+### 净增 / 减
+**D2 合计**：4 files changed, +97/-103 + 3 files / +56/-3 docs = 净 -6 行
+- `composables/useStatsQuery.js`: 0 → 192 → 273 行（+81 Phase 2）
+- `stores/stats.js`: 244 → 113 → 113 行（Phase 1 减 131，Phase 2 不变）
+- `composables/useStatsDrawer.js`: 微调 9 行（destructure 加 exportData/importData alias）
+- `composables/index.js`: 10 → 14 行（桶补 4 个 export：D4 + D2 useStatsQuery）
+
+### UI 可见性：**🟡 0 视觉变化**（纯分层调整）
+
+### 8 个 action 升层矩阵
+
+| # | 类别 | action | 去向 |
+|---|------|--------|------|
+| 1 | DB read | `loadSessions` | → useStatsQuery |
+| 2 | DB read | `loadSessionDetail` | → useStatsQuery |
+| 3 | DB read | `loadAggregatedStats` | → useStatsQuery |
+| 4 | DB read | `loadAllAnswers` | → useStatsQuery |
+| 5 | DB read | `refreshAll` | → useStatsQuery (组合 #1 + #3) |
+| 6 | DB write | `deleteSessionById` | → useStatsQuery (含 refreshAll) |
+| 7 | 文件 IO | `exportData` | → useStatsQuery (Blob/URL/a.click) |
+| 8 | 文件 IO | `importData` | → useStatsQuery (FileReader + refreshAll) |
+
+**留 store 3 个 UI toggle**：`toggleDrawer` / `openDrawer` / `closeDrawer`
+
+### 调用方改动（5 处）
+
+| 文件:行 | Before | After |
+|---------|--------|-------|
+| `DebugPanel.vue:255,256` | `statsStore.refreshAll()` / `statsStore.loadAllAnswers()` | `useStatsQuery().refreshAll()` / `useStatsQuery().loadAllAnswers()` |
+| `usePracticeSaver.js:108,120` | `await statsStore.refreshAll()` | `await useStatsQuery().refreshAll()` |
+| `useStatsDrawer.js:36` | `statsStore.loadSessionDetail()` | `useStatsQuery().loadSessionDetail()` |
+| `useStatsDrawer.js:48-58` | `statsStore.exportData()` / `statsStore.importData()` | `useStatsQuery()` 暴露的 `exportData` / `importData` |
+
+### 验证状态
+- ✅ `npx vitest run` 49/50（1 预存失败与本次无关）
+- ✅ `npx vite build` 736 modules
+- ✅ 浏览器实测（评估→G1(6/6)→G2(14/14)→ 3 个 IO action）：
+  - `deleteSessionById(1)`：1 session → 0 ✓
+  - `exportData()`：触发 a.click() + blob URL 创建 ✓
+  - `importData(file)`：1 session 导入成功（imported 1, skipped 0）✓
+  - `refreshAll` / `loadAllAnswers`（Phase 1）：仍正常 ✓
+  - `useStatsDrawer` 集成：hasExport/hasImport 函数暴露 ✓
+
+### 关键发现
+1. **store 退化为纯状态层**：原 244 行 → 113 行，仅留 state + getter + 3 个 UI toggle。业务行为（数据加载/IO）全在 composable。
+2. **跨 store 共享通过 pinia 单例**：`useStatsQuery` 内 `const store = useStatsStore()`，`store.sessions = ...` 直接写状态，V 层读仍走 `useStatsStore().sessions`。
+3. **D4 桶补准备未来迁移**：3 个漏桶（`useAnswerBuilder`/`useSubmitHandler`/`useStatsDrawer`）+ D2 新增的 `useStatsQuery` 一次性加到桶。当前 0 桶消费者（V 层全直引），桶为未来迁移准备。
+4. **Phase 1/2 拆分的好处**：Phase 1 浏览器充分测试 → 验证 5 read 路径无误 → Phase 2 加 3 write/IO → 进一步浏览器实测。分层迭代降低单次风险。
+
+### 已知遗留
+- D1 usePrintPreview 跳过（你决议不动 print 线）
+- D3 useChart 跳过（chartBuilder 服务层已覆盖）
+- E 组 stores 瘦身仍需 D1 完成（print 这条线未动，`stores/app.js` 暂留）
 
 ---
 

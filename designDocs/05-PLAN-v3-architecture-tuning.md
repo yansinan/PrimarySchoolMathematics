@@ -21,7 +21,7 @@ v2 arch 重构（7 阶段）是结构性整改（分层、路径）。**v3 调�
 |----|------|------|--------|---|
 | **A** | 死代码清理 | 🟢 | -460 | ✅ **完成**（v2.3 A6+A7+A3+A1+A2+A4b）|
 | **B** | 路径统一（PR 阶段 1.3）| 🟡 | -63 (实际: -43 + 6 删 + 0 桶影响) | ✅ **完成** (commit `210c9b5`, 2026-06-08) |
-| **C** | services 升顶层 + 完善 | 🟡 | +30 | ⬜ C1+C2+C3 完成 (`3f9f777`)，C4 sumResponseTimes 落地 (`ded867e`)，C6 paperGenerator 待升 |
+| **C** | services 升顶层 + 完善 | 🟡 | +30 | ✅ C1+C2+C3 (`3f9f777`)、C4 (`ded867e`) 完成；C6 paperGenerator 跳过（单函数不值当，v2.4+ 聚合）|
 | **D** | composables 补齐 | 🟡 | +100 | ⬜ D4 桶补 + D2 Phase 1 完成 (`399e3ba`)，D2 Phase 2 (3 个 IO+delete 待做)，D1 usePrintPreview/D3 useChart 跳过 |
 | **E** | stores 瘦身 + 删 app.js | 🟠 | -70 | ⬜ 依赖 D1（usePrintPreview）|
 | **F** | components 目录归位 | 🟡 | 0 | ⬜ 部分（dialog/ 已建，home→generate + →dev 未做）|
