@@ -279,6 +279,54 @@ analysis.js (887 行) + analysis.spec.js (733 行) 整体从 `utils/services/` �
 
 ---
 
+## v3 F 组 components 归位（2026-06-08）
+
+### 范围
+3 个子任务：F1 home/→generate/、F2 Test*→dev/、F3 删 3 死文件。
+
+分支：`chore/cleanup-f-group`（基于 d-group，1 个 commit：`4829643`）
+
+### Commits
+| hash | 范围 |
+|------|------|
+| `4829643` | chore: F 组 components 归位 — home→generate + 测试→dev/ + 删 3 死文件 |
+
+### 净增 / 减
+**6 files changed, +7/-7, 9 文件重命名, 3 文件删除**（净 -63 行）
+- 改 6 文件（4 处 import 改 + 1 桶 import 改）
+- 重命名 9 文件：7 home/→generate/ + 2 Test*→dev/
+- 删 3 文件：Header/Menu/Footer
+
+### UI 可见性：**🟡 0 视觉变化**（纯归位）
+
+### 3 子任务
+
+| # | 内容 | 改动 |
+|---|------|------|
+| F1 | `home/` → `generate/` | 7 个文件 git mv + 2 处桶 import 改 |
+| F2 | Test* → `dev/` | 2 个文件 git mv + 1 处 import 改 + 4 处 internal `../question/...` 修正 |
+| F3 | 删死代码 | Header/Menu/Footer (3 文件 0-import) |
+
+### 验证状态
+- ✅ `npx vitest run` 49/50（1 预存失败与本次无关）
+- ✅ `npx vite build` 736 modules
+- ✅ 浏览器实测：
+  - 评估→G1(4/4)→G2 正常推进（Generate.vue 桶 import 改后未破）
+  - `/test` 路由：50 元素（HorizontalLayout/VerticalLayout/DigitInput 测试用例全显示）
+
+### 关键发现
+1. **Header/Menu/Footer 真的是死代码**：0 import 站点，Layout.vue 实际只引 4 个组件（Generate/Practice/StatsDrawer/DebugPanel）。这 3 个是 v2 早期布局遗留，不在用户保护范围（Test 前缀）所以直接删。
+2. **F2 暴露 internal 路径问题（B3 同类）**：TestComponentView 4 处 + TestHorizontalLayout 1 处 internal `./question/...` 相对路径，从 components/ 根移 dev/ 后立即 build 爆。修：改 `../question/...`。
+3. **F1 桶 import 2 处而非 1 处**：Generate.vue 主 import + AutoGenerateFormulas.vue 内部自引 OptionsDrawer，2 处都要改。
+4. **components/home/index.js 桶**（6 .vue 的桶导出）随 F1 整体迁移到 generate/index.js，桶结构保留。
+
+### 已知遗留
+- E 组 stores 瘦身（仍依赖 D1，D1 跳过故 E 暂停）
+- G 组 测试分区（`__tests__/` 散落在各子目录，移到顶层 `tests/`）
+- H 组 验证 + 文档（v3 收尾）
+
+---
+
 ## v3 D2 Phase 1 useStatsQuery 5 个 DB 加载（2026-06-08）
 
 ### 范围
