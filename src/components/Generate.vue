@@ -77,13 +77,13 @@
 import { ref, onMounted, unref, toRaw, getCurrentInstance, computed } from 'vue';
 import { useRouter } from "vue-router";
 import { CustomFormulas, AutoGenerateFormulas, ConfigurationList } from "@/components/home";
-import ConfigStorage from "@/utils/configStorage";
+import ConfigStorage from "@/utils/store/configStorage";
 import { fileNameGeneratedRuleEnum } from '@/utils/enum';
 import { useAppStore } from '@/stores/app';
 import { usePracticeStore } from '@/stores/practice';
 import { createFormulasGenerator } from '@/utils/paperGenerator';
 // 表单默认值（17 字段统一来源）
-import { DEFAULT_FORM_DATA, applyConfigToFormData, buildPaperDescriptionList } from '@/utils/formDefaults';
+import { DEFAULT_FORM_DATA, applyConfigToFormData, buildPaperDescriptionList } from '@/utils/form/formDefaults';
 // 解算式
 import { EquationSolver } from '@/utils/algorithm/EquationSolver';
 const { proxy } = getCurrentInstance()

@@ -23,7 +23,7 @@ import { useStatsStore } from '@/stores/stats'
 import { computeAndSaveAbilityProfile } from '@/services/abilityProfile'
 // 修复 Bug 3: 直接 import db 实例, 用于 savePerQuestion 写单条 answer
 // (避免每题都 saveSessionToDB 产生 N 个 1 步 session 污染"最近练习"列表)
-import db, { saveQuestion } from '@/utils/database'
+import db, { saveQuestion } from '@/utils/store/database'
 
 /**
  * 从 history 中提取 evaluations（{group, score}[]），转 JSON 字符串

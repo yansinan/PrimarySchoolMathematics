@@ -24,7 +24,7 @@
  *  - currentLevel / totalLevels / currentLevelLabel
  */
 
-import { saveAbilitySnapshot } from '@/utils/database'
+import { saveAbilitySnapshot } from '@/utils/store/database'
 import { DIAG_LEVELS } from '@/utils/algorithm/diagnostic'
 import { DIFFICULTY_LEVELS } from '@/utils/algorithm/adaptiveEngine'
 import { sumAnswerScores } from '@/utils/score'

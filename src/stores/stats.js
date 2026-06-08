@@ -9,7 +9,7 @@ import {
   // P2 阶段 14: StatsDrawer 需要全量历史答案, 改走 database 层
   // (M 层可引 D 层 — database.js 是数据层, 合规)
   getAllAnswers
-} from '@/utils/database'
+} from '@/utils/store/database'
 // 统一 operator 映射（ARCHITECTURE.md §3.5 消除重复）
 // OPERATOR_SYMBOLS 对应图表显示（＋ － × ÷）
 import { OPERATOR_SYMBOLS } from '@/services'

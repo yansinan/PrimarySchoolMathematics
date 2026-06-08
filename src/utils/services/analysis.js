@@ -10,7 +10,7 @@
  * - § 3.1 题目聚合（findEquivalent / findRelated / getMasteryByNumber）
  */
 
-import db from '@/utils/database'
+import db from '@/utils/store/database'
 import { getAnswerScore, sumAnswerScores } from '@/utils/score'
 
 // ─── 辅助工具 ─────────────────────────────────────────────────────

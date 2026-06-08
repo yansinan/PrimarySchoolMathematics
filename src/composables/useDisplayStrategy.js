@@ -19,7 +19,7 @@ import {
   decideDisplayMode,
   createInitialStats,
   updateDisplayStats,
-} from '@/utils/displayStrategy'
+} from '@/utils/algorithm/displayStrategy'
 import { ASSIST_LEVELS } from '@/constants/practice'
 
 /**

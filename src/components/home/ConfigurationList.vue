@@ -16,7 +16,7 @@
 
 <script setup>
 import { getCurrentInstance, computed, watch } from 'vue';
-import ConfigStorage from '@/utils/configStorage';
+import ConfigStorage from '@/utils/store/configStorage';
 import { cloneDeep } from 'lodash';
 
 const { proxy } = getCurrentInstance()

@@ -10,7 +10,7 @@
  */
 import { computed } from 'vue'
 import { useStatsStore } from '@/stores/stats'
-import { formatDuration as _formatDuration } from '@/utils/timeFormat'
+import { formatDuration as _formatDuration } from '@/utils/time/timeFormat'
 // 统一 operator 中文名称（services/operatorMap.js）
 import { OPERATOR_LABELS } from '@/services'
 

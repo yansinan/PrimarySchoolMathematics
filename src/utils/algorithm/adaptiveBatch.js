@@ -17,7 +17,7 @@
  */
 
 import { createFormulasGenerator } from '../paperGenerator'
-import { EquationSolver } from '../EquationSolver'
+import { EquationSolver } from './EquationSolver'
 import {
   diversifyBatch,
   DIFFICULTY_LEVELS,

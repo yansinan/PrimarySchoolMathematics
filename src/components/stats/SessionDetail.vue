@@ -97,7 +97,7 @@
 import { computed, watch } from 'vue'
 import { Document, Check, Close } from '@element-plus/icons-vue'
 import { useStatsStore } from '@/stores/stats'
-import { formatDuration } from '@/utils/timeFormat'
+import { formatDuration } from '@/utils/time/timeFormat'
 
 const statsStore = useStatsStore()
 

@@ -7,7 +7,7 @@
  * 工具：vitest + fake-indexeddb（让 Dexie 在 Node 环境跑）
  */
 import { describe, it, expect, beforeEach } from 'vitest'
-import db from '@/utils/database'
+import db from '@/utils/store/database'
 import {
   getEffectiveResponseTime,
   findEquivalent,

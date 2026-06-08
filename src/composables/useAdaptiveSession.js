@@ -27,8 +27,8 @@ import { createAdaptiveEngine, getGroupSize, evaluateGroup, getDifficultyLabel, 
 import { generateAdaptiveBatch } from '@/utils/algorithm/adaptiveBatch'
 import { getGroupComment, getCommentByRate } from '@/constants/practice'
 import { sumAnswerScores } from '@/utils/score'
-import { TARGET_LIMITS } from '@/utils/formDefaults'
-import { formatDuration } from '@/utils/timeFormat'
+import { TARGET_LIMITS } from '@/utils/form/formDefaults'
+import { formatDuration } from '@/utils/time/timeFormat'
 
 /**
  * 自适应会话 composable 工厂
