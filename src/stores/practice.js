@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia'
 import { EMPTY_PARSED_EQUATION, getCarryType, parseEquation } from '@/utils/algorithm/equationParser'
-import { saveSession } from '@/utils/store/database'
+// E1: saveSession / sumResponseTimes 已迁 services/sessionPersistence.js
 import { LS_KEY_PSM_PROFILE } from '@/constants/storageKeys'
-import { sumAnswerScores, sumResponseTimes } from '@/utils/score'
+import { sumAnswerScores } from '@/utils/score'
 
 const LS_KEY = LS_KEY_PSM_PROFILE
 
@@ -211,62 +211,5 @@ export const usePracticeStore = defineStore('practice', {
       const elapsed = Date.now() - (this.session.startTime || Date.now())
       return elapsed
     },
-
-    /**
-     * Persist the completed session and its answers to IndexedDB.
-     * Called after the last question is answered.
-     */
-    async saveSessionToDB(evaluations) {
-      const answers = this.session.answers
-      if (!answers.length) return
-
-      // 按 questionIndex 去重，确保每个问题只算一次
-      const seen = new Set()
-      const uniqueAnswers = answers.filter(a => {
-        const key = a.questionIndex ?? a.equation
-        if (seen.has(key)) return false
-        seen.add(key)
-        return true
-      })
-
-      const correctCount = sumAnswerScores(uniqueAnswers)
-      const totalDuration = sumResponseTimes(uniqueAnswers)
-
-      const sessionData = {
-        studentId: 'default',
-        config: this.session.configSnapshot || {},
-        totalQuestions: uniqueAnswers.length,
-        correctCount,
-        accuracy: uniqueAnswers.length > 0 ? correctCount / uniqueAnswers.length : 0,
-        totalDuration,
-        evaluations: evaluations || null
-      }
-
-      const answersData = answers.map(a => ({
-        equation: a.equation,
-        solution: a.solution,
-        userAnswer: a.userAnswer,
-        isCorrect: a.isCorrect,
-        responseTime: a.responseTime || 0,
-        operator: a.operator || '',
-        isCarry: a.isCarry || false,
-        isBorrow: a.isBorrow || false,
-        stepCount: a.stepCount || 1,
-        operandMin: a.operandMin ?? 0,
-        operandMax: a.operandMax ?? 0,
-        attemptCount: a.attemptCount ?? 1,
-        score: typeof a.score === 'number' ? a.score : (a.isCorrect ? 1 : 0),
-        timestamp: a.timestamp || Date.now()
-      }))
-
-      try {
-        const sessionId = await saveSession(sessionData, answersData)
-        console.log(`[PracticeStore] Session saved to DB: #${sessionId}, ${answers.length} questions, ${Math.round((correctCount / answers.length) * 100)}% accuracy`)
-        return sessionId
-      } catch (err) {
-        console.error('[PracticeStore] Failed to save session:', err)
-        return null
-      }
-    }
   }
 })

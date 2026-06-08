@@ -23,7 +23,7 @@ v2 arch 重构（7 阶段）是结构性整改（分层、路径）。**v3 调�
 | **B** | 路径统一（PR 阶段 1.3）| 🟡 | -63 (实际: -43 + 6 删 + 0 桶影响) | ✅ **完成** (commit `210c9b5`, 2026-06-08) |
 | **C** | services 升顶层 + 完善 | 🟡 | +30 | ✅ C1+C2+C3 (`3f9f777`)、C4 (`ded867e`) 完成；C6 paperGenerator 跳过（单函数不值当，v2.4+ 聚合）|
 | **D** | composables 补齐 | 🟡 | +100 | ✅ D2 useStatsQuery 完整落地 (`399e3ba`+`4525335`)，D1/D3 跳过 |
-| **E** | stores 瘦身 + 删 app.js | 🟠 | -70 | ⏸️ 依赖 D1（你跳过 D1 故暂停）；stats store 已 244→113 行（-54%）|
+| **E** | stores 瘦身 + 删 app.js | 🟠 | -70 | 🟢 E1 完成 (sessionPersistence 抽层)；E2 由 D2 提前完成；E3 路径 4 已就绪 (待执行) |
 | **F** | components 目录归位 | 🟡 | -63 | ✅ 完成 (`4829643`) — home→generate + Test*→dev/ + 删 3 死文件 |
 | **G** | 测试分区 | 🟢 | +1 | ✅ **完成**（2026-06-08，G1+G2；G3 留 v3.1）|
 | **H** | 验证 + 文档 | 🟢 | 0 | ⬜ |
@@ -121,13 +121,30 @@ src/utils/
 
 **目标**: `stores/practice.js` + `stores/stats.js` 减业务，删 `app.js`
 
-| 编号 | 任务 | 减行 | 风险 |
-|------|------|------|------|
-| E1 | `stores/practice.js` 拆 `saveSessionToDB` → `usePracticeSaver`（已抽，待迁）| -47 | 🟠（核心路径）|
-| E2 | `stores/stats.js` 拆 `load*` 方法 → `useStatsQuery`（D2 落地后）| -50 | 🟠 |
-| E3 | 删 `stores/app.js`（D1 落地后）| -20 | 🟠（验证 Generate/Home/Print 路径改完）|
+| 编号 | 任务 | 减行 | 风险 | 状态 |
+|------|------|------|------|------|
+| E1 | `stores/practice.js` 拆 `saveSessionToDB` → `services/sessionPersistence.js` | -57 +89 (新) = +32 | 🟠 | ✅ **2026-06-08 完成**（A+1 方案，方案 B 待重评）|
+| E2 | `stores/stats.js` 拆 `load*` 方法 → `useStatsQuery`（D2 落地后） | -131 (244→113) | 🟠 | ✅ **由 D2 Phase 1+2 提前完成** |
+| E3 | 删 `stores/app.js`（D1 落地后） | -20 | 🟠 | ⏸️ D1 跳过；路径 4 (sessionStorage + key in query) 已就绪 |
 
-**预计**: 净减 117 行，2 PR
+**预计**: 净增 12 行（E1 业务从 M 抽 S，加 doc 注释 + payload 解构），1-2 PR
+
+### E1 抽层详情
+
+**问题**：`stores/practice.js#saveSessionToDB`（52 行）— DB 写编排混在 M 层，违反 ARCHITECTURE.md §1.1"S 层 = IO 边界"原则。
+
+**方案 A+1**（最小手术）：
+- 新建 `services/sessionPersistence.js`（89 行，1 个 export: `persistSession`）
+- S 层纯函数接 payload（`{ answers, configSnapshot, evaluations, studentId }`），不引 store
+- `usePracticeSaver.js` 3 处调 store action → 调 S 层（`saveGroupCheckpoint` / `saveAdaptiveFinal` / `savePracticeFinal`）
+- 删 `stores/practice.js#saveSessionToDB` 整 action（-57 行，含死 import `saveSession` / `sumResponseTimes`）
+- 调用方 `Practice.vue` 注释更新
+
+**方案 B 重评（待用户决定是否再上）**：
+- A 已做：`saveSessionToDB` 抽 S 层
+- B 增量：把 `usePracticeSaver.savePerQuestion` 内的 `db.answers.put` + `saveQuestion` 编排也抽 S 层（建 `persistSingleAnswer`）
+- B 价值：把"写单条 answer"也走统一 S 层入口，未来要做"批量重试 / 上传云端"只改 S 层
+- B 风险：调用点从 3 处变 4 处；savePerQuestion 当前是 fire-and-forget，S 层化后失败处理需 review
 
 ---
 

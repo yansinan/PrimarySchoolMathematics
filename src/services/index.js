@@ -14,3 +14,5 @@ export * from './analysis'
 export * from './operatorMap'
 // 能力画像计算 (2026-06-07 升层自 utils/abilityProfile.js)
 export * from './abilityProfile'
+// Session 持久化 (2026-06-08 E1 抽层自 stores/practice.js#saveSessionToDB)
+export * from './sessionPersistence'

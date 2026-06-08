@@ -1,6 +1,6 @@
 # PrimarySchoolMathematics 进度记录
 
-> 跟踪版本、阶段、UI 可见性。最后更新：2026-06-08（v3 G 组测试分区落地）
+> 跟踪版本、阶段、UI 可见性。最后更新：2026-06-08（v3 E1 sessionPersistence 抽层落地）
 
 ---
 
@@ -432,6 +432,52 @@ test/
 ### 已知遗留（G3 留 v3.1）
 - 端到端集成测试 `test/integration/fullSessionFlow.spec.js`（评估→答题→stats 完整流，+50 行）留 v3.1 排期
 - D2 Phase 2 仍待执行（独立分支）
+
+---
+
+## v3 E1 sessionPersistence 抽层（2026-06-08）
+
+### 范围
+`stores/practice.js#saveSessionToDB`（52 行）抽到 S 层新建 `services/sessionPersistence.js`（89 行）。A+1 方案（最小手术）。
+
+### Commits
+| hash | 范围 |
+|------|------|
+| `<本 commit>` (`14946bc`) | E1 抽层 + usePracticeSaver 3 处调通 + practice.js 删 action + 死 import 清理 |
+
+### 净增 / 减
+**4 files changed, +112/-66**（净 +46，主要是 S 层 doc 注释 + payload 解构）
+- 新建 `src/services/sessionPersistence.js`: 89 行（1 个 export: `persistSession`）
+- 改 `src/stores/practice.js`: 272 → 215（-57，删 saveSessionToDB action + 死 import `saveSession` / `sumResponseTimes`）
+- 改 `src/composables/usePracticeSaver.js`: 129 → 142（+13，3 处调 store action → 调 S 层）
+- 改 `src/components/Practice.vue`: 注释从 `saveSessionToDB` → `persistSession`（-1）
+
+### UI 可见性：**🟢 0 视觉变化**（纯抽层，外部行为完全一致）
+
+### 验证状态
+- ✅ `node ./node_modules/vitest/vitest.mjs run` 49/50（1 预存失败与本改动无关）
+- ✅ 浏览器 `__psm_debug.answerN(5, true)` 走完评估 → 触发 `completeAssessment` → `saveAdaptiveFinal` → `persistSession` → IndexedDB 写入成功
+- ✅ `__psm_debug.state()` 正确返回（phase=practice, hasProfile=true, groupIdx=1, totalQuestions=4）
+- ✅ 直接 `import { persistSession }` 调 S 层 → sessionId=2 写入成功
+
+### 架构合规
+- S 层 `sessionPersistence.js`: 只引 `@/utils/score` + `@/utils/store/database`（U 层），符合 §1.2 跨层规则
+- M 层 `stores/practice.js`: 删 1 个 action（业务编排）后，只剩 state + getter + UI toggle
+- C 层 `usePracticeSaver.js`: 调 S 层 ✅（替代原调 M 层 action），符合 §1.2
+
+### 关键发现
+1. **`saveSessionToDB` 业务职责 = IO 边界编排**：去重 uniqueAnswers、拼 sessionData / answersData、调 saveSession — 100% S 层职责，不在 M 层放业务的规则下不应放 M 层
+2. **S 层不引 store 是关键约束**：抽层时 `persistSession` 接收 payload 参数（不是 store 引用），C 层负责从 store 取数据 — 这样 S 层保持纯函数特性，测试 / 复用更易
+3. **删 action 触发死 import 清理连锁反应**：`saveSession` 和 `sumResponseTimes` 在 `practice.js` 都只被 `saveSessionToDB` 用，删 action 后必须同步删 2 个 import
+
+### 方案 B 重评（A 已完成，B 待决定）
+- A 已做：抽 `saveSessionToDB` → S 层 `persistSession`
+- B 增量：把 `usePracticeSaver.savePerQuestion` 内的 `db.answers.put` + `saveQuestion` 编排也抽 S 层（建 `persistSingleAnswer`）
+- 详见 [05-PLAN-v3-architecture-tuning.md §5 E1 抽层详情](05-PLAN-v3-architecture-tuning.md)
+
+### 已知遗留（E 组剩余）
+- E3 删 `stores/app.js`：D1 已跳过，路径 4（sessionStorage + key in query）已就绪，待用户决定是否执行
+- E 组原始目标"净减 70 行"：E1 净 +46（业务抽层 + doc），E2 -131（早完成），E3 -20 — 实际净 -105 行（含 E2 提前）
 
 ---
 

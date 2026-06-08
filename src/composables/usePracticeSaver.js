@@ -22,8 +22,10 @@ import { usePracticeStore } from '@/stores/practice'
 import { useStatsQuery } from '@/composables'
 import { computeAndSaveAbilityProfile } from '@/services/abilityProfile'
 // 修复 Bug 3: 直接 import db 实例, 用于 savePerQuestion 写单条 answer
-// (避免每题都 saveSessionToDB 产生 N 个 1 步 session 污染"最近练习"列表)
+// (避免每题都 persistSession 产生 N 个 1 步 session 污染"最近练习"列表)
 import db, { saveQuestion } from '@/utils/store/database'
+// E1: persistSession 从 S 层调, 不再绕 store action (2026-06-08)
+import { persistSession } from '@/services/sessionPersistence'
 
 /**
  * 从 history 中提取 evaluations（{group, score}[]），转 JSON 字符串
@@ -56,7 +58,7 @@ export function usePracticeSaver() {
   /**
    * 1) 每题答完：fire-and-forget
    * 修复 Bug 3:
-   *   - 不再调 practiceStore.saveSessionToDB()，避免每答 1 题都创建 1 个 session 记录
+   *   - 不再调 practiceStore.persistSession()，避免每答 1 题都创建 1 个 session 记录
    *   - 改为只把"最近一条 answer"写到 db.answers 表（不写 session 表）
    *   - 这样"最近练习"列表只显示 group checkpoint 和最终 session，不再被 1 步 session 淹没
    *   - abilitySnapshot 仍正常更新（fire-and-forget）
@@ -66,7 +68,7 @@ export function usePracticeSaver() {
     computeAndSaveAbilityProfile(buildProfileContext())
     // 取 session.answers 最后一条（刚答完的那题），单独写入 db.answers
     // sessionId=0 表示这条 answer 暂未关联到任何 session record
-    // 等到 group checkpoint / final 时，saveSessionToDB 会再写一份带 sessionId 的完整 record
+    // 等到 group checkpoint / final 时，persistSession 会再写一份带 sessionId 的完整 record
     const answers = practiceStore.session.answers
     const lastAnswer = answers[answers.length - 1]
     if (lastAnswer) {
@@ -89,7 +91,11 @@ export function usePracticeSaver() {
   async function saveGroupCheckpoint(history) {
     computeAndSaveAbilityProfile(buildProfileContext())
     const evaluations = extractEvaluationsJSON(history)
-    await practiceStore.saveSessionToDB(evaluations)
+    await persistSession({
+      answers: practiceStore.session.answers,
+      configSnapshot: practiceStore.session.configSnapshot,
+      evaluations,
+    })
   }
 
   /**
@@ -104,7 +110,11 @@ export function usePracticeSaver() {
     computeAndSaveAbilityProfile(buildProfileContext())
     const evaluations = extractEvaluationsJSON(history)
     practiceStore.session.answers = answers
-    await practiceStore.saveSessionToDB(evaluations)
+    await persistSession({
+      answers,
+      configSnapshot: practiceStore.session.configSnapshot,
+      evaluations,
+    })
     await refreshAll()
   }
 
@@ -116,7 +126,10 @@ export function usePracticeSaver() {
    */
   async function savePracticeFinal() {
     computeAndSaveAbilityProfile(buildProfileContext())
-    await practiceStore.saveSessionToDB()
+    await persistSession({
+      answers: practiceStore.session.answers,
+      configSnapshot: practiceStore.session.configSnapshot,
+    })
     await refreshAll()
   }
 

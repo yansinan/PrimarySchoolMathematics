@@ -109,7 +109,8 @@ src/
 │  └ index.js       ⭐ 兼容桶 (PR 1.3 路径统一后删)
 │
 ├ services/                             ⭐ S 层(顶层,与 utils/components 同级)
-│  ├ analysis.js                        ⏳ 仍在 utils/services/ (PR 阶段 2 迁)
+│  ├ analysis.js                        ✅ 2026-06-08 C2 升层(从 utils/services/)
+│  ├ sessionPersistence.js              ✅ 2026-06-08 E1 抽层(从 stores/practice.js#saveSessionToDB)
 │  ├ sessionMetrics.js                  📋 规划
 │  ├ chartBuilder.js                    ✅ 2026-06 arch-v2.3 新建
 │  ├ operatorMap.js                     ✅ 2026-06 arch-v2.3 新建
@@ -132,8 +133,9 @@ src/
 │  └ index.js                           ✅ 桶导出
 │
 ├ stores/                               M 层(只放字段)
-│  ├ practice.js                         🟡 含 saveSessionToDB 业务(待拆)
-│  ├ stats.js                            🟡 含 load* 业务(待拆)
+│  ├ practice.js                         ✅ 2026-06-08 E1 删 saveSessionToDB action
+│  ├ stats.js                            ✅ 2026-06-08 D2 删 8 个 DB actions
+│  ├ app.js                              🟡 仍含 navigateToPrint 业务(待 E3 删)
 │  └ index.js                           📋 规划
 │
 ├ components/                           V 层(按角色 group)
