@@ -135,7 +135,6 @@ src/
 ├ stores/                               M 层(只放字段)
 │  ├ practice.js                         ✅ 2026-06-08 E1 删 saveSessionToDB action
 │  ├ stats.js                            ✅ 2026-06-08 D2 删 8 个 DB actions
-│  ├ app.js                              🟡 仍含 navigateToPrint 业务(待 E3 删)
 │  └ index.js                           📋 规划
 │
 ├ components/                           V 层(按角色 group)

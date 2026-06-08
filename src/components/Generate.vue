@@ -79,7 +79,6 @@ import { useRouter } from "vue-router";
 import { CustomFormulas, AutoGenerateFormulas, ConfigurationList } from "@/components/generate";
 import ConfigStorage from "@/utils/store/configStorage";
 import { fileNameGeneratedRuleEnum } from '@/utils/enum';
-import { useAppStore } from '@/stores/app';
 import { usePracticeStore } from '@/stores/practice';
 import { createFormulasGenerator } from '@/utils/paperGenerator';
 // 表单默认值（17 字段统一来源）
@@ -96,6 +95,8 @@ import {
 } from '@element-plus/icons-vue'
 // 界面操作参数
 const practiceStore = usePracticeStore()
+// E3: 内联 navigateToPrint 需 router (修复 pre-existing bug: router 之前 import 但未声明)
+const router = useRouter()
 
 // P4-2: targetMin/Max 校验状态（从 AutoGenerateFormulas 接收）
 const formValid = ref(true)
@@ -152,7 +153,14 @@ const selectedConfiguration = (configuration) => {
   applyConfigToFormData(formData.value, config, { includeAdaptive: true })
 
   const papers = createFormulasGenerator(toRaw(unref(formData)), toRaw(unref(paperList)))
-  appStore.navigateToPrint(router, formData.value.fileNameGeneratedRule == fileNameGeneratedRuleEnum.baseOnTitleAndIndex.key ? formData.value.paperTitle : "", papers)
+  // E3: sessionStorage + key in query 替代原 stores/app.js 跨页面 state
+  // (路径 4 — papers 大小无限制, URL 短, 刷新/前进后退恢复)
+  const fileName = formData.value.fileNameGeneratedRule == fileNameGeneratedRuleEnum.baseOnTitleAndIndex.key
+    ? formData.value.paperTitle
+    : ""
+  const key = `print_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+  try { sessionStorage.setItem(key, JSON.stringify(papers)) } catch {}
+  router.push({ path: '/print', query: { fileName, key } })
   paperList.value = []
 }
 const generateFormulas = () => {

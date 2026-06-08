@@ -34,4 +34,13 @@ export const router = createRouter({
     history: createWebHistory(baseUrl),
     // history: createWebHashHistory(),
     routes,
-});
+})
+
+// E3: 兜底清理 /print 路由的 sessionStorage print 临时数据
+// 避免用户关闭 tab / 强退时 onUnmounted 不触发的残留
+// (路径 4: sessionStorage + key in query)
+router.beforeEach((to, from) => {
+    if (from.path === '/print' && from.query.key && to.path !== '/print') {
+        try { sessionStorage.removeItem(from.query.key) } catch {}
+    }
+})

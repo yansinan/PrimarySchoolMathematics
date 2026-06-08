@@ -21,9 +21,10 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { useAppStore } from "@/stores/app";
+// E3: papers 改从 sessionStorage 读 (路径 4: sessionStorage + key in query)
+// 不再依赖 stores/app.js 跨页面 state
 
 
 /**
@@ -36,10 +37,24 @@ import { useAppStore } from "@/stores/app";
 const isPrinting = ref(false)
 const route = useRoute()
 const router = useRouter()
-const appStore = useAppStore()
+
+/**
+ * 读 sessionStorage 的 papers. key 来自 query.
+ * 兼容历史: 若 query 没 key (例如直链访问), 返回空数组.
+ */
+const printPapers = computed(() => {
+  const key = route.query.key
+  if (!key) return []
+  try {
+    const raw = sessionStorage.getItem(key)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+})
 
 const sheets = computed(() => {
-  return appStore.printPreviewPapers.map(p => {
+  return printPapers.value.map(p => {
     const { paperTitle, paperSubTitle, numberOfPagerColumns, solution, formulas } = p
 
     const numberOfCols = formulas.length / numberOfPagerColumns
@@ -81,6 +96,15 @@ onMounted(() => {
     nextTick(() => {
       isPrinting.value = false
     })
+  }
+})
+
+// 兜底清理: 路由 guard 会在离开 /print 时清, 这里再清一次 (双保险)
+// onUnmounted 不一定在浏览器关 tab 时触发, 但同 tab 内的 router 跳转通常会触发
+onUnmounted(() => {
+  const key = route.query.key
+  if (key) {
+    try { sessionStorage.removeItem(key) } catch {}
   }
 })
 

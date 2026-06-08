@@ -1,6 +1,6 @@
 # PrimarySchoolMathematics 进度记录
 
-> 跟踪版本、阶段、UI 可见性。最后更新：2026-06-08（v3 D2 Phase 1+2 文档冲突清理；E1 sessionPersistence 抽层落地）
+> 跟踪版本、阶段、UI 可见性。最后更新：2026-06-08（v3 E3 删 app.js 路径 4 落地；D2/E1 段前文）
 
 ---
 
@@ -463,8 +463,54 @@ test/
 - 详见 [05-PLAN-v3-architecture-tuning.md §5 E1 抽层详情](05-PLAN-v3-architecture-tuning.md)
 
 ### 已知遗留（E 组剩余）
-- E3 删 `stores/app.js`：D1 已跳过，路径 4（sessionStorage + key in query）已就绪，待用户决定是否执行
 - E 组原始目标"净减 70 行"：E1 净 +46（业务抽层 + doc），E2 -131（早完成），E3 -20 — 实际净 -105 行（含 E2 提前）
+
+---
+
+## v3 E3 删 app.js 路径 4 落地（2026-06-08）
+
+### 范围
+`stores/app.js` 跨页面 state 改用 sessionStorage + key in query 替代。打破"删 app.js 必须先 D1"约束。
+
+### Commits
+| hash | 范围 |
+|------|------|
+| `<本 commit>` (`95d59e4`) | Generate.vue 内联 + Print.vue 改读 sessionStorage + router guard 兜底 + 删 app.js + 修 2 个 pre-existing bug |
+
+### 净增 / 减
+**5 files changed, +78/-43**（净 +35，主要是 sessionStorage 包装 + onUnmounted + router guard）
+- 删 `src/stores/app.js`（-21）
+- 改 `src/components/Generate.vue`（+10/-2）— 删 useAppStore + 加 router const + 内联 sessionStorage 写入
+- 改 `src/views/Print.vue`（+28/-4）— 删 useAppStore + 读 sessionStorage + onUnmounted 清理
+- 改 `src/router/index.js`（+10/-1）— beforeEach 兜底清理
+- 修 2 个 pre-existing bug：`appStore` 和 `router` 在 `selectedConfiguration` 函数中未声明
+
+### UI 可见性：**🟢 0 视觉变化**（打印渲染一致，仅数据流路径变）
+
+### 验证状态
+- ✅ `npx vitest run` 49/50（1 预存失败与本改动无关）
+- ✅ 浏览器实测完整流程：
+  - 写 `sessionStorage['print_xxx'] = JSON.stringify(papers)`
+  - `router.push({ path: '/print', query: { fileName, key } })` → URL 正确
+  - Print.vue h1/h3 正确渲染（"测试卷A" / "单元1"）
+  - 离开 /print 后 `sessionStorage.removeItem(key)` 自动清理（router guard）
+  - onUnmounted 兜底清理（双保险）
+
+### 架构合规
+- 删除 V→M 反向依赖（Print.vue 不再 useAppStore 读 printPreviewPapers）
+- 打印数据流：Generate (V) → sessionStorage → Print (V)，无跨页面 store state
+- 仍符合 §1.2 跨层规则（V 只用 useRouter + useRoute）
+
+### 关键发现
+1. **跨页面传数据 3 路径对比（路径 4 胜出）**：
+   - 路径 1（纯 query base64）：URL 长度风险，>2K 字符爆
+   - 路径 4（sessionStorage + key in query，**已选**）：URL 短、papers 大小无限制、刷新/前进后退恢复
+   - 路径 5（route meta）：刷新即丢，不可用
+2. **router beforeEach + onUnmounted 双保险**：浏览器关 tab 时 onUnmounted 不一定触发，靠 beforeEach 兜底；同 tab 内跳转两个都触发，去重
+3. **pre-existing 2 个 bug 顺手修**：`selectedConfiguration` 函数 line 155 用 `appStore` / `router` 都未声明。E1 之前的代码 — 因主流程不调此函数，bug 一直潜伏。E3 内联 navigateToPrint 时显式加 `const router = useRouter()` 修复。
+
+### 已知遗留（E 组清空）
+无 — E 组全部完成 (E1 + E2 + E3)
 
 ---
 

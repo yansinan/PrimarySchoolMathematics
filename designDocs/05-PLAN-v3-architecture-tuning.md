@@ -23,7 +23,7 @@ v2 arch 重构（7 阶段）是结构性整改（分层、路径）。**v3 调�
 | **B** | 路径统一（PR 阶段 1.3）| 🟡 | -63 (实际: -43 + 6 删 + 0 桶影响) | ✅ **完成** (commit `210c9b5`, 2026-06-08) |
 | **C** | services 升顶层 + 完善 | 🟡 | +30 | ✅ C1+C2+C3 (`3f9f777`)、C4 (`ded867e`) 完成；C6 paperGenerator 跳过（单函数不值当，v2.4+ 聚合）|
 | **D** | composables 补齐 | 🟡 | +100 | ✅ D2 useStatsQuery 完整落地 (`399e3ba`+`4525335`)，D1/D3 跳过 |
-| **E** | stores 瘦身 + 删 app.js | 🟠 | -70 | 🟢 E1 完成 (sessionPersistence 抽层)；E2 由 D2 提前完成；E3 路径 4 已就绪 (待执行) |
+| **E** | stores 瘦身 + 删 app.js | 🟠 | -70 | 🟢 E1 完成 (sessionPersistence 抽层)；E2 由 D2 提前完成；**E3 完成 (路径 4 sessionStorage + key in query)** |
 | **F** | components 目录归位 | 🟡 | -63 | ✅ 完成 (`4829643`) — home→generate + Test*→dev/ + 删 3 死文件 |
 | **G** | 测试分区 | 🟢 | +1 | ✅ **完成**（2026-06-08，G1+G2；G3 留 v3.1）|
 | **H** | 验证 + 文档 | 🟢 | 0 | ⬜ |
@@ -125,9 +125,24 @@ src/utils/
 |------|------|------|------|------|
 | E1 | `stores/practice.js` 拆 `saveSessionToDB` → `services/sessionPersistence.js` | -57 +89 (新) = +32 | 🟠 | ✅ **2026-06-08 完成**（A+1 方案，方案 B 待重评）|
 | E2 | `stores/stats.js` 拆 `load*` 方法 → `useStatsQuery`（D2 落地后） | -131 (244→113) | 🟠 | ✅ **由 D2 Phase 1+2 提前完成** |
-| E3 | 删 `stores/app.js`（D1 落地后） | -20 | 🟠 | ⏸️ D1 跳过；路径 4 (sessionStorage + key in query) 已就绪 |
+| E3 | 删 `stores/app.js`（D1 落地后） | -20 | 🟠 | ✅ **2026-06-08 完成**（路径 4：sessionStorage + key in query） |
 
-**预计**: 净增 12 行（E1 业务从 M 抽 S，加 doc 注释 + payload 解构），1-2 PR
+**预计**: 净减 8 行（E1 +89/E3 -20 综合 + 路径 4 模板代码 +5），2-3 PR
+
+### E3 删 app.js 详情
+
+**问题**：`stores/app.js`（20 行）— 跨页面用 `printPreviewPapers` state 传数据，违反 M 层"只放字段" + V→M 反向依赖。
+
+**路径 4（推荐，已落地）**：
+- `Generate.vue` 选中配置时：写 `sessionStorage.setItem('print_xxx', JSON.stringify(papers))` + `router.push({ path: '/print', query: { fileName, key } })`
+- `Print.vue` 从 `route.query.key` 读 `sessionStorage` → 渲染
+- `router/index.js` `beforeEach` 兜底清理（离开 /print 时 `removeItem`）
+- `Print.vue` `onUnmounted` 双保险清理
+- 删 `stores/app.js` 整文件 + 删 `useAppStore` 引用
+
+**顺手修复 pre-existing 2 个 bug**：
+- `Generate.vue#selectedConfiguration` 之前用 `appStore.navigateToPrint(router, ...)` 但 `appStore` 和 `router` 都没声明（import 了但 const 没写）— 因主流程（`generateFormulas` line 158）不调此函数，bug 一直潜伏
+- 这次内联 navigateToPrint 时显式加 `const router = useRouter()`，移除 `appStore` 调用
 
 ### E1 抽层详情
 
