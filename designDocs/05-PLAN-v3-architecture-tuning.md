@@ -279,6 +279,164 @@ A (✅) → B → C → D → (D 完成后) E + F + G (平行) → H
 
 ---
 
+## 12. 已知遗留 + 下阶段规划（v3.1 / v4 / v2.4）
+
+> **v3 架构调优（§1-8）全部完成**。本节列出 v3 收尾（2026-06-08）后剩余工作，按"下一个产品节奏"分组到 3 个 phase。
+
+### 12.1 状态总览
+
+| Phase | 编号 | 任务 | 估行 | 风险 | 建议起点 | 关联文档 |
+|-------|------|------|------|------|----------|----------|
+| **v3.1 测试收尾** | G3 | 端到端集成测试 `test/integration/fullSessionFlow.spec.js` | +50 | 🟢 简单 | 立即可做（v3 收尾）| [05-PLAN-v3 § 7 G 组](05-PLAN-v3-architecture-tuning.md) |
+| **v4.1 错题注入专项** | P1.6 | 干扰项错题库（`generateDistractors(correct, count, userId)`）| +30 | 🟢 | 用户指定下一目标 | [03-PLAN-v2-roadmap § P1](03-PLAN-v2-roadmap.md) |
+| **v4.1 错题注入专项** | P1.8 | 20% 错题注入（`adjustNextQuestion` 步骤 A 前 20% 概率）| +25 | 🟡 | 与 P1.6 同步 | [03-PLAN-v2-roadmap § P1](03-PLAN-v2-roadmap.md) |
+| **v4.2 难度等级专项** | P3 | L2.5 难度等级（`DIFFICULTY_LEVELS` 12→13）| +50 | 🟡 | 独立业务功能 | [03-PLAN-v2-roadmap § P3](03-PLAN-v2-roadmap.md) |
+| **v2.4.1 chart 增强** | D3 | `useChart` composable（响应式 chart.js 包装）| +30 | 🟢 | chart 渲染增强 | [05-PLAN-v3 § 4 D 组](05-PLAN-v3-architecture-tuning.md) |
+| **v2.4.2 出题领域聚合** | C6 | paperGenerator + psm + EquationSolver + equationParser + diagnostic + adaptiveBatch + formDefaults 7 文件聚合到 `services/questionGen/` | +10 净（路径迁移） | 🟡 | 出题领域服务化 | [05-PLAN-v3 § 3 C 组](05-PLAN-v3-architecture-tuning.md) |
+| **v2.4.3 业务拆分** | — | `Practice.vue` 923 行偏大，业务可读性 | -100+ 净（拆分） | 🟠 | 可读性提升 | — |
+
+### 12.2 推荐执行顺序与依赖
+
+```
+v3 收尾 (✅ 06c1a29)
+    ↓
+v3.1 (G3 端到端)               ← 立即可做，1-2 天
+    ↓
+v4.1 (P1.6 + P1.8 错题注入)    ← 错题注入专项，1 周
+    ↓
+v4.2 (P3 L2.5 难度等级)        ← 独立业务功能，2-3 天
+    ↓ (可平行)
+v2.4.1 (D3 useChart)           ← chart 增强，1 天
+v2.4.2 (C6 出题聚合)           ← 7 文件迁移，1 周
+v2.4.3 (Practice.vue 拆分)     ← 业务可读性，2-3 天
+```
+
+**关键依赖**：
+- v4.1 (P1.6 + P1.8) **无前置依赖**，可立即开始
+- v4.2 (P3) **无前置依赖**，与 v4.1 平行
+- v2.4.1 (D3) **无前置依赖**，独立
+- v2.4.2 (C6) **依赖 services/index.js 桶设计稳定**（✅ 已稳定）
+- v2.4.3 (Practice.vue 拆分) **依赖 v4.1 + v4.2 业务稳定**（否则拆分后又重写）
+
+### 12.3 各子任务详细规格
+
+#### 12.3.1 v3.1 G3 端到端集成测试
+
+| 维度 | 详情 |
+|------|------|
+| **目标** | 覆盖完整会话流：评估 → 答题 → stats 持久化 → 删除 |
+| **范围** | 1 个文件 `test/integration/fullSessionFlow.spec.js` |
+| **风险** | 🟢 简单（v3 G1+G2 已落 `test/` 顶层目录）|
+| **净行** | +50 |
+| **验收** | `npx vitest run` 通过；模拟用户完整 session 后 IndexedDB 数据正确 |
+| **依赖** | 无 |
+| **PR 拆分** | 单 PR |
+
+#### 12.3.2 v4.1 P1.6 干扰项错题库
+
+| 维度 | 详情 |
+|------|------|
+| **目标** | `generateDistractors(correct, count, userId)` 升级：先从 `getWrongAnswers` 取错题答案作候选，不足再 fallback 规则数 |
+| **范围** | 1 处改 `adaptiveEngine.js:71` + 新增单测 |
+| **风险** | 🟢 低（formula 独立，失败易回退） |
+| **净行** | +30（含单测）|
+| **验收** | 错题库有数据时，干扰项 60% 来自错题；无数据时 fallback 规则数 |
+| **依赖** | `services/analysis.js#getWrongAnswers` 已存在（v2.2.0 P2 阶段落地）|
+| **PR 拆分** | 与 P1.8 同 PR（错题注入专项）|
+
+#### 12.3.3 v4.1 P1.8 20% 错题注入
+
+| 维度 | 详情 |
+|------|------|
+| **目标** | `adjustNextQuestion` 步骤 A 前加 20% 概率分支 → 调 `prioritizeWrongAnswers` 替换下一题 |
+| **范围** | 1 处改 `adaptiveEngine.js:738` + 新增单测 |
+| **风险** | 🟡 中（影响每答一题，需确保不破坏 P1.7 已有 3 步骤）|
+| **净行** | +25（含单测）|
+| **验收** | 100 题答完统计：约 20 题是错题复用；不影响 P1.7 的换题/Mastery/调辅助 |
+| **依赖** | `services/analysis.js#prioritizeWrongAnswers` 已存在；P1.6 可独立（priority 不同）|
+| **PR 拆分** | 与 P1.6 同 PR（错题注入专项）|
+
+#### 12.3.4 v4.2 P3 L2.5 难度等级
+
+| 维度 | 详情 |
+|------|------|
+| **目标** | `DIFFICULTY_LEVELS` 12→13 级，在 L2 和 L3 之间新增 L2.5（针对大数加法过渡）|
+| **范围** | 1 处改 `constants/practice.js` + 1 处改 `algorithm/EquationSolver.js`（13 处出题器）+ 1 处改 `adaptiveEngine.js`（难度切换判断）|
+| **风险** | 🟡 中（13 处出题器需要保证每道题 `result ≤ 20`）|
+| **净行** | +50（含诊断 + 测试用例）|
+| **验收** | 12→13 级；L2.5 题目 result ≤ 20；自适应能切到 L2.5 级别 |
+| **依赖** | 无（独立业务功能）|
+| **PR 拆分** | 独立 PR（难度等级专项）|
+
+#### 12.3.5 v2.4.1 D3 useChart composable
+
+| 维度 | 详情 |
+|------|------|
+| **目标** | `services/chartBuilder.js` 是无状态 chart.js 封装；composable 加响应式 Vue 包装（自动 rebuild） |
+| **范围** | 1 处新建 `composables/useChart.js` |
+| **风险** | 🟢 低（chartBuilder 现有 110 行稳定，composable 薄包装）|
+| **净行** | +30 |
+| **验收** | StatsDrawer 改用 useChart 替代直接调 chartBuilder；chart 数据响应式更新 |
+| **依赖** | chartBuilder.js 已稳定（v2.3.0）|
+| **PR 拆分** | 独立 PR（chart 增强）|
+
+#### 12.3.6 v2.4.2 C6 paperGenerator 聚合
+
+| 维度 | 详情 |
+|------|------|
+| **目标** | 7 个"出题领域"文件聚合到 `services/questionGen/` 子目录：paperGenerator + psm + EquationSolver + equationParser + diagnostic + adaptiveBatch + formDefaults |
+| **范围** | 7 个 git mv + 7+ import 站点改路径 +桶设计 |
+| **风险** | 🟡 中（跨多层，import 站点多；algorithm/ 内 internal 路径需修）|
+| **净行** | +10 净（路径迁移 + 桶；可能删除部分 internal 错误路径）|
+| **验收** | services/questionGen/ 子目录落地，桶导出；与 v3 C1+C2+C3 的 services/ 顶层平级 |
+| **依赖** | services/index.js 桶设计稳定 |
+| **PR 拆分** | 独立 PR（出题领域服务化）|
+
+#### 12.3.7 v2.4.3 Practice.vue 923 行业务拆分
+
+| 维度 | 详情 |
+|------|------|
+| **目标** | 拆分 `Practice.vue` 923 行偏大文件，按"功能"分：自评弹窗逻辑 / 答题计时 / 调试接口 / 状态机 |
+| **范围** | 1 个 923 行文件 → 3-4 个 composable 或子组件 |
+| **风险** | 🟠 高（核心业务文件，改动易影响主流程）|
+| **净行** | -100+ 净（拆出去后 Practice.vue 减到 ~500 行；新文件 +50）|
+| **验收** | Practice.vue 业务可读性提升；端到端测试覆盖主流程不破 |
+| **依赖** | v4.1 + v4.2 业务稳定（否则拆分后又重写）|
+| **PR 拆分** | 独立 PR（业务可读性，**放最后做**）|
+
+### 12.4 与 v3 整合关系
+
+| 维度 | 关系 |
+|------|------|
+| **架构合规** | v3 落地后 6 层模型稳定；下阶段工作**不重新洗牌架构**，只做业务功能新增 + 内部可读性 |
+| **C 桶设计** | `services/` 桶稳定；v2.4.2 引入 `services/questionGen/` 子桶 |
+| **D composables** | 9 个 composables 稳定；v2.4.1 加 1 个 useChart（与 useDisplayStrategy 同级）|
+| **E stores** | 退化为状态层（stats 113 行 + practice ~200 行）；v2.4.3 拆 Practice.vue 不动 store |
+| **F components** | 8 个子目录稳定；下阶段无新增组件 |
+| **G 测试** | test/ 顶层 + 4 个子目录；v3.1 G3 加 integration/ |
+| **H 文档** | 6 份主文档全 ✅；下阶段每个 PR 同步 PROGRESS + 关联 PLAN |
+
+### 12.5 节奏建议
+
+| 阶段 | 估时 | 累计 | 备注 |
+|------|------|------|------|
+| v3 收尾 (2026-06-08) | — | 0 | ✅ 本次完成 |
+| **v3.1 G3 集成测试** | 1-2 天 | 1-2 天 | 立即可做（独立、无前置）|
+| **v4.1 P1.6 + P1.8 错题注入** | 1 周 | 1.5-2 周 | 用户指定下一目标 |
+| **v4.2 P3 L2.5 难度** | 2-3 天 | 2.5-3 周 | 独立业务功能 |
+| **v2.4.1 D3 useChart** | 1 天 | 3 周 | chart 增强（可与 v4.1 平行）|
+| **v2.4.2 C6 出题聚合** | 1 周 | 4 周 | 7 文件迁移 |
+| **v2.4.3 Practice.vue 拆分** | 2-3 天 | 4-5 周 | 业务可读性（放最后）|
+
+### 12.6 元信息
+
+- 编制时间：2026-06-08
+- 编制者：v3 收尾（ui 分支合 06c1a29）
+- 下次更新：每次子任务完成后
+- 关联：[03-PLAN-v2-roadmap § v3 业务阶段收尾](03-PLAN-v2-roadmap.md) | [02-PROGRESS § 已知遗留](02-PROGRESS.md)
+
+---
+
 ## 11. 元信息
 
 - 文档关系: v2 plan = 7 阶段整改, v3 plan = 整改后调优
