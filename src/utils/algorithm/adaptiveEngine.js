@@ -15,7 +15,7 @@
 
 // P5 v2.3.0: generatePracticeConfig 不再被 adaptiveEngine 调用
 // import { generatePracticeConfig } from './diagnostic'
-import { getAnswerScore } from '../score'
+import { getAnswerScore, sumResponseTimes } from '../score'
 import {
   ACCURACY_THRESHOLDS,
   SPEED_THRESHOLDS,
@@ -283,7 +283,7 @@ export function evaluateGroup(engine, groupAnswers) {
 
   const correct = groupAnswers.filter(a => a.isCorrect).length
   const accuracy = correct / total
-  const avgTime = groupAnswers.reduce((s, a) => s + (a.responseTime || 0), 0) / total
+  const avgTime = sumResponseTimes(groupAnswers) / total
 
   const next = {
     ...engine,

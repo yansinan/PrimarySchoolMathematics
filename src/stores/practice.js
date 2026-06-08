@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { EMPTY_PARSED_EQUATION, getCarryType, parseEquation } from '@/utils/algorithm/equationParser'
 import { saveSession } from '@/utils/store/database'
 import { LS_KEY_PSM_PROFILE } from '@/constants/storageKeys'
-import { sumAnswerScores } from '@/utils/score'
+import { sumAnswerScores, sumResponseTimes } from '@/utils/score'
 
 const LS_KEY = LS_KEY_PSM_PROFILE
 
@@ -230,7 +230,7 @@ export const usePracticeStore = defineStore('practice', {
       })
 
       const correctCount = sumAnswerScores(uniqueAnswers)
-      const totalDuration = Date.now() - (this.session.sessionStartTime || Date.now())
+      const totalDuration = sumResponseTimes(uniqueAnswers)
 
       const sessionData = {
         studentId: 'default',

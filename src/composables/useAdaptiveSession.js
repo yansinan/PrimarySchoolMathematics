@@ -26,7 +26,7 @@ import { generateDiagnosticQuestions, analyzeAbility } from '@/utils/algorithm/d
 import { createAdaptiveEngine, getGroupSize, evaluateGroup, getDifficultyLabel, generateQuestionPlan, adjustNextQuestion } from '@/utils/algorithm/adaptiveEngine'
 import { generateAdaptiveBatch } from '@/utils/algorithm/adaptiveBatch'
 import { getGroupComment, getCommentByRate } from '@/constants/practice'
-import { sumAnswerScores } from '@/utils/score'
+import { sumAnswerScores, sumResponseTimes } from '@/utils/score'
 import { TARGET_LIMITS } from '@/utils/form/formDefaults'
 import { formatDuration } from '@/utils/time/timeFormat'
 
@@ -218,7 +218,7 @@ export function useAdaptiveSession(options = {}) {
     const size = engine.lastGroupSize || getGroupSize(engine)
     const groupAnswers = allAnswers.slice(-size)
     const groupCorrect = groupAnswers.filter(a => a.isCorrect).length
-    const groupTime = groupAnswers.reduce((s, a) => s + (a.responseTime || 0), 0)
+    const groupTime = sumResponseTimes(groupAnswers)
 
     // ── 小组反馈 ──
     const groupIdx = adaptiveGroupIndex.value
@@ -257,7 +257,7 @@ export function useAdaptiveSession(options = {}) {
       // ── 全部完成 → 弹汇总弹窗 ──
       const finalAnswers = practiceStore.adaptiveAnswers
       const totalCorrect = Math.round(sumAnswerScores(finalAnswers))
-      const totalTime = finalAnswers.reduce((s, a) => s + (a.responseTime || 0), 0)
+      const totalTime = sumResponseTimes(finalAnswers)
       const totalRate = Math.round((totalCorrect / finalAnswers.length) * 100)
       const { emoji, comment, color: rateColor2 } = getCommentByRate(totalRate)
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildAttemptScore, computeScore } from '@/utils/score'
+import { buildAttemptScore, computeScore, sumResponseTimes } from '@/utils/score'
 
 describe('score helpers', () => {
   it('computes score by attempt count', () => {
@@ -15,5 +15,41 @@ describe('score helpers', () => {
     expect(buildAttemptScore(1, false)).toEqual({ attemptCount: 2, score: 0 })
     expect(buildAttemptScore(1, true)).toEqual({ attemptCount: 2, score: computeScore(2) })
     expect(buildAttemptScore(2, true)).toEqual({ attemptCount: 3, score: computeScore(3) })
+  })
+})
+
+describe('sumResponseTimes', () => {
+  it('空数组返回 0', () => {
+    expect(sumResponseTimes([])).toBe(0)
+  })
+
+  it('null/undefined/non-array 兜底返回 0', () => {
+    expect(sumResponseTimes(null)).toBe(0)
+    expect(sumResponseTimes(undefined)).toBe(0)
+    expect(sumResponseTimes('not array')).toBe(0)
+  })
+
+  it('正常求和', () => {
+    expect(sumResponseTimes([
+      { responseTime: 1000 },
+      { responseTime: 2000 },
+      { responseTime: 1500 },
+    ])).toBe(4500)
+  })
+
+  it('responseTime 缺失/null/0 兜底为 0', () => {
+    expect(sumResponseTimes([
+      { responseTime: 1000 },
+      {},                       // 缺失字段
+      { responseTime: null },  // 显式 null
+      { responseTime: 0 },     // 显式 0
+    ])).toBe(1000)
+  })
+
+  it('负数 responseTime 视为异常兜底为 0', () => {
+    expect(sumResponseTimes([
+      { responseTime: 1000 },
+      { responseTime: -500 },   // 异常值
+    ])).toBe(1000)
   })
 })
