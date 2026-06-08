@@ -4,11 +4,11 @@
 
 ---
 
-## 当前进度（2026-06-07）
+## 当前进度（2026-06-08）
 
-**v2.3 阶段**：A 组死代码清理已完成（A4b 升 `services/abilityProfile.js`）。
-**下一目标**：v3 架构调优 — 路径统一、服务层完善、components 归位。
-**详见**：[02-PROGRESS.md](02-PROGRESS.md) 的"v2.3"段。
+**v3 架构调优已全部完成**（A/B/C/D/E/F/G/H 8 大组）。详见 [02-PROGRESS.md](02-PROGRESS.md) "v3 调优"段。
+**下一目标**：回归 [03-PLAN-v2-roadmap.md](03-PLAN-v2-roadmap.md) 业务/UI 改进（P0-P3 任务），或合并 v3 分支入主干。
+**详见**：[02-PROGRESS.md](02-PROGRESS.md)。
 
 ---
 

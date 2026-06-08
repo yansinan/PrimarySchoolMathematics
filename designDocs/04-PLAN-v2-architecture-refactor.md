@@ -13,15 +13,17 @@
 
 按 **7 阶段** 渐进迁移, 每阶段独立可发布. 总预计 **7-10 个 PR**, 跨度 4-6 周.
 
-| 阶段 | 内容 | 风险 | 净行数 | 状态（2026-06-07） |
+| 阶段 | 内容 | 风险 | 净行数 | 状态（2026-06-08 H 组收尾后） |
 |---|---|---|---|---|
-| 1 | utils 内部子目录化 | 🟡 路径变动 | 0 | ✅ **部分完成**（子目录化 + 桶导出 + 8 个 stub 过渡） |
-| 2 | services 升顶层 + 新增 | 🟡 需补单测 | +200 | 🟡 **部分完成**（`chartBuilder` / `operatorMap` 新建；`analysis` 仍未升） |
-| 3 | composables 补齐 | 🟠 续抽 250 行 | +300 | 🟡 **部分完成**（`useAnswerBuilder` / `useSubmitHandler` / `useStatsDrawer` 新建；`useChart` / `usePrintPreview` / `useStatsQuery` 未建） |
-| 4 | stores 瘦身 + 删 app.js | 🟠 业务迁移 | -20 | ⬜ 未开始（`app.js` 仍被引用，需先建 `usePrintPreview`） |
-| 5 | components 目录归位 | 🟡 纯移动 | 0 | 🟡 **部分完成**（`dialog/` 已建；`generate/` / `dev/` 已部分迁移） |
-| 6 | 测试分区 | 🟢 加目录 | 0 | ⬜ 未开始 |
-| 7 | 验证 + 文档更新 | 🟢 | 0 | 🟡 **部分完成**（本轮 ARCH §2.1 / §3 / §4 + PROGRESS 落地） |
+| 1 | utils 内部子目录化 | 🟡 路径变动 | 0 | ✅ **完成**（B 组 commit `210c9b5`） |
+| 2 | services 升顶层 + 新增 | 🟡 需补单测 | +200 | ✅ **完成**（C 组 C1-C4 commit `3f9f777`/`ded867e`；C6 paperGenerator 跳过留 v2.4+）|
+| 3 | composables 补齐 | 🟠 续抽 250 行 | +300 | ✅ **完成**（D2 useStatsQuery commit `399e3ba`+`4525335`；D1 usePrintPreview 跳过走 E3 路径 4；D3 useChart 留 v2.4）|
+| 4 | stores 瘦身 + 删 app.js | 🟠 业务迁移 | -20 | ✅ **完成**（E1 `14946bc`+E3 `95d59e4`；E2 由 D2 提前完成）|
+| 5 | components 目录归位 | 🟡 纯移动 | 0 | ✅ **完成**（F 组 commit `4829643`）|
+| 6 | 测试分区 | 🟢 加目录 | 0 | ✅ **完成**（G 组 commit `208fad9`，顶层 `test/`；G3 集成测试留 v3.1）|
+| 7 | 验证 + 文档更新 | 🟢 | 0 | ✅ **完成**（H 组：全链路 build/test/浏览器手测通过，全文档同步 "v3 全部 ✅"）|
+
+> **v3 调优整批已全部完成**（2026-06-08）。详见 [05-PLAN-v3-architecture-tuning.md](05-PLAN-v3-architecture-tuning.md)。
 
 > **不在本轮**:
 > - 死代码清理(见 [ARCHITECTURE.md § 3](./ARCHITECTURE.md))
@@ -78,7 +80,7 @@ src/
 | `utils/` 12 文件平铺 | `utils/*` | 按子域分目录 |
 | `stores/practice.js` 含 `saveSessionToDB` 业务 | `stores/practice.js` | `composables/usePracticeSaver` |
 | `stores/stats.js` 含 load 业务 | `stores/stats.js` | `composables/useStatsQuery` |
-| `stores/app.js` 角色不清 | `stores/app.js` | 拆为 `composables/usePrintPreview` |
+| `stores/app.js` 角色不清 | ~~`stores/app.js`~~ | ✅ **2026-06-08 E3 删除**（路径 4 sessionStorage + key in query 替代；D1 usePrintPreview 跳过）|
 | `components/home/` 命名不清晰 | `components/home/*` | 改 `components/generate/` |
 | 顶层 dialog 组件应下沉 | `components/PracticeSummaryDialog.vue` | `components/dialog/` |
 | 顶层 dev 组件应隔离 | `components/TestComponentView.vue` | `components/dev/` |
@@ -190,9 +192,9 @@ src/composables/
 ├ usePracticeSaver.js                  现有(改用 services/sessionMetrics)
 ├ usePracticeDialogs.js                现有
 ├ useDisplayStrategy.js                ⭐ 新增
-├ useChart.js                          ⭐ 新增
-├ usePrintPreview.js                   ⭐ 新增: 替代 stores/app.js
-├ useStatsQuery.js                     ⭐ 新增: 替代 stats.js 业务规则
+├ useChart.js                          ⏳ 留 v2.4
+├ ~~usePrintPreview.js~~                ⛔ 跳过 (E3 改走路径 4 sessionStorage)
+├ useStatsQuery.js                     ✅ 现有 (D2 落地, 5 read + 3 write/IO)
 ├ __tests__/                           ⭐ 新增
 └ index.js                             桶导出
 ```
@@ -200,14 +202,14 @@ src/composables/
 **新增 composable 职责**:
 | Composable | 替代/抽取 | 优先级 |
 |---|---|---|
-| `usePrintPreview` | `stores/app.js` (23 行) | P0 |
+| `usePrintPreview` | ~~`stores/app.js` (23 行)~~ | ⛔ **跳过** (E3 走路径 4 sessionStorage + key in query 替代整文件) |
 | `useStatsQuery` | `stores/stats.js` 内 load* 方法 | P0 |
 | `useDisplayStrategy` | 响应式 displayStats(目前 Practice.vue 内) | P1 |
 | `useChart` | chart.js 通用封装(StatsDrawer 内) | P2 |
 
 **预计**: +300 行, 组件瘦身
 
-### 阶段 4 — stores 瘦身 + 删 app.js(🟠 业务迁移)
+### 阶段 4 — stores 瘦身 + 删 app.js(🟠 业务迁移) → ✅ **2026-06-08 完成**
 
 **目标**: 业务规则从 store 移到 composable; 拆 `stores/app.js`
 
@@ -218,10 +220,16 @@ src/stores/
 ├ practice.js                          状态字段, 业务规则 → usePracticeSaver
 ├ stats.js                             状态字段, 业务规则 → useStatsQuery
 └ index.js                             桶导出
-(删除 stores/app.js)
+(✅ 删除 stores/app.js — 2026-06-08 E3 commit 95d59e4)
 ```
 
-**预计**: -20 行
+**实际完成**：
+- E1 commit `14946bc` — `practice.js#saveSessionToDB` 抽 S 层 `services/sessionPersistence.js` (persistSession + persistSingleAnswer)
+- E1-B commit `50dca4c` — `usePracticeSaver#savePerQuestion` 也抽 S 层 (persistSingleAnswer)
+- E2 — `stats.js` 244→113 行（8 个 DB actions 抽 `composables/useStatsQuery.js`）
+- E3 commit `95d59e4` — 删整个 `stores/app.js`，sessionStorage + key in query 替代
+
+**预计**: -20 行（实际 net -100+ 行）
 
 ### 阶段 5 — components 目录归位(🟡 纯移动) → 🟡 **部分完成**
 
@@ -255,17 +263,18 @@ src/components/
 
 **预计**: 0 净增(纯移动), 改 import 路径
 
-### 阶段 6 — 测试分区(🟢 加目录)
+### 阶段 6 — 测试分区(🟢 加目录) → ✅ **2026-06-08 完成**
 
-**目标**: 测试目录统一组织, 顶层 `tests/` 放集成/契约
+**目标**: 测试目录统一组织, 顶层 `test/` 放集成/契约 (单数, 按用户最终决策)
 
 ```
-tests/                                 ⭐ 新建顶层
-├ stores/                              ⭐ 新增
-├ composables/                         ⭐ 新增
-├ services/
-└ integration/
-   └ fullSessionFlow.spec.js           ⭐ 新增
+test/                                  ✅ 已建 (2026-06-08 G 组 commit 208fad9)
+├ services/                            ✅ analysis.spec.js (3 spec 集中)
+├ utils/                               ✅ score.spec.js
+└ utils/database/                      ✅ migration.spec.js
+```
+
+**G3 集成测试** (`test/integration/fullSessionFlow.spec.js`, +50 行) 留 v3.1 排期
 ```
 
 **vitest.config.js** 增:
@@ -336,8 +345,8 @@ include: [
 | `src/services/index.js` | services 桶导出 | ✅ 已有（仅 export * from utils/services/analysis） |
 | `src/composables/useDisplayStrategy.js` | 响应式 displayStats 状态 | ✅ 已有 (PR-4.2) |
 | `src/composables/useChart.js` | chart.js 通用封装 | ⏳ 留 v2.4 |
-| `src/composables/usePrintPreview.js` | 替代 stores/app.js | ⏳ 留 v2.4 |
-| `src/composables/useStatsQuery.js` | 替代 stats.js 业务规则 | ⏳ 留 v2.4 |
+| ~~`src/composables/usePrintPreview.js`~~ | 替代 stores/app.js | ⛔ **跳过** (E3 路径 4 替代) |
+| `src/composables/useStatsQuery.js` | 替代 stats.js 业务规则 | ✅ **2026-06-08 D2 落地** (5 read + 3 write/IO 共 8 export) |
 | **`src/composables/useAnswerBuilder.js`** | 封 U 调 (extractQuestionMetadata + buildAttemptScore) | ✅ **2026-06-07 新建** |
 | **`src/composables/useSubmitHandler.js`** | 封 handleSubmit 编排 | ✅ **2026-06-07 新建** |
 | **`src/composables/useStatsDrawer.js`** | 封 stats drawer 状态/操作/格式化 | ✅ **2026-06-07 新建** |
@@ -411,7 +420,7 @@ include: [
 
 **保留活跃引用 (🔴)**:
 - `TestView.vue` / `TestComponentView.vue` / `TestHorizontalLayout.vue` — 测试 UI 组件，router 仍引用
-- `stores/app.js` — Generate/Home/Print 仍引用 `navigateToPrint`，需先建 `usePrintPreview`
+- ~~`stores/app.js` — Generate/Home/Print 仍引用 `navigateToPrint`，需先建 `usePrintPreview`~~ → ✅ **2026-06-08 E3 已删**（路径 4 sessionStorage + key in query）
 
 **待办 (⏳) 留 v2.4+**:
 - `extractOperandNumbers` 重复（`utils/database.js` vs `utils/equationParser.parseEquation`）
@@ -483,7 +492,7 @@ PROGRESS.md
 - 架构文档: [01-ARCHITECTURE.md](./01-ARCHITECTURE.md)
 - 进度记录: [02-PROGRESS.md](./02-PROGRESS.md)
 - 路线图: [03-PLAN-v2-roadmap.md](./03-PLAN-v2-roadmap.md)
-- v3 调优计划: [05-PLAN-v3-architecture-tuning.md](./05-PLAN-v3-architecture-tuning.md) ← **下一步**
+- v3 调优计划: [05-PLAN-v3-architecture-tuning.md](./05-PLAN-v3-architecture-tuning.md) ← **✅ 2026-06-08 全部完成**
 - 现行服务层样板: `src/utils/services/analysis.js` (831 行, read-only query)
 - 现行 composable 样板: `src/composables/useAdaptiveSession.js` (98 行)
 - 现行常量样板: `src/constants/practice.js` (148 行)

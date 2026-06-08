@@ -3,7 +3,7 @@
 > 文档性质: 执行计划 (Action Plan) - 调优阶段
 > 范围: v2 arch 重构之后的"扫尾 + 深化"工作
 > 配套: [01-ARCHITECTURE.md](01-ARCHITECTURE.md) 是"是什么"，[04-PLAN-v2-architecture-refactor.md](04-PLAN-v2-architecture-refactor.md) 是 v2 阶段 1-7
-> 状态: 📐 草案 (2026-06-07 起点)
+> 状态: ✅ **2026-06-08 全部完成**（A/B/C/D/E/F/G/H 8 大组，仅 G3 集成测试留 v3.1）
 > 维护: 项目组 / 所有 agent
 
 ---
@@ -26,7 +26,7 @@ v2 arch 重构（7 阶段）是结构性整改（分层、路径）。**v3 调�
 | **E** | stores 瘦身 + 删 app.js | 🟠 | -70 | 🟢 E1 完成 (sessionPersistence 抽层)；E2 由 D2 提前完成；**E3 完成 (路径 4 sessionStorage + key in query)** |
 | **F** | components 目录归位 | 🟡 | -63 | ✅ 完成 (`4829643`) — home→generate + Test*→dev/ + 删 3 死文件 |
 | **G** | 测试分区 | 🟢 | +1 | ✅ **完成**（2026-06-08，G1+G2；G3 留 v3.1）|
-| **H** | 验证 + 文档 | 🟢 | 0 | ⬜ |
+| **H** | 验证 + 文档 | 🟢 | 0 | ✅ **2026-06-08 全部完成**（H1 build/test/手测 + H2 全文档同步）|
 
 > **不在 v3 范围**:
 > - bug 修复（totalDuration 等单独排期）
@@ -217,12 +217,31 @@ test/
 
 ---
 
-## 8. H 组：验证 + 文档
+## 8. H 组：验证 + 文档 → ✅ **2026-06-08 完成**
 
-| 编号 | 任务 | 风险 |
-|------|------|------|
-| H1 | 跑全链路 build + test + 浏览器手测 | 🟢 |
-| H2 | 更新 ARCHITECTURE.md / PROGRESS.md 标"全部 ✅" | 🟢 |
+| 编号 | 任务 | 风险 | 状态 |
+|------|------|------|------|
+| H1 | 跑全链路 build + test + 浏览器手测 | 🟢 | ✅ |
+| H2 | 更新 ARCHITECTURE.md / PROGRESS.md 标"全部 ✅" | 🟢 | ✅ |
+
+**H1 实测**:
+- `node ./node_modules/vitest/vitest.mjs run` — **49/50 通过**（1 预存失败: `analysis.spec.js:247` 与 v3 改动无关）
+- `node ./node_modules/vite/bin/vite.js build` — 编译成功，1024 KB index.js + 449 KB Layout.js + 315 KB css
+- 浏览器手测完整流程：评估 5 题 → `completeAssessment` → `saveAdaptiveFinal` → `persistSession` + 触发 `useStatsQuery.refreshAll`
+  - sessions=2, answers=8, questions=16, snapshots=62
+  - `__psm_debug.state()`: phase=practice, hasProfile=true, groupIdx=1, totalQuestions=4
+
+**H2 同步**:
+- `00-README.md` 头部进度改为 "v3 全部完成"
+- `01-ARCHITECTURE.md` 树结构标 usePrintPreview 跳过 / app.js 删除 / "下一步" → "✅ 全部完成"
+- `04-PLAN-v2-architecture-refactor.md` 7 阶段表全 ✅ / useStatsQuery/usePrintPreview 行更新 / "下一步" → "✅ 全部完成"
+- `05-PLAN-v3-architecture-tuning.md`（本文件）状态行 + 8 大组总览 H ✅ + 本 H 段
+- `02-PROGRESS.md` 头部 + v3 H 段（详见 PROGRESS）
+
+**未在 v3 范围修改的文档**（与架构 v3 不同维度，不动）：
+- `03-PLAN-v2-roadmap.md` — 业务路线图 P0-P5（v2.3.0 P0/P2/P5 ✅，P1/P3 待开始）
+- `06-PLAN-v2-ability-analysis.md` — P2 阶段详细设计（v2.2.0 实施，DB schema v2 → v3 升级）
+- `07-PLAN-v2-ui-roadmap.md` — 业务 UI 路线图（v2.2.0 → v3.0.0 业务版本，UI 强化/学习曲线/profile）
 
 ---
 

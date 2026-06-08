@@ -128,7 +128,7 @@ src/
 │  ├ useSubmitHandler.js                 ✅ 2026-06 arch-v2.3 新建 (V→C 整改)
 │  ├ useStatsDrawer.js                   ✅ 2026-06 arch-v2.3 新建 (V→M 整改)
 │  ├ useChart.js                         📋 规划
-│  ├ usePrintPreview.js                  📋 规划(替代 stores/app.js)
+│  ├ usePrintPreview.js                  ⛔ 跳过 (E3 改走路径 4 sessionStorage + key in query)
 │  ├ useStatsQuery.js                    ✅ 2026-06-08 D2 落地（5 个 DB actions 拆出）
 │  └ index.js                           ✅ 桶导出
 │
@@ -211,7 +211,7 @@ src/
 | 🔴 | `src/components/TestComponentView.vue` | 209 | **TestView 引用** — 布局组件测试页 |
 | 🔴 | `src/components/TestHorizontalLayout.vue` | 115 | **TestComponentView 引用** — 布局测试用例 |
 | 🔴 | `src/components/home/index.js` | 5 | **未列入**（桶仍被 Generate.vue 等引用）|
-| 🔴 | `src/stores/app.js` | 20 | **未列入**（Generate/Home/Print 仍引用 navigateToPrint，迁 usePrintPreview 前不删）|
+| ✅ | `src/stores/app.js` | 20 | E3 改走路径 4 (sessionStorage + key in query)，**2026-06-08 chore/cleanup-f-group 删除** |
 | ✅ ~~**⏳ 待查**~~ | `src/utils/paperGenerator.js` | 65 | Generate+Home 引用；Home 死则 Generate 单引用，可迁 services。**2026-06-07 确认**：仅 Generate 1 处，可迁到 `services/paperGenerator.js` 后删 |
 | ✅ | `src/components/index.js` | 10 | 没人用（仅 Layout.vue 用了桶，已改直接路径），**2026-06-07 chore/cleanup-a-group 删除** |
 
@@ -291,7 +291,7 @@ src/
 | 重复实现 | `src/utils/abilityProfile.js` (91 行) | 与 `composables/useAbilityProfile.js` 重复 |
 | 调试残留 | `src/components/StatsDrawer.vue` `handleOpen` 内 `console.error('[StatsDrawer] handleOpen failed:')` | 可改 dev-only 输出 |
 | S 层未升顶层 | `src/utils/services/analysis.js` (831 行) | 应迁到 `src/services/analysis.js`（PR 阶段 2 目标）|
-| 死 store 字段 | `src/stores/app.js` `printPreviewPapers` 字段 | 等 `usePrintPreview` composable 建后整体删除 |
+| 死 store 字段 | ~~`src/stores/app.js` `printPreviewPapers` 字段~~ | ✅ **2026-06-08 E3 删除整个 app.js**（路径 4 sessionStorage 替代）|
 | 重复 emit | `src/components/dialog/SelfEvaluationDialog.vue` 的 `handleUpdate` 在 `!val` 时 emit 'select' | edge case，evalResolver 已 null 时是 no-op |
 
 ---
@@ -334,5 +334,5 @@ src/
 - 历史: `.refactor-todo.md` A1-A5 / B-E / `.refactor-a1-plan.md`(A1 拆分已完成, 本计划是其续章)
 - P2 体系: [06-PLAN-v2-ability-analysis.md](./06-PLAN-v2-ability-analysis.md)
 - P0-P4 路线: [03-PLAN-v2-roadmap.md](./03-PLAN-v2-roadmap.md)
-- v3 调优计划: [05-PLAN-v3-architecture-tuning.md](./05-PLAN-v3-architecture-tuning.md) ← **下一步**
+- v3 调优计划: [05-PLAN-v3-architecture-tuning.md](./05-PLAN-v3-architecture-tuning.md) ← **✅ 2026-06-08 全部完成**
 - 本轮浏览器烟测清单: [12-TODO-browser-smoke-test-v2.3.md](./12-TODO-browser-smoke-test-v2.3.md)

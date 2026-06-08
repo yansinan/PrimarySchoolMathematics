@@ -1,6 +1,6 @@
 # PrimarySchoolMathematics 进度记录
 
-> 跟踪版本、阶段、UI 可见性。最后更新：2026-06-08（v3 E1 方案 B persistSingleAnswer 合并到 sessionPersistence）
+> 跟踪版本、阶段、UI 可见性。最后更新：2026-06-08（v3 H 组验证+文档收尾，全部 ✅）
 
 ---
 
@@ -530,6 +530,72 @@ test/
 - ✅ `usePracticeSaver` 4 处 save 调用（savePerQuestion / saveGroupCheckpoint / saveAdaptiveFinal / savePracticeFinal）全部走 S 层
 
 **价值兑现**：未来加批量重试 / 上传云端只改 S 层。
+
+---
+
+## v3 H 组验证+文档收尾（2026-06-08）
+
+### 范围
+全链路 build + test + 浏览器手测 + 8 份文档同步标 "v3 全部完成"。
+
+### Commits
+| hash | 范围 |
+|------|------|
+| `<本 commit>` (`5a47674`) | H1+H2 验证+全文档同步 |
+
+### H1 实测
+- ✅ `node ./node_modules/vitest/vitest.mjs run` — **49/50** 通过（1 预存失败 `analysis.spec.js:247` 与 v3 无关）
+- ✅ `node ./node_modules/vite/bin/vite.js build` — 编译成功（1024 KB index.js + 449 KB Layout.js + 315 KB css）
+- ✅ 浏览器手测：清空 → /home?final → 评估 5 题全对 → `completeAssessment` → 进自适应第 1 组
+  - DB 终态：sessions=2, answers=8, questions=16, snapshots=62
+  - `__psm_debug.state()`: phase=practice, hasProfile=true, groupIdx=1, totalQuestions=4
+  - 打印流程 E3：写 sessionStorage + router.push → Print.vue h1/h3 正确渲染 → 离开 /print 后自动清理
+  - E1-B persistSingleAnswer 写 db.answers + db.questions 实测通过（operands [7,8] 转换正确）
+
+### H2 全文档同步
+| 文档 | 改动 |
+|------|------|
+| `00-README.md` | 头部进度 "v3 全部完成" |
+| `01-ARCHITECTURE.md` | services/composables/stores 树标 ✅ / app.js 死代码清单改 ✅ / "下一步" → "✅" |
+| `04-PLAN-v2-architecture-refactor.md` | 7 阶段表全 ✅ / useStatsQuery ✅ / usePrintPreview ⛔ / app.js 引用段 ✅ / "下一步" → "✅" |
+| `05-PLAN-v3-architecture-tuning.md` | 状态行 ✅ / 8 大组总览 H ✅ / 本 H 段（含未改动文档说明）|
+| `02-PROGRESS.md` | 头部日期 + 本 H 段 |
+| `03-PLAN-v2-roadmap.md` | **不动**（业务路线图 v2.3.0，独立维度）|
+| `06-PLAN-v2-ability-analysis.md` | **不动**（P2 阶段，v3 是 DB schema 而非架构 v3）|
+| `07-PLAN-v2-ui-roadmap.md` | **不动**（业务 v3.0.0 UI 强化，独立维度）|
+| `08/09/10/11/12/13` | **不动**（业务/归档/历史参考）|
+
+### v3 整批全景
+| 组 | 状态 | commit |
+|---|---|---|
+| A 死代码清理 | ✅ | `793056e` `b69aac4` |
+| B 路径统一 | ✅ | `210c9b5` |
+| C services 升层 | ✅ | `3f9f777` `ded867e` |
+| D composables 补齐 | ✅ D2（D1/D3 跳过）| `399e3ba` `4525335` |
+| E stores 瘦身 | ✅ E1 + E1-B + E2 + E3 | `14946bc` `50dca4c` `95d59e4` |
+| F components 归位 | ✅ | `4829643` |
+| G 测试分区 | ✅ G1+G2（G3 留 v3.1）| `208fad9` |
+| H 验证+文档 | ✅ | `<本 commit>` |
+
+### v3 总成绩
+- **代码净影响** ~+90 行（主要是 doc 注释 + S 层 payload 解构 + router guard + 路径 4 包装）
+- **业务净减** ~+160 行（删 stores/app.js 21 + practice.js 57 + utils/request.js 61 + utils/download.js 168 + utils/abilityProfile.js 91 + components/index.js 10 + views/Home.vue 147 + apis/paper.js 59 - 新增 sessionPersistence 109 + 其他）
+- **架构净合规** V→U/M 反向依赖清空 / M 层只剩字段 / S 层 IO 边界集中 / C 层编排下沉
+- **跨分支可合并**：8 commits 在 `chore/cleanup-f-group` 分支，零冲突
+
+### 已知遗留（非 v3 阻塞）
+- `analysis.spec.js:247` 1 个预存失败（与 v3 无关，旧审计遗留）
+- G3 端到端集成测试（+50 行，留 v3.1 排期）
+- D1 usePrintPreview（已用 E3 路径 4 替代，不再需要）
+- D3 useChart / C6 paperGenerator 迁 services（留 v2.4+ 业务迭代时）
+- `Practice.vue` 923 行偏大（业务拆分留 v2.4）
+- 业务 v2.3.0 P1 错题强化 / P3 难度等级新增 L2.5（[03-PLAN-v2-roadmap.md](03-PLAN-v2-roadmap.md)）
+
+### 下一目标
+- A: 回归 [03-PLAN-v2-roadmap.md](03-PLAN-v2-roadmap.md) P1/P3 业务实现
+- B: 合并 `chore/cleanup-f-group` 分支入 `refactor/architecture-v2.3` / `ui` / `master`
+- C: G3 端到端集成测试
+- D: 暂缓 / 切其他
 
 ---
 
