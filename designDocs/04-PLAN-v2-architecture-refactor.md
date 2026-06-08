@@ -1,4 +1,4 @@
-<!-- filepath: designDocs/PLAN-v2-architecture-refactor.md -->
+<!-- filepath: designDocs/04-PLAN-v2-architecture-refactor.md -->
 # 架构重构执行计划(v2.3)
 
 > **性质**: 执行计划(Action Plan)  
@@ -401,7 +401,7 @@ include: [
 ## 6. 不在本轮范围
 
 ### 6.1 死代码
-**完整目录** 见 [ARCHITECTURE.md § 3](./ARCHITECTURE.md)。本节只列当前已确认 + 待办分类。
+**完整目录** 见 [01-ARCHITECTURE.md § 3](./01-ARCHITECTURE.md)。本节只列当前已确认 + 待办分类。
 
 **已确认 (✅ 2026-06-07 审计)**:
 - 整文件：`apis/paper.js` / `utils/request.js` / `utils/download.js` / `views/Home.vue` (147 行)
@@ -443,7 +443,7 @@ include: [
 
 - `equationCore.js` 抽取(合并 equationParser/EquationSolver/psm 重复段)
 - `formDefaults.applyConfigToFormData` 推广(目前 3 处重复用 1 处)
-- `useAbilityAnalysis` 接入调用链(PROGRESS.md "未接入调用链"项)
+- `useAbilityAnalysis` 接入调用链([02-PROGRESS.md](./02-PROGRESS.md) "未接入调用链"项)
 - 切换到 iconify 替代 element-plus/icons-vue
 - 引入 vitest jsdom 环境
 - i18n 准备
@@ -480,13 +480,19 @@ PROGRESS.md
 
 ### 7.2 引用
 
-- 架构文档: [ARCHITECTURE.md](./ARCHITECTURE.md)
+- 架构文档: [01-ARCHITECTURE.md](./01-ARCHITECTURE.md)
+- 进度记录: [02-PROGRESS.md](./02-PROGRESS.md)
+- 路线图: [03-PLAN-v2-roadmap.md](./03-PLAN-v2-roadmap.md)
+- v3 调优计划: [05-PLAN-v3-architecture-tuning.md](./05-PLAN-v3-architecture-tuning.md) ← **下一步**
 - 现行服务层样板: `src/utils/services/analysis.js` (831 行, read-only query)
 - 现行 composable 样板: `src/composables/useAdaptiveSession.js` (98 行)
 - 现行常量样板: `src/constants/practice.js` (148 行)
 - 历史: `.refactor-todo.md` A1-A5 / B-E / `.refactor-a1-plan.md`(A1 拆分已完成, 本计划是其续章)
-- P2 体系: [PLAN-v2-ability-analysis.md](./PLAN-v2-ability-analysis.md)
-- P0-P4 路线: [PLAN-v2-roadmap.md](./PLAN-v2-roadmap.md)
+- P2 体系: [06-PLAN-v2-ability-analysis.md](./06-PLAN-v2-ability-analysis.md)
+- P0-P4 路线: [03-PLAN-v2-roadmap.md](./03-PLAN-v2-roadmap.md)
+- UI 路线: [07-PLAN-v2-ui-roadmap.md](./07-PLAN-v2-ui-roadmap.md)
+- 自适应出题: [08-PLAN-v2-自适应出题.md](./08-PLAN-v2-自适应出题.md)
+- 浏览器烟测: [11-PLAN-browser-smoke-test.md](./11-PLAN-browser-smoke-test.md)
 
 ### 7.3 文档演进
 
@@ -495,22 +501,23 @@ PROGRESS.md
 - 每完成一个阶段: 更新 § 2 对应阶段加 "✅" 标记 + § 3 文件总表(标记 ✅/⏳)
 - 大版本变化时: 重新评审整套架构
 - **2026-06-07**: § 0 加"状态列"、§ 0.1 加本轮 commits 表、§ 3.1/3.2 加状态列（✅已迁 / ⏳留 v2.4）、§ 6.1 链接到 ARCH § 3 详细目录
+- **2026-06-07 v3 节点**: § 7.2 加 [05-PLAN-v3](./05-PLAN-v3-architecture-tuning.md) 链接（标记"下一步"），所有引用文件统一加数字前缀。详见 [02-PROGRESS.md § v3 调优计划草拟](./02-PROGRESS.md)
 
 ---
 
 ## 8. 立即可做的事
 
-> 本轮是"先修正架构, 文档审完再动". 当前状态是**文档已落地, 等用户审**.
+> **v2.3 A 组已全部落地** (2026-06-07, 分支 `chore/cleanup-a-group`)。本计划(v2 架构重构)进入"已交付"状态。
+>
+> **下一步**: 见 [05-PLAN-v3-architecture-tuning.md](./05-PLAN-v3-architecture-tuning.md) 8 大组（B 路径统一 / C services 升顶层 / D composables / E stores / F components / G 测试 / H 验证）。
+>
+> 如用户优先 v2 阶段 1-3 收尾（form 拆分 / context 抽象 / rules 拆分），可回此计划 § 2 阶段表继续。否则转向 v3 计划。
 
-**审完后第一步** (按阶段 1):
+**v2.3 A 组本轮 worktree 内已落地** (2026-06-07, commit `793056e` + `b69aac4`):
 ```bash
-# 在 utils/form/ 下建新位置
-mkdir -p src/utils/form
-git mv src/utils/formDefaults.js src/utils/form/formDefaults.js
-# 写 utils/index.js 桶导出(兼容旧 import)
-# 验证 build + test
-npm run build
-npm test
+# 删 8 个根目录 stub + 简 utils/index.js
+# A6/A7/A3/A1/A2 + A4b 全部 ✅
+# 9 files changed, 3 insertions(+), 459 deletions(-)
 ```
 
 更多 PR 节奏按 § 4 表格.

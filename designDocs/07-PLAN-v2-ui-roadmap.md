@@ -76,7 +76,7 @@
 
 **前置**：v2.2.0 阶段 10 + ✅ 用户测试反馈
 
-**计划文档**：`designDocs/PLAN-browser-smoke-test.md`（agent-test 出品，已 commit `ee1fae6`）
+**计划文档**：[11-PLAN-browser-smoke-test.md](11-PLAN-browser-smoke-test.md)（agent-test 出品，已 commit `ee1fae6`）
 
 **6 场景**：
 1. 4 新 props 全传（数据流）

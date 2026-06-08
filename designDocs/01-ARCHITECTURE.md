@@ -1,4 +1,4 @@
-<!-- filepath: designDocs/ARCHITECTURE.md -->
+<!-- filepath: designDocs/01-ARCHITECTURE.md -->
 # 系统架构文档
 
 > **性质**: 基础架构文档(Architecture Constitution)  
@@ -333,6 +333,7 @@ src/
   `src/composables/useSubmitHandler.js` (113 行, V→C 整改样板)
 - 现行常量样板: `src/constants/practice.js` (191 行)
 - 历史: `.refactor-todo.md` A1-A5 / B-E / `.refactor-a1-plan.md`(A1 拆分已完成, 本计划是其续章)
-- P2 体系: [PLAN-v2-ability-analysis.md](./PLAN-v2-ability-analysis.md)
-- P0-P4 路线: [PLAN-v2-roadmap.md](./PLAN-v2-roadmap.md)
-- 本轮浏览器烟测清单: [TODO-browser-smoke-test-v2.3.md](./TODO-browser-smoke-test-v2.3.md)
+- P2 体系: [06-PLAN-v2-ability-analysis.md](./06-PLAN-v2-ability-analysis.md)
+- P0-P4 路线: [03-PLAN-v2-roadmap.md](./03-PLAN-v2-roadmap.md)
+- v3 调优计划: [05-PLAN-v3-architecture-tuning.md](./05-PLAN-v3-architecture-tuning.md) ← **下一步**
+- 本轮浏览器烟测清单: [12-TODO-browser-smoke-test-v2.3.md](./12-TODO-browser-smoke-test-v2.3.md)

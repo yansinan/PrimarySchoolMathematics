@@ -1,6 +1,6 @@
 # PrimarySchoolMathematics 进度记录
 
-> 跟踪版本、阶段、UI 可见性。最后更新：2026-06-07（v2.3 A 组 A4b 落地）
+| 跟踪版本、阶段、UI 可见性。最后更新：2026-06-07（v2.3 A 组 A4b 落地 + v3 调优计划草拟）
 
 ---
 
@@ -46,6 +46,29 @@ A 组 6 个子任务：A6/A7/A3/A1/A2 + A4b（升 service）全部落地。**A5 
 
 ---
 
+## v3 调优计划草拟（2026-06-07）
+
+### 范围
+在 v2.3 A 组死代码清理基础上，向目标态推进。**仅文档可见**——未开始执行。
+
+详细计划见 [05-PLAN-v3-architecture-tuning.md](05-PLAN-v3-architecture-tuning.md)。
+
+### 8 大组（按建议执行顺序）
+| 组 | 任务 | 行数影响 | 依赖 |
+|----|------|----------|------|
+| B | 路径统一（删 8 个根目录 stub + 简化 `utils/index.js` 桶） | ~ -90 | 无 |
+| C | services 升顶层（`analysis.js` 从 `utils/services/` 迁到 `services/`） | ~ ±0 + 单测 | 无 |
+| D | composables 补齐（`usePrintPreview` / `useStatsQuery` / `useChart`） | ~ +100 | 无 |
+| E | stores 瘦身（依赖 D1，拆业务到 composable） | ~ -50 | D1 |
+| F | components 归位（`home/` → `generate/`，测试组件到 `dev/`） | ~ ±0 | 无 |
+| G | 测试分区（`tests/` 目录建立） | ~ +5 | 无 |
+| H | 验证 + 文档更新 | — | B/C/D/E/F/G |
+
+### 状态
+⏳ **待用户审阅 05-PLAN-v3，决定 B/C/D/E/F/G 执行顺序**
+
+---
+
 ## v2.3 arch-v2.3 阶段 5/6（2026-06-07）
 
 ### 范围
@@ -70,7 +93,7 @@ A 组 6 个子任务：A6/A7/A3/A1/A2 + A4b（升 service）全部落地。**A5 
 - `src/services/operatorMap.js` (S, 34 行) — 单一来源消除 operator label 重复
 
 ### 浏览器烟测结果
-12/12 项通过，0 遗留 P0/P1 问题。详见 [TODO-browser-smoke-test-v2.3.md](12-TODO-browser-smoke-test-v2.3.md)。
+12/12 项通过，0 遗留 P0/P1 问题。详见 [12-TODO-browser-smoke-test-v2.3.md](12-TODO-browser-smoke-test-v2.3.md)。
 
 ### UI 可见性：**🟡 0 视觉变化**（纯底层/服务层）
 详见 § "UI 可见性清单"。

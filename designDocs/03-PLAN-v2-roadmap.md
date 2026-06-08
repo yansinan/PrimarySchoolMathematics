@@ -403,7 +403,7 @@ src/composables/useAbilityProfile.js    // 包装 abilityProfile
 
 **改进方向**：
 - 弱项判定 v2（动态评估）→ 见 "未来规划" 章节
-- 错题规则 + 错题库利用 → 见 `designDocs/IdeaByUser.md`（待用户完成）
+- 错题规则 + 错题库利用 → 见 [10-IdeaByUser.md](10-IdeaByUser.md)（待用户完成）
 
 ---
 
