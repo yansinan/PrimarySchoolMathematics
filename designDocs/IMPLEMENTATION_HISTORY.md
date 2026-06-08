@@ -2,7 +2,7 @@
 
 > **性质**：实施历史 (Implementation History)  — 记录 v2.3 整改和 v3 调优两个阶段"做了什么、为什么、结果如何"
 > **配套**：[ARCHITECTURE.md](./ARCHITECTURE.md) 是"现在是什么"，本文是"过去怎么走到这的"
-> **完整日志**：[_ARCHIVED_02-PROGRESS.md](./_ARCHIVED_02-PROGRESS.md)（每个 commit 的逐行净增/减/验证/发现）
+> **完整日志**：[_ARCHIEVED_02-PROGRESS.md](./_ARCHIEVED_02-PROGRESS.md)（每个 commit 的逐行净增/减/验证/发现）
 
 ---
 
@@ -301,5 +301,5 @@ router.beforeEach((to, from) => {
 - 编制时间：2026-06-08（v3 收尾 + ui 合并后）
 - 关联：[ARCHITECTURE.md](./ARCHITECTURE.md) — "现在是什么"
 - 关联：[README.md](./README.md) — 文档索引
-- 完整日志（archived）：[_ARCHIVED_02-PROGRESS.md](./_ARCHIVED_02-PROGRESS.md)
-- 完整计划（archived）：[_ARCHIVED_04-PLAN-v2-architecture-refactor.md](./_ARCHIVED_04-PLAN-v2-architecture-refactor.md) | [_ARCHIVED_05-PLAN-v3-architecture-tuning.md](./_ARCHIVED_05-PLAN-v3-architecture-tuning.md)
+- 完整日志（archived）：[_ARCHIEVED_02-PROGRESS.md](./_ARCHIEVED_02-PROGRESS.md)
+- 完整计划（archived）：[_ARCHIEVED_04-PLAN-v2-architecture-refactor.md](./_ARCHIEVED_04-PLAN-v2-architecture-refactor.md) | [_ARCHIEVED_05-PLAN-v3-architecture-tuning.md](./_ARCHIEVED_05-PLAN-v3-architecture-tuning.md)
