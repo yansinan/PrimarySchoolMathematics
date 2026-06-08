@@ -1,14 +1,11 @@
 import { defineStore } from 'pinia'
 import {
-  getSessions,
-  getSessionDetail,
-  getAggregatedStats,
   deleteSession,
   exportAllData,
   importAllData,
-  // P2 阶段 14: StatsDrawer 需要全量历史答案, 改走 database 层
-  // (M 层可引 D 层 — database.js 是数据层, 合规)
-  getAllAnswers
+  // Phase 1 deleteSession 内联 refreshAll 用
+  getSessions,
+  getAggregatedStats,
 } from '@/utils/store/database'
 // 统一 operator 映射（ARCHITECTURE.md §3.5 消除重复）
 // OPERATOR_SYMBOLS 对应图表显示（＋ － × ÷）
@@ -19,6 +16,17 @@ import { OPERATOR_SYMBOLS } from '@/services'
  * and the stats drawer UI state.
  *
  * Agent A contract (see plan: 接口契约 B).
+ *
+ * D 组 D2 整改 (2026-06-08): 5 个数据加载 action (loadSessions/SessionDetail/
+ *   AggregatedStats/AllAnswers/refreshAll) 抽到 composables/useStatsQuery.js.
+ *   业务行为 (C 层) 与状态字段 (M 层) 分离.
+ *
+ * 仍在本 store 的:
+ * - 6 个 state 字段
+ * - 5 个 getter
+ * - 3 个 drawer UI toggle (toggleDrawer/openDrawer/closeDrawer)
+ * - 1 个删除 action (deleteSession) — Phase 2 抽到 useStatsQuery
+ * - 2 个文件 IO (exportData/importData) — Phase 2 抽到 useStatsQuery
  */
 export const useStatsStore = defineStore('stats', {
   state: () => ({
@@ -98,6 +106,7 @@ export const useStatsStore = defineStore('stats', {
   },
 
   actions: {
+    // ── UI 状态 (留 store) ──
     toggleDrawer() {
       this.drawerVisible = !this.drawerVisible
     },
@@ -110,87 +119,29 @@ export const useStatsStore = defineStore('stats', {
       this.drawerVisible = false
     },
 
-    /**
-     * P2 阶段 14: 加载全量历史答案 (从 db.answers 全表读)
-     * - 用于 StatsDrawer 打开时一次性拉取所有答题历史
-     * - 内部通过 getAllAnswers(studentId) 走 database 层
-     *   (database.js 已 join practiceSessions 过滤 studentId)
-     * - V→S→D 链合规: V 不直连 D
-     *
-     * @param {string} studentId
-     */
-    async loadAllAnswers(studentId = 'default') {
-      this.loading = true
-      try {
-        this.allAnswers = await getAllAnswers(studentId)
-      } catch (err) {
-        console.error('[StatsStore] Failed to load all answers:', err)
-        // 失败保持上次缓存, 不清空
-      } finally {
-        this.loading = false
-      }
-    },
-
-    /**
-     * Load the most recent sessions list.
-     */
-    async loadSessions(studentId = 'default', limit = 50) {
-      this.loading = true
-      try {
-        this.sessions = await getSessions(studentId, limit)
-      } catch (err) {
-        console.error('[StatsStore] Failed to load sessions:', err)
-      } finally {
-        this.loading = false
-      }
-    },
-
-    /**
-     * Load detail for a single session (session + answers).
-     */
-    async loadSessionDetail(sessionId) {
-      this.loading = true
-      try {
-        this.selectedSession = await getSessionDetail(sessionId)
-      } catch (err) {
-        console.error('[StatsStore] Failed to load session detail:', err)
-      } finally {
-        this.loading = false
-      }
-    },
-
-    /**
-     * Load (or reload) aggregated statistics.
-     */
-    async loadAggregatedStats(studentId = 'default') {
-      this.loading = true
-      try {
-        this.aggregatedStats = await getAggregatedStats(studentId)
-      } catch (err) {
-        console.error('[StatsStore] Failed to load aggregated stats:', err)
-      } finally {
-        this.loading = false
-      }
-    },
-
-    /**
-     * Refresh both session list and aggregated stats.
-     */
-    async refreshAll(studentId = 'default') {
-      await Promise.all([
-        this.loadSessions(studentId),
-        this.loadAggregatedStats(studentId)
-      ])
-    },
-
+    // ── Phase 2 待迁移 (留 store) ──
     /**
      * Delete a session and refresh.
+     * Phase 2: 抽到 useStatsQuery.deleteSessionById()，届时调 useStatsQuery().refreshAll()
+     * Phase 1: 内联 refreshAll 逻辑（避免 store 跨文件依赖 useStatsQuery）
      */
     async deleteSession(sessionId) {
       this.loading = true
       try {
         await deleteSession(sessionId)
-        await this.refreshAll()
+        // 内联 refreshAll: loadSessions + loadAggregatedStats 并行
+        const [sessions, aggregated] = await Promise.all([
+          getSessions('default', 50).catch(err => {
+            console.error('[StatsStore] Failed to load sessions:', err)
+            return this.sessions
+          }),
+          getAggregatedStats('default').catch(err => {
+            console.error('[StatsStore] Failed to load aggregated stats:', err)
+            return this.aggregatedStats
+          }),
+        ])
+        this.sessions = sessions
+        this.aggregatedStats = aggregated
       } catch (err) {
         console.error('[StatsStore] Failed to delete session:', err)
       } finally {
@@ -200,6 +151,7 @@ export const useStatsStore = defineStore('stats', {
 
     /**
      * Export all data — triggers a file download.
+     * Phase 2: 抽到 useStatsQuery.exportData()
      */
     async exportData(studentId = 'default') {
       try {
@@ -224,6 +176,7 @@ export const useStatsStore = defineStore('stats', {
      * Import data from a JSON file.
      * @param {File} file - The JSON file to import
      * @returns {Promise<{imported: number, skipped: number}|null>}
+     * Phase 2: 抽到 useStatsQuery.importData()
      */
     async importData(file) {
       this.loading = true

@@ -19,7 +19,7 @@
  */
 
 import { usePracticeStore } from '@/stores/practice'
-import { useStatsStore } from '@/stores/stats'
+import { useStatsQuery } from '@/composables'
 import { computeAndSaveAbilityProfile } from '@/services/abilityProfile'
 // 修复 Bug 3: 直接 import db 实例, 用于 savePerQuestion 写单条 answer
 // (避免每题都 saveSessionToDB 产生 N 个 1 步 session 污染"最近练习"列表)
@@ -39,7 +39,7 @@ function extractEvaluationsJSON(history) {
 
 export function usePracticeSaver() {
   const practiceStore = usePracticeStore()
-  const statsStore = useStatsStore()
+  const { refreshAll } = useStatsQuery()
 
   /**
    * 拿 store 画像数据，传入 abilityProfile 纯函数
@@ -105,7 +105,7 @@ export function usePracticeSaver() {
     const evaluations = extractEvaluationsJSON(history)
     practiceStore.session.answers = answers
     await practiceStore.saveSessionToDB(evaluations)
-    await statsStore.refreshAll()
+    await refreshAll()
   }
 
   /**
@@ -117,7 +117,7 @@ export function usePracticeSaver() {
   async function savePracticeFinal() {
     computeAndSaveAbilityProfile(buildProfileContext())
     await practiceStore.saveSessionToDB()
-    await statsStore.refreshAll()
+    await refreshAll()
   }
 
   return {

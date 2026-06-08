@@ -202,6 +202,7 @@ import { usePracticeStore } from '@/stores/practice'
 import { useStatsStore } from '@/stores/stats'
 import { useAbilityProfile } from '@/composables/useAbilityProfile'
 import { useAbilityAnalysis } from '@/composables/useAbilityAnalysis'
+import { useStatsQuery } from '@/composables'
 import { DIFFICULTY_LEVELS } from '@/utils/algorithm/adaptiveEngine'
 import { sumAnswerScores } from '@/utils/score'
 import { storeToRefs } from 'pinia'
@@ -227,6 +228,7 @@ const activeTab = ref('overview')
 // ── Store 数据 (M 层) ──
 const practiceStore = usePracticeStore()
 const statsStore = useStatsStore()
+const { refreshAll: refreshAllQuery, loadAllAnswers: loadAllAnswersQuery } = useStatsQuery()
 const {
   phase, isAssessment, currentDifficultyIdx, currentGroupIndex,
   totalQuestions, currentIndex, session, correctCount,
@@ -252,8 +254,8 @@ const histAggStats = computed(() => statsStore.aggregatedStats)
 // 历史 tab 被点击时触发加载聚合统计 + 数字掌握度
 watch(activeTab, (tab) => {
   if (tab === 'history') {
-    statsStore.refreshAll()
-    statsStore.loadAllAnswers().then(() => {
+    refreshAllQuery()
+    loadAllAnswersQuery().then(() => {
       if (statsStore.allAnswers?.length) {
         analysis.refreshMasteryFromAnswers(statsStore.allAnswers)
       }

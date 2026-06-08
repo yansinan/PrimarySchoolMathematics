@@ -10,12 +10,14 @@
  */
 import { computed } from 'vue'
 import { useStatsStore } from '@/stores/stats'
+import { useStatsQuery } from '@/composables'
 import { formatDuration as _formatDuration } from '@/utils/time/timeFormat'
 // 统一 operator 中文名称（services/operatorMap.js）
 import { OPERATOR_LABELS } from '@/services'
 
 export function useStatsDrawer() {
   const statsStore = useStatsStore()
+  const { refreshAll, loadAllAnswers, loadSessionDetail } = useStatsQuery()
 
   // ── Drawer 可见性（C 层委托，V 不直接写 store） ──
   const drawerVisible = computed(() => statsStore.drawerVisible)
@@ -31,15 +33,15 @@ export function useStatsDrawer() {
   const allAnswers = computed(() => statsStore.allAnswers)
   const isDrawerOpen = computed(() => statsStore.drawerVisible)
 
-  // ── Store 操作委托 ──
+  // ── Store 操作委托（业务行为走 useStatsQuery，状态字段仍走 store） ──
   function openSessionDetail(sessionId) {
-    statsStore.loadSessionDetail(sessionId)
+    return loadSessionDetail(sessionId)
   }
 
-  async function refreshAll() {
+  async function refreshAllDrawer() {
     await Promise.all([
-      statsStore.refreshAll(),
-      statsStore.loadAllAnswers(),
+      refreshAll(),
+      loadAllAnswers(),
     ])
   }
 
@@ -57,13 +59,13 @@ export function useStatsDrawer() {
    */
   async function openDrawer() {
     await Promise.all([
-      statsStore.refreshAll(),
-      statsStore.loadAllAnswers(),
+      refreshAll(),
+      loadAllAnswers(),
     ])
   }
 
-  function loadAllAnswers() {
-    return statsStore.loadAllAnswers()
+  function loadAllAnswersDrawer() {
+    return loadAllAnswers()
   }
 
   // ── 纯函数（原 V 层内联，搬至此统一出口） ──
@@ -96,7 +98,11 @@ export function useStatsDrawer() {
   return {
     isDrawerOpen, toggleDrawer, loading, aggregatedStats, overallAccuracyPercent,
     sessions, accuracyTrend, operatorBreakdown, allAnswers,
-    openSessionDetail, refreshAll, openDrawer, loadAllAnswers, exportData, importData,
+    openSessionDetail,
+    refreshAll: refreshAllDrawer,
+    openDrawer,
+    loadAllAnswers: loadAllAnswersDrawer,
+    exportData, importData,
     formatDuration, formatDate, operatorLabel,
     weakNumbers, weakNumberSuggestion,
   }
