@@ -1,6 +1,6 @@
 # PrimarySchoolMathematics 进度记录
 
-| 跟踪版本、阶段、UI 可见性。最后更新：2026-06-07（v2.3 A 组 A4b 落地 + v3 调优计划草拟）
+> 跟踪版本、阶段、UI 可见性。最后更新：2026-06-08（v3 B 组路径统一落地）
 
 ---
 
@@ -66,6 +66,53 @@ A 组 6 个子任务：A6/A7/A3/A1/A2 + A4b（升 service）全部落地。**A5 
 
 ### 状态
 ⏳ **待用户审阅 05-PLAN-v3，决定 B/C/D/E/F/G 执行顺序**
+
+---
+
+## v3 B 组路径统一（2026-06-08）
+
+### 范围
+PR 1.3 落地。删 6 个根目录 stub，简化 `utils/index.js` 到 4 行。
+
+分支：`chore/cleanup-b-group`（2 个 commits: `73d1b95` docs + `210c9b5` code）
+
+### Commits
+| hash | 范围 |
+|------|------|
+| `73d1b95` | docs: 同步所有 Plan 文档引用至新编号 + 添加 v3 计划引用 |
+| `210c9b5` | chore: B 组路径统一 — 删 6 个根 stub + 18 个 import 站点迁移 |
+
+### 净增 / 减
+**18 files changed, 20 insertions(+), 43 deletions(-)** + 6 files deleted
+
+| 任务 | 改动 |
+|------|------|
+| B1 | 7 处 `@/utils/database` → `@/utils/store/database` + 删 `utils/database.js` 根 stub |
+| B2 | 3 处 `@/utils/configStorage` → `@/utils/store/configStorage` + 删 `utils/configStorage.js` 根 stub |
+| B3a | 1 处 `@/utils/displayStrategy` → `@/utils/algorithm/displayStrategy` |
+| B3b | 3 处 `@/utils/formDefaults` → `@/utils/form/formDefaults` |
+| B3c | 3 处 `@/utils/timeFormat` → `@/utils/time/timeFormat` |
+| B3d | 删 4 个根 stub (`displayStrategy` / `EquationSolver` / `formDefaults` / `timeFormat`) |
+| B4 | 简化 `utils/index.js` 从 28 行到 4 行（4 个子目录桶，去掉 score/enum 直留） |
+| 修 | 2 处 internal `../EquationSolver` → `./EquationSolver`（build 阻塞项，根 stub 删后浮出） |
+
+### UI 可见性：**🟡 0 视觉变化**（纯路径迁移）
+
+### 验证状态
+- ✅ `npx vitest run` 44/45（1 预存失败与本次无关）
+- ✅ `npx vite build` 736 modules
+- ✅ 浏览器实测：评估→G1(6/6)→3星自评→G2(8题) 正常推进
+- ✅ 0 旧引用残留（grep `@/utils/{database,configStorage,displayStrategy,EquationSolver,formDefaults,timeFormat}` 0 匹配）
+
+### 关键发现
+1. **根 stub 隐藏 internal 路径问题**：`algorithm/adaptiveBatch.js` 和 `algorithm/diagnostic.js` 用 `import ... from '../EquationSolver'` 靠根 stub `export * from './algorithm/EquationSolver'` 解析。删根 stub 后 build 立即爆 `Could not resolve '../EquationSolver'`。修复：改 `./EquationSolver`（同目录）。
+2. **没人用 `@/utils` 桶**：`grep "from '@/utils'$"` 0 匹配，桶实际上 0 消费者，删除 `score`/`enum` 直引出安全。`score.js` 和 `enum.js` 仍作为独立文件存在，按需 `@/utils/score` / `@/utils/enum` 直引。
+3. **B3 真实 stubs 数量**：v3 计划 B 组 header 写"8 个"，实际只 6 个根 stub（不含 `paperGenerator.js`——那个属 C6 升 services）。
+
+### 已知遗留
+- `utils/paperGenerator.js` (74 行) 仍在根目录，2 处 import 站点（`algorithm/adaptiveBatch.js:19` + `Generate.vue:84`）。属 C6 升 services 范畴。
+- `utils/score.js` 和 `utils/enum.js` 仍为根目录直留文件（非 stub，有活跃导出），下次路径统一再考虑是否归入子目录。
+- 1 处 internal `../paperGenerator` 类似 B3 修过的 `../EquationSolver`，但 `paperGenerator.js` 根文件未删，目前仍能解析，C6 实施时一并修复。
 
 ---
 
