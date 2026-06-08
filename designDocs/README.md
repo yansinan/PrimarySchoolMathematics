@@ -8,10 +8,10 @@
 
 **v3 架构调优已全部完成**（A/B/C/D/E/F/G/H 8 大组 + 收尾审计 + ui 分支合并）。详见 [IMPLEMENTATION_HISTORY.md](./IMPLEMENTATION_HISTORY.md)。
 
-**下一目标**（[_ARCHIEVED_05-PLAN-v3-architecture-tuning.md § 12](./_ARCHIEVED_05-PLAN-v3-architecture-tuning.md) 完整规划）：
+**下一目标**（[v4-PLAN-error-injection.md](./v4-PLAN-error-injection.md) 完整规划）：
 - **v4.1** 错题注入专项（P1.6 干扰项错题库 + P1.8 20% 注入）— 用户指定下一目标
-- **v3.1** G3 端到端集成测试
 - **v4.2** P3 L2.5 难度等级
+- **v3.1** G3 端到端集成测试（顺手收尾）
 - **v2.4.1-3** D3 useChart / C6 出题聚合 / Practice.vue 拆分
 
 ---
@@ -23,7 +23,7 @@
 | 1 | **[ARCHITECTURE.md](./ARCHITECTURE.md)** | 架构宪法 | 必读 — 任何 PR 前看一遍 |
 | 2 | **[DESIGN.md](./DESIGN.md)** | 产品设计 | 业务必读 — 出题流程、profile、stats 三套设计 |
 | 3 | **[IMPLEMENTATION_HISTORY.md](./IMPLEMENTATION_HISTORY.md)** | 实施过程 | 选读 — 了解 v2.3+v3 "过去怎么走到这" |
-| 4 | [03-PLAN-v2-roadmap.md](./03-PLAN-v2-roadmap.md) | 业务路线图 | 选读 — P0-P5 业务优先级 + 状态 |
+| 4 | [v4-PLAN-error-injection.md](./v4-PLAN-error-injection.md) | v4 业务规划（错题注入 + L2.5）| 必读 — 当前活跃 |
 | 5 | [10-IdeaByUser.md](./10-IdeaByUser.md) | 用户原始创意 | 业务必读 |
 
 **v3 调优计划完整版**（archived）：[_ARCHIEVED_05-PLAN-v3-architecture-tuning.md](./_ARCHIEVED_05-PLAN-v3-architecture-tuning.md)
@@ -41,18 +41,17 @@ designDocs/
 │   └── DESIGN.md                          产品设计（业务流程）
 │
 ├── 业务规划（活跃）
-│   ├── 03-PLAN-v2-roadmap.md              P0-P5 业务路线图
-│   ├── 07-PLAN-v2-ui-roadmap.md           UI 业务 v3.0+ 规划
-│   └── 10-IdeaByUser.md                   用户原始创意汇总
-│
-├── 实施历史（参考）
-│   └── IMPLEMENTATION_HISTORY.md          v2.3+v3 实施过程（合并历史）
-│
-│   └── _ARCHIEVED_*.md                         已落地计划 / 报告 / smoke test（不读）
+│   └── v4-PLAN-error-injection.md       v4.1 错题注入 + v4.2 L2.5 难度
+└── 实施历史（参考）
+    └── IMPLEMENTATION_HISTORY.md          v2.3+v3 实施过程（合并历史）
+
+└── _ARCHIEVED_*.md                         已落地计划 / 报告 / smoke test（不读）
     ├── _ARCHIEVED_02-PROGRESS.md          v3 收尾前的逐行 commit 日志
+    ├── _ARCHIEVED_03-PLAN-v2-roadmap.md   v2 业务路线图（已落地）
     ├── _ARCHIEVED_04-PLAN-v2-architecture-refactor.md   v2.3 7 阶段计划（已落地）
     ├── _ARCHIEVED_05-PLAN-v3-architecture-tuning.md    v3 8 大组计划（已落地）
     ├── _ARCHIEVED_06-PLAN-v2-ability-analysis.md       P2 阶段（已落地）
+    ├── _ARCHIEVED_07-PLAN-v2-ui-roadmap.md   v3.0+ UI 业务规划
     ├── _ARCHIEVED_08-PLAN-v2-自适应出题.md              暂缓
     ├── _ARCHIEVED_11-PLAN-browser-smoke-test.md        smoke test 计划（旧）
     ├── _ARCHIEVED_12-TODO-browser-smoke-test-v2.3.md   smoke test 清单（12/12 通过）
@@ -71,11 +70,11 @@ designDocs/
        │
        ├──→ [DESIGN]                          产品设计（业务流程）
        │         │
-       │         ↓ 业务规划
-       │         [03-PLAN-v2-roadmap]            v2 路线图（P0-P4）
+       │         ↓ 业务规划（活跃）
+       │         [v4-PLAN-error-injection]       v4.1 错题注入 + v4.2 L2.5
        │              │
-       │              ├──→ [07-PLAN-v2-ui-roadmap]   UI 路线图
-       │              └──→ [10-IdeaByUser]           用户原始创意
+       │              └──→ [_ARCHIEVED_03-PLAN-v2-roadmap]   历史 P0-P5 路线
+       │              └──→ [_ARCHIEVED_05-PLAN-v3-architecture-tuning § 12.3.2-4]  粗略规划
        │
        ├──→ [IMPLEMENTATION_HISTORY]        v2.3+v3 实施过程（"过去怎么走"）
        │         │
@@ -108,11 +107,12 @@ designDocs/
 |-----------|--------|
 | 当前架构 + 死代码 | [ARCHITECTURE.md](./ARCHITECTURE.md) |
 | 已经做了哪些 | [IMPLEMENTATION_HISTORY.md](./IMPLEMENTATION_HISTORY.md) |
-| v2 整体规划 | [03-PLAN-v2-roadmap.md](./03-PLAN-v2-roadmap.md) |
+| v2 整体规划（archived）| [_ARCHIEVED_03-PLAN-v2-roadmap.md](./_ARCHIEVED_03-PLAN-v2-roadmap.md) |
+| v4 业务（错题注入 + L2.5）| [v4-PLAN-error-injection.md](./v4-PLAN-error-injection.md) |
 | 怎么把代码迁成目标态 | [_ARCHIEVED_04-PLAN-v2-architecture-refactor.md](./_ARCHIEVED_04-PLAN-v2-architecture-refactor.md) |
 | 怎么清死代码 / 调优 | [_ARCHIEVED_05-PLAN-v3-architecture-tuning.md](./_ARCHIEVED_05-PLAN-v3-architecture-tuning.md) |
 | 产品设计 | [DESIGN.md](./DESIGN.md) |
 | P2 阶段细节 | [_ARCHIEVED_06-PLAN-v2-ability-analysis.md](./_ARCHIEVED_06-PLAN-v2-ability-analysis.md) |
-| UI 规划 | [07-PLAN-v2-ui-roadmap.md](./07-PLAN-v2-ui-roadmap.md) |
+| UI 业务 v3.0+ | [_ARCHIEVED_07-PLAN-v2-ui-roadmap.md](./_ARCHIEVED_07-PLAN-v2-ui-roadmap.md) |
 | 出题流程业务 | [DESIGN.md](./DESIGN.md) |
 | 浏览器实测细节 | [_ARCHIEVED_12-TODO-browser-smoke-test-v2.3.md](./_ARCHIEVED_12-TODO-browser-smoke-test-v2.3.md) |

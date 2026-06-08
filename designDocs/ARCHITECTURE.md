@@ -221,6 +221,6 @@ src/
   `src/composables/useStatsQuery.js` (273 行, D2 抽 8 个 stats action)
 - 现行常量样板: `src/constants/practice.js` (191 行)
 - P2 体系: [_ARCHIEVED_06-PLAN-v2-ability-analysis.md](./_ARCHIEVED_06-PLAN-v2-ability-analysis.md)
-- P0-P4 路线: [03-PLAN-v2-roadmap.md](./03-PLAN-v2-roadmap.md)
+- P0-P4 路线（archived）: [_ARCHIEVED_03-PLAN-v2-roadmap.md](./_ARCHIEVED_03-PLAN-v2-roadmap.md) → 业务阶段在 [v4-PLAN-error-injection.md](./v4-PLAN-error-injection.md)
 - 实施过程: [IMPLEMENTATION_HISTORY.md](./IMPLEMENTATION_HISTORY.md)
 - v3 调优计划（已落地）: [_ARCHIEVED_05-PLAN-v3-architecture-tuning.md](./_ARCHIEVED_05-PLAN-v3-architecture-tuning.md)

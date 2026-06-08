@@ -31,7 +31,7 @@ v2 arch 重构（7 阶段）是结构性整改（分层、路径）。**v3 调�
 > **不在 v3 范围**:
 > - bug 修复（totalDuration 等单独排期）
 > - 大型 `Practice.vue` 拆分（放 v2.4）
-> - 业务功能新做（P0-P3 等，留 [03-PLAN-v2-roadmap.md](03-PLAN-v2-roadmap.md) 跟踪）
+> - 业务功能新做（P0-P3 等，留 [_ARCHIEVED_03-PLAN-v2-roadmap.md](_ARCHIEVED_03-PLAN-v2-roadmap.md) (archived) + [v4-PLAN-error-injection.md](v4-PLAN-error-injection.md) (current) 跟踪）
 
 ---
 
@@ -239,7 +239,7 @@ test/
 - `02-PROGRESS.md` 头部 + v3 H 段（详见 PROGRESS）
 
 **未在 v3 范围修改的文档**（与架构 v3 不同维度，不动）：
-- `03-PLAN-v2-roadmap.md` — 业务路线图 P0-P5（v2.3.0 P0/P2/P5 ✅，P1/P3 待开始）
+- `_ARCHIEVED_03-PLAN-v2-roadmap.md` — v2 业务路线图（已落地）→ v4 业务阶段在 [v4-PLAN-error-injection.md](v4-PLAN-error-injection.md)
 - `06-PLAN-v2-ability-analysis.md` — P2 阶段详细设计（v2.2.0 实施，DB schema v2 → v3 升级）
 - `07-PLAN-v2-ui-roadmap.md` — 业务 UI 路线图（v2.2.0 → v3.0.0 业务版本，UI 强化/学习曲线/profile）
 
@@ -288,9 +288,9 @@ A (✅) → B → C → D → (D 完成后) E + F + G (平行) → H
 | Phase | 编号 | 任务 | 估行 | 风险 | 建议起点 | 关联文档 |
 |-------|------|------|------|------|----------|----------|
 | **v3.1 测试收尾** | G3 | 端到端集成测试 `test/integration/fullSessionFlow.spec.js` | +50 | 🟢 简单 | 立即可做（v3 收尾）| [05-PLAN-v3 § 7 G 组](05-PLAN-v3-architecture-tuning.md) |
-| **v4.1 错题注入专项** | P1.6 | 干扰项错题库（`generateDistractors(correct, count, userId)`）| +30 | 🟢 | 用户指定下一目标 | [03-PLAN-v2-roadmap § P1](03-PLAN-v2-roadmap.md) |
-| **v4.1 错题注入专项** | P1.8 | 20% 错题注入（`adjustNextQuestion` 步骤 A 前 20% 概率）| +25 | 🟡 | 与 P1.6 同步 | [03-PLAN-v2-roadmap § P1](03-PLAN-v2-roadmap.md) |
-| **v4.2 难度等级专项** | P3 | L2.5 难度等级（`DIFFICULTY_LEVELS` 12→13）| +50 | 🟡 | 独立业务功能 | [03-PLAN-v2-roadmap § P3](03-PLAN-v2-roadmap.md) |
+| **v4.1 错题注入专项** | P1.6 | 干扰项错题库（`generateDistractors(correct, count, userId)`）| +30 | 🟢 | 用户指定下一目标 | [v4-PLAN-error-injection.md § 2.2](v4-PLAN-error-injection.md) |
+| **v4.1 错题注入专项** | P1.8 | 20% 错题注入（`adjustNextQuestion` 步骤 A 前 20% 概率）| +25 | 🟡 | 与 P1.6 同步 | [v4-PLAN-error-injection.md § 2.3](v4-PLAN-error-injection.md) |
+| **v4.2 难度等级专项** | P3 | L2.5 难度等级（`DIFFICULTY_LEVELS` 12→13）| +50 | 🟡 | 独立业务功能 | [v4-PLAN-error-injection.md § 3](v4-PLAN-error-injection.md) |
 | **v2.4.1 chart 增强** | D3 | `useChart` composable（响应式 chart.js 包装）| +30 | 🟢 | chart 渲染增强 | [05-PLAN-v3 § 4 D 组](05-PLAN-v3-architecture-tuning.md) |
 | **v2.4.2 出题领域聚合** | C6 | paperGenerator + psm + EquationSolver + equationParser + diagnostic + adaptiveBatch + formDefaults 7 文件聚合到 `services/questionGen/` | +10 净（路径迁移） | 🟡 | 出题领域服务化 | [05-PLAN-v3 § 3 C 组](05-PLAN-v3-architecture-tuning.md) |
 | **v2.4.3 业务拆分** | — | `Practice.vue` 923 行偏大，业务可读性 | -100+ 净（拆分） | 🟠 | 可读性提升 | — |
@@ -433,7 +433,7 @@ v2.4.3 (Practice.vue 拆分)     ← 业务可读性，2-3 天
 - 编制时间：2026-06-08
 - 编制者：v3 收尾（ui 分支合 06c1a29）
 - 下次更新：每次子任务完成后
-- 关联：[03-PLAN-v2-roadmap § v3 业务阶段收尾](03-PLAN-v2-roadmap.md) | [02-PROGRESS § 已知遗留](02-PROGRESS.md)
+- 关联：[v4-PLAN-error-injection.md](./v4-PLAN-error-injection.md) | [_ARCHIEVED_02-PROGRESS.md § 已知遗留](_ARCHIEVED_02-PROGRESS.md) | [_ARCHIEVED_03-PLAN-v2-roadmap.md § v3 业务阶段收尾](_ARCHIEVED_03-PLAN-v2-roadmap.md)
 
 ---
 
