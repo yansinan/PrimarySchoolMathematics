@@ -123,7 +123,7 @@ src/utils/
 
 | 编号 | 任务 | 减行 | 风险 | 状态 |
 |------|------|------|------|------|
-| E1 | `stores/practice.js` 拆 `saveSessionToDB` → `services/sessionPersistence.js` | -57 +89 (新) = +32 | 🟠 | ✅ **2026-06-08 完成**（A+1 方案，方案 B 待重评）|
+| E1 | `stores/practice.js` 拆 `saveSessionToDB` → `services/sessionPersistence.js` | -57 +109 (新, 含 B) = +52 | 🟠 | ✅ **2026-06-08 完成**（A+1 方案，B 方案同日合并） |
 | E2 | `stores/stats.js` 拆 `load*` 方法 → `useStatsQuery`（D2 落地后） | -131 (244→113) | 🟠 | ✅ **由 D2 Phase 1+2 提前完成** |
 | E3 | 删 `stores/app.js`（D1 落地后） | -20 | 🟠 | ✅ **2026-06-08 完成**（路径 4：sessionStorage + key in query） |
 
@@ -144,22 +144,32 @@ src/utils/
 - `Generate.vue#selectedConfiguration` 之前用 `appStore.navigateToPrint(router, ...)` 但 `appStore` 和 `router` 都没声明（import 了但 const 没写）— 因主流程（`generateFormulas` line 158）不调此函数，bug 一直潜伏
 - 这次内联 navigateToPrint 时显式加 `const router = useRouter()`，移除 `appStore` 调用
 
+**预计**: 净增 32 行（E1 业务从 M 抽 S，加 doc 注释 + payload 解构 + persistSingleAnswer），1-2 PR
+
 ### E1 抽层详情
 
 **问题**：`stores/practice.js#saveSessionToDB`（52 行）— DB 写编排混在 M 层，违反 ARCHITECTURE.md §1.1"S 层 = IO 边界"原则。
 
 **方案 A+1**（最小手术）：
-- 新建 `services/sessionPersistence.js`（89 行，1 个 export: `persistSession`）
+- 新建 `services/sessionPersistence.js`（109 行含 B，2 个 export）
 - S 层纯函数接 payload（`{ answers, configSnapshot, evaluations, studentId }`），不引 store
-- `usePracticeSaver.js` 3 处调 store action → 调 S 层（`saveGroupCheckpoint` / `saveAdaptiveFinal` / `savePracticeFinal`）
+- `usePracticeSaver.js` 4 处调 store action / 内联 DB 操作 → 调 S 层：
+  - `saveGroupCheckpoint` / `saveAdaptiveFinal` / `savePracticeFinal` 调 `persistSession`
+  - `savePerQuestion` 调 `persistSingleAnswer`（B 方案）
 - 删 `stores/practice.js#saveSessionToDB` 整 action（-57 行，含死 import `saveSession` / `sumResponseTimes`）
+- 删 usePracticeSaver 内联 `db.answers.put` + `saveQuestion`（B 方案：-7 行 + import 清理）
 - 调用方 `Practice.vue` 注释更新
 
-**方案 B 重评（待用户决定是否再上）**：
+**合并分析（用户决策 2026-06-08）**：B 方案不新建 `answerPersistence.js`，合并到 `sessionPersistence.js`，原因：
+- `persistSession` 写整组 session+answers，`persistSingleAnswer` 写 1 条 answer+question — 强语义关联（"练习答题数据持久化"）
+- 文件职责统一，避免"答 1 题"和"答 N 题"分两个文件碎片化
+- 文件名保留（`sessionPersistence`）— "session" 在项目里等同"练习次"（看 `practiceSessions` 表名），且不改 services 桶引用
+
+**方案 B 已完成**（不再"待重评"）：
 - A 已做：`saveSessionToDB` 抽 S 层
-- B 增量：把 `usePracticeSaver.savePerQuestion` 内的 `db.answers.put` + `saveQuestion` 编排也抽 S 层（建 `persistSingleAnswer`）
-- B 价值：把"写单条 answer"也走统一 S 层入口，未来要做"批量重试 / 上传云端"只改 S 层
-- B 风险：调用点从 3 处变 4 处；savePerQuestion 当前是 fire-and-forget，S 层化后失败处理需 review
+- B 完成：把 `usePracticeSaver.savePerQuestion` 内的 `db.answers.put` + `saveQuestion` 编排也抽 S 层（建 `persistSingleAnswer`）
+- 价值兑现：未来加批量重试 / 上传云端只改 S 层
+- 风险已控：S 层函数保留 try/catch 失败日志 + 返回 void，C 层仍 fire-and-forget 调用
 
 ---
 

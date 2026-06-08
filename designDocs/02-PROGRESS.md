@@ -1,6 +1,6 @@
 # PrimarySchoolMathematics 进度记录
 
-> 跟踪版本、阶段、UI 可见性。最后更新：2026-06-08（v3 E3 删 app.js 路径 4 落地；D2/E1 段前文）
+> 跟踪版本、阶段、UI 可见性。最后更新：2026-06-08（v3 E1 方案 B persistSingleAnswer 合并到 sessionPersistence）
 
 ---
 
@@ -511,6 +511,25 @@ test/
 
 ### 已知遗留（E 组清空）
 无 — E 组全部完成 (E1 + E2 + E3)
+
+### E1 方案 B persistSingleAnswer 合并（2026-06-08 同日）
+
+**合并决策**：B 方案不新建 `answerPersistence.js`，合并到 `sessionPersistence.js`：
+- `persistSession` 写整组 session+answers，`persistSingleAnswer` 写 1 条 answer+question — 强语义关联
+- 文件职责统一（"练习答题数据持久化" 集中 1 文件）
+- 文件名保留（`sessionPersistence`），不改 services 桶引用
+
+**改动**：
+- `sessionPersistence.js`: 加 `persistSingleAnswer(answer)` 函数（+20 行），含 try/catch 失败日志
+- `usePracticeSaver.js#savePerQuestion`: 删内联 `db.answers.put` + `saveQuestion` 编排（-7 行），改调 `persistSingleAnswer`
+- 清 `usePracticeSaver.js` 的 import: `db, { saveQuestion }` 不再需要
+
+**验证**：
+- ✅ vitest 49/50
+- ✅ 浏览器实测：S 层直调 `persistSingleAnswer(fakeAnswer)` → `db.answers.toArray()` 含该条 (eq='7+8=15', sessionId=undefined) + `db.questions.toArray()` 含 (eq='7+8=15', operands=[7, 8])
+- ✅ `usePracticeSaver` 4 处 save 调用（savePerQuestion / saveGroupCheckpoint / saveAdaptiveFinal / savePracticeFinal）全部走 S 层
+
+**价值兑现**：未来加批量重试 / 上传云端只改 S 层。
 
 ---
 

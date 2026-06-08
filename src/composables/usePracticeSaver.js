@@ -21,11 +21,9 @@
 import { usePracticeStore } from '@/stores/practice'
 import { useStatsQuery } from '@/composables'
 import { computeAndSaveAbilityProfile } from '@/services/abilityProfile'
-// 修复 Bug 3: 直接 import db 实例, 用于 savePerQuestion 写单条 answer
-// (避免每题都 persistSession 产生 N 个 1 步 session 污染"最近练习"列表)
-import db, { saveQuestion } from '@/utils/store/database'
 // E1: persistSession 从 S 层调, 不再绕 store action (2026-06-08)
-import { persistSession } from '@/services/sessionPersistence'
+// E1-B: persistSingleAnswer 同样从 S 层调, 替代原内联 db.answers.put + saveQuestion (2026-06-08)
+import { persistSession, persistSingleAnswer } from '@/services/sessionPersistence'
 
 /**
  * 从 history 中提取 evaluations（{group, score}[]），转 JSON 字符串
@@ -66,18 +64,13 @@ export function usePracticeSaver() {
   function savePerQuestion() {
     // 同步更新能力画像（fire-and-forget）
     computeAndSaveAbilityProfile(buildProfileContext())
-    // 取 session.answers 最后一条（刚答完的那题），单独写入 db.answers
+    // 取 session.answers 最后一条（刚答完的那题），单独写入 db.answers + db.questions
     // sessionId=0 表示这条 answer 暂未关联到任何 session record
     // 等到 group checkpoint / final 时，persistSession 会再写一份带 sessionId 的完整 record
     const answers = practiceStore.session.answers
     const lastAnswer = answers[answers.length - 1]
     if (lastAnswer) {
-      void db.answers.put(lastAnswer)
-      // ✨ B-2 修复：同步写入 questions 表（equation 唯一键去重，首次创建后续复用 id）
-      void saveQuestion({
-        ...lastAnswer,
-        operands: [lastAnswer.operandMin, lastAnswer.operandMax].filter(x => x > 0),
-      })
+      void persistSingleAnswer(lastAnswer)
     }
   }
 
