@@ -1,6 +1,6 @@
 # PrimarySchoolMathematics 进度记录
 
-> 跟踪版本、阶段、UI 可见性。最后更新：2026-06-08（v3 B 组路径统一落地）
+> 跟踪版本、阶段、UI 可见性。最后更新：2026-06-08（v3 C1+C2+C3 services 升顶层落地）
 
 ---
 
@@ -113,6 +113,46 @@ PR 1.3 落地。删 6 个根目录 stub，简化 `utils/index.js` 到 4 行。
 - `utils/paperGenerator.js` (74 行) 仍在根目录，2 处 import 站点（`algorithm/adaptiveBatch.js:19` + `Generate.vue:84`）。属 C6 升 services 范畴。
 - `utils/score.js` 和 `utils/enum.js` 仍为根目录直留文件（非 stub，有活跃导出），下次路径统一再考虑是否归入子目录。
 - 1 处 internal `../paperGenerator` 类似 B3 修过的 `../EquationSolver`，但 `paperGenerator.js` 根文件未删，目前仍能解析，C6 实施时一并修复。
+
+---
+
+## v3 C1+C2+C3 services 升顶层（2026-06-08）
+
+### 范围
+analysis.js (887 行) + analysis.spec.js (733 行) 整体从 `utils/services/` 迁到 `services/`，barrel 桥接改直引。
+
+分支：`chore/cleanup-c-group`（基于 `chore/cleanup-b-group`，1 个 commit：`3f9f777`）
+
+### Commits
+| hash | 范围 |
+|------|------|
+| `3f9f777` | chore: C1+C2+C3 services 升顶层 — analysis.js 887+733 行迁到 services/ |
+
+### 净增 / 减
+**3 files changed, +734/-1**（0 净行，纯路径迁移）
+- 删除: `src/utils/services/` 整个目录（含 `analysis.js` + `__tests__/analysis.spec.js`）
+- 新增: `src/services/__tests__/analysis.spec.js`
+- 重命名: `src/utils/services/analysis.js` → `src/services/analysis.js`
+- 改: `src/services/index.js` 1 行（`@/utils/services/analysis` → `./analysis`）
+- 改: `src/services/__tests__/analysis.spec.js` 1 行（`@/utils/services/analysis` → `../analysis`）
+
+### UI 可见性：**🟡 0 视觉变化**（纯路径迁移）
+
+### 验证状态
+- ✅ `npx vitest run` 44/45（1 预存失败与本次无关）
+- ✅ `npx vite build` 736 modules
+- ✅ 浏览器实测：评估→G1(6/6)→3星自评→G2(8题) 正常推进
+- ✅ `services/` 桶 5 个 export 全部可访问（CDP 验证 `import('/src/services/index.js')` 返回 5 类 services）
+
+### 关键发现
+1. **`git mv` 嵌套目录有坑**：先 `git mv utils/services/analysis.js` 成功，但 `git mv utils/services/__tests__/analysis.spec.js` 失败（"没有那个文件或目录"）。原因可能是 git mv 在嵌套 `__tests__` 目录下有解析问题。**workaround**：`mkdir -p dest/__tests__` + `mv` + `git add` + `rmdir` 旧目录。
+2. **barrel 5 个 export 全部健康**：`getEffectiveResponseTime` / `findEquivalent`（from analysis.js）+ `OPERATOR_SYMBOLS` / `OPERATOR_LABELS`（from operatorMap.js）+ `computeAndSaveAbilityProfile`（from abilityProfile.js）。
+3. **C5 早于 C1+C2+C3 完成**：`services/abilityProfile.js` 在 A4b 已升层，桶中无 stub 残留。
+
+### 已知遗留
+- C4 `sessionMetrics.js` 待新增（备 totalDuration bug）
+- C6 `paperGenerator.js` 升层待执行
+- `utils/score.js` 和 `utils/enum.js` 仍为根目录直留文件
 
 ---
 
