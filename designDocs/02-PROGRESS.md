@@ -37,7 +37,7 @@ A 组 6 个子任务：A6/A7/A3/A1/A2 + A4b（升 service）全部落地。**A5 
 
 ### 关键发现与决策
 1. **`utils/download.js` 仍被 Generate.vue:82 引用**：原审计数据陈旧，实际是 `download` 和 `generatePaper` 都被 Generate.vue import 但**从未在 body 中调用**。A7 删除源文件后必须立即清理 A3 的死 import（已合并处理）。
-2. **`stores/app.js` 仍被 Generate.vue:84 引用**（`useAppStore().navigateToPrint` 在 line 157 实际使用），`printPreviewPapers` 字段活。`app.js` 不能删，需等 D1（`usePrintPreview` composable）落地。
+2. **`stores/app.js` 走路径 4 删除**（E3, 2026-06-08）：`useAppStore().navigateToPrint` 改用 `sessionStorage` + `router.push` query 替代，跨页 state 不再走 store。整 `stores/app.js` 已删，Generate.vue 改用 sessionStorage 直引。
 3. **Layout.vue 是 `@/components` 桶的唯一用户**：A1 删桶时直接改 Layout.vue 为 `Generate` + `Practice` 两个直接路径 import。
 
 ### 已知遗留（A4 已落地，A8 不执行）
@@ -107,12 +107,12 @@ PR 1.3 落地。删 6 个根目录 stub，简化 `utils/index.js` 到 4 行。
 ### 关键发现
 1. **根 stub 隐藏 internal 路径问题**：`algorithm/adaptiveBatch.js` 和 `algorithm/diagnostic.js` 用 `import ... from '../EquationSolver'` 靠根 stub `export * from './algorithm/EquationSolver'` 解析。删根 stub 后 build 立即爆 `Could not resolve '../EquationSolver'`。修复：改 `./EquationSolver`（同目录）。
 2. **没人用 `@/utils` 桶**：`grep "from '@/utils'$"` 0 匹配，桶实际上 0 消费者，删除 `score`/`enum` 直引出安全。`score.js` 和 `enum.js` 仍作为独立文件存在，按需 `@/utils/score` / `@/utils/enum` 直引。
-3. **B3 真实 stubs 数量**：v3 计划 B 组 header 写"8 个"，实际只 6 个根 stub（不含 `paperGenerator.js`——那个属 C6 升 services）。
+3. **B3 真实 stubs 数量**：v3 计划 B 组 header 写"8 个"，实际只 6 个根 stub（不含 `paperGenerator.js`——C6 决议**跳过**，留 v2.4+ 聚合 7 个文件到 `services/questionGen/` 子目录）。
 
 ### 已知遗留
-- `utils/paperGenerator.js` (74 行) 仍在根目录，2 处 import 站点（`algorithm/adaptiveBatch.js:19` + `Generate.vue:84`）。属 C6 升 services 范畴。
+- `utils/paperGenerator.js` 仍在根目录（65 行），2 处 import 站点（`algorithm/adaptiveBatch.js:19` + `Generate.vue:84`）。**C6 决议跳过**（单函数移 1 改 3 性价比低），路径未变。
 - `utils/score.js` 和 `utils/enum.js` 仍为根目录直留文件（非 stub，有活跃导出），下次路径统一再考虑是否归入子目录。
-- 1 处 internal `../paperGenerator` 类似 B3 修过的 `../EquationSolver`，但 `paperGenerator.js` 根文件未删，目前仍能解析，C6 实施时一并修复。
+- 1 处 internal `../paperGenerator` 仍在（`algorithm/adaptiveBatch.js:19`）—— 路径解析仍工作（`paperGenerator.js` 未删），C6 重启时一并修复。
 
 ---
 
@@ -151,7 +151,7 @@ analysis.js (887 行) + analysis.spec.js (733 行) 整体从 `utils/services/` �
 
 ### 已知遗留
 - C4 `sessionMetrics.js` 待新增（备 totalDuration bug）→ ✅ **已用 sumResponseTimes 替代**
-- C6 `paperGenerator.js` 升层待执行
+- C6 `paperGenerator.js` 升层**决议跳过**（单函数移 1 改 3 性价比低；v2.4+ 聚合 7 个文件到 `services/questionGen/`）|
 - `utils/score.js` 和 `utils/enum.js` 仍为根目录直留文件
 
 ---

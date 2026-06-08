@@ -6,9 +6,18 @@
 
 ## 当前进度（2026-06-08）
 
-**v3 架构调优已全部完成**（A/B/C/D/E/F/G/H 8 大组）。详见 [02-PROGRESS.md](02-PROGRESS.md) "v3 调优"段。
-**下一目标**：回归 [03-PLAN-v2-roadmap.md](03-PLAN-v2-roadmap.md) 业务/UI 改进（P0-P3 任务），或合并 v3 分支入主干。
-**详见**：[02-PROGRESS.md](02-PROGRESS.md)。
+**v3 架构调优已全部完成**（A/B/C/D/E/F 6 大组；G/H 决议跳过/暂缓）。详见 [02-PROGRESS.md](02-PROGRESS.md) "v3 调优"段。
+- ✅ A 死代码清理 / B 路径统一 / C services 升顶层（C1+C2+C3+C4；C6 跳过）
+- ✅ D composables 补齐（D2 useStatsQuery 完整落地；D1/D3 跳过）
+- ✅ E stores 瘦身 + 删 app.js（路径 4 sessionStorage 替代 D1）
+- ✅ F components 归位（home/→generate/，Test*→dev/，删 3 死文件）
+- ⏸️ G 测试分区（记录状态后暂停，留 v3 收尾 H 阶段处理）
+- ⏸️ H 验证+文档（v3 收尾阶段）
+
+**差异审计（2026-06-08）**：实现/文档差异已统一。详见 [02-PROGRESS.md § 关键发现](02-PROGRESS.md)。
+
+**下一目标**：**P1 错题注入专项**——P1.6（干扰项错题库） + P1.8（20% 错题注入）。P1.7 实时调题已实装（`adjustNextQuestion` + `useAdaptiveSession#afterAnswer()`）。详见 [03-PLAN-v2-roadmap.md](03-PLAN-v2-roadmap.md) § P1。
+**详见**：[02-PROGRESS.md](02-PROGRESS.md) + [03-PLAN-v2-roadmap.md](03-PLAN-v2-roadmap.md) 业务 P0-P3 段。
 
 ---
 

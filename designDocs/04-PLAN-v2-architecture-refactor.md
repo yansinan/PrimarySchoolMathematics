@@ -316,7 +316,7 @@ include: [
 | `src/utils/displayStrategy.js` | `src/utils/algorithm/displayStrategy.js` | ✅ |
 | `src/utils/equationParser.js` | `src/utils/algorithm/equationParser.js` | ✅ |
 | `src/utils/EquationSolver.js` | `src/utils/algorithm/EquationSolver.js` | ✅ |
-| `src/utils/paperGenerator.js` | `src/utils/algorithm/paperGenerator.js` | ✅ |
+| `src/utils/paperGenerator.js` | `src/utils/algorithm/paperGenerator.js` | ⏸️ **C6 决议跳过**（单函数移 1 改 3 性价比低）|
 | `src/utils/psm.js` | `src/utils/algorithm/psm.js` | ✅ |
 | `src/utils/formDefaults.js` | `src/utils/form/formDefaults.js` | ✅ |
 | `src/utils/timeFormat.js` | `src/utils/time/timeFormat.js` | ✅ |

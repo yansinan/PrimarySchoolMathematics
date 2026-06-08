@@ -92,7 +92,7 @@ src/utils/
 | C3 | 改 `services/index.js` 桥接：`export * from '@/utils/services/analysis'` → `export * from './analysis'` | -1 | 🟡 |
 | C4 | 新增 `services/sessionMetrics.js`（备 totalDuration bug）| +30 | 🟢 |
 | C5 | 升 `utils/abilityProfile.js` → `services/abilityProfile.js` | ✅ | **2026-06-07 A4b 已落地** |
-| C6 | 升 `utils/paperGenerator.js` → `services/paperGenerator.js` | 0 | 🟡（待 v3 后续 batch）|
+| C6 | ~~升 `utils/paperGenerator.js` → `services/paperGenerator.js`~~ | ~~0~~ | ⏸️ **决议跳过**（单函数移 1 改 3 性价比低；v2.4+ 聚合 7 个文件到 `services/questionGen/`）|
 
 **预计**: 净增 30 行，2 PR
 
@@ -104,7 +104,7 @@ src/utils/
 
 | 编号 | 任务 | 净行 | 风险 |
 |------|------|------|------|
-| D1 | 新增 `composables/usePrintPreview.js`，替代 `stores/app.js` 业务 | +20 | 🟡 |
+| D1 | ~~新增 `composables/usePrintPreview.js`，替代 `stores/app.js` 业务~~ | ~~+20~~ | ⛔ **跳过**（E3 改走路径 4 sessionStorage 替代整文件，无需 D1）|
 | D2 | 新增 `composables/useStatsQuery.js`，抽 `stores/stats.js` 业务规则 | +50 | 🟡 |
 | D3 | 新增 `composables/useChart.js`（chart.js 通用封装）| +30 | 🟢 |
 | D4 | 补 `composables/index.js` 桶：3 个新 composable 入口 | +5 | 🟢 |

@@ -210,9 +210,9 @@ src/
 | 🔴 | `src/views/TestView.vue` | 51 | **router 仍引用** — 测试页保留 |
 | 🔴 | `src/components/TestComponentView.vue` | 209 | **TestView 引用** — 布局组件测试页 |
 | 🔴 | `src/components/TestHorizontalLayout.vue` | 115 | **TestComponentView 引用** — 布局测试用例 |
-| 🔴 | `src/components/home/index.js` | 5 | **未列入**（桶仍被 Generate.vue 等引用）|
+| ✅ | `src/components/generate/index.js` | 5 | F 组 2026-06-08 改名为 `generate/`（含桶导出）|
 | ✅ | `src/stores/app.js` | 20 | E3 改走路径 4 (sessionStorage + key in query)，**2026-06-08 chore/cleanup-f-group 删除** |
-| ✅ ~~**⏳ 待查**~~ | `src/utils/paperGenerator.js` | 65 | Generate+Home 引用；Home 死则 Generate 单引用，可迁 services。**2026-06-07 确认**：仅 Generate 1 处，可迁到 `services/paperGenerator.js` 后删 |
+| ✅ ~~**⏳ 待查**~~ | `src/utils/paperGenerator.js` | 65 | C6 决议**跳过**（单函数移 1 改 3 性价比低）。v2.4+ 聚合 paperGenerator + psm + EquationSolver + equationParser + diagnostic + adaptiveBatch + formDefaults 7 个文件到 `services/questionGen/` 子目录 |
 | ✅ | `src/components/index.js` | 10 | 没人用（仅 Layout.vue 用了桶，已改直接路径），**2026-06-07 chore/cleanup-a-group 删除** |
 
 ### 3.2 死符号
@@ -239,7 +239,7 @@ src/
 | ✅ ~~`src/components/Generate.vue:81`~~ | ~~`httpContentTypeExtensionsMappingEnum`~~ | import 但未用，**2026-06-07 已删** |
 | ✅ ~~`src/components/Generate.vue:82`~~ | ~~`download`~~ | import 但未用，源文件已删，**2026-06-07 已清** |
 | ✅ ~~`src/components/Generate.vue:83`~~ | ~~`generatePaper`~~ | import 但未用，源文件已删，**2026-06-07 已清** |
-| ~~`src/components/Generate.vue:86`~~ | ~~`createFormulasGenerator` from `@/utils/paperGenerator`~~ | 待迁移到 services（留 v2.4） |
+| ✅ ~~`src/components/Generate.vue:86`~~ | ~~`createFormulasGenerator` from `@/utils/paperGenerator`~~ | C6 决议跳过；2026-06-08 路径未变（仍在 `@/utils/paperGenerator`）|
 | ~~`src/views/Home.vue:93`~~ | ~~`console.log('少年，我看你骨骼精奇...')`~~ | 彩蛋，Home 删后消失（2026-06-07）|
 
 ### 3.4 调试残留
@@ -251,7 +251,7 @@ src/
 | 文件 | 内容 | 状态 |
 |------|------|:----:|
 | ✅ ~~`src/views/Home.vue`~~ | ~~`debugger`(近末尾)~~ | 随 Home 删（2026-06-07）|
-| `src/utils/paperGenerator.js:64` | `console.log('papers', papers)` | ⏸ 暂不清理 |
+| `src/utils/paperGenerator.js:64` | `console.log('papers', papers)` | ⏸ 暂不清理（C6 跳过，路径未变）|
 | `src/views/Print.vue:56,71,75,80` | 4 处 console.log | ⏸ 暂不清理 |
 | `src/utils/database.js:215` | `console.log('[PracticeStore] Session saved to DB...')` | ⏸ 暂不清理 |
 | ✅ ~~`src/router/index.js:33`~~ | ~~`// console.log(baseUrl)`~~ | 注释清掉（2026-06-07）|
@@ -263,7 +263,7 @@ src/
 | `toEvalSymbols` | `utils/equationParser.js:3-9` | `utils/EquationSolver.js:1-7` | ✅ 删 B 后消 |
 | 进位/退位判断 | `equationParser.getCarryType` | `psm.is_addcarry/is_abdication` | ⏳ |
 | `formData` 17 字段默认值 | `views/Home.vue:60-88` | `components/Generate.vue:102-131` | ✅ 删 A 后消 |
-| `paperGenerator` vs | `utils/paperGenerator.js:11-39` | `apis/paper.js:12-40` | ⏳ 迁 services 后消 |
+| `paperGenerator` vs | ~~`utils/paperGenerator.js:11-39`~~ | ~~`apis/paper.js:12-40`~~ | ✅ A7 已删 `apis/paper.js`（重复 168 行）|
 | operator label | `services/operatorMap.js`（新）| ~~`stores/stats.js:51-58`~~ | ✅ 2026-06 统一 |
 | operator label | `services/operatorMap.js`（新）| ~~`components/stats/StatsDrawer.vue`~~ | ✅ 2026-06 统一 |
 | `extractOperandNumbers` | `utils/database.js:6-25` | `utils/equationParser.parseEquation` | ⏳ |

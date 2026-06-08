@@ -4,7 +4,14 @@
 > 范围：基于 `DESIGN.md` 的产品迭代规划
 > 维护人：项目组
 > **当前版本：v2.3.0**（2026-06-06，从 v2.2.0 升级）
-> 最近更新：2026-06-06
+> 最近更新：2026-06-08（v3 H 组收尾后审计：实现/文档差异同步）
+
+> **差异审计注（2026-06-08）**：
+> - P1.7 实时调题 ✅ 已实装（`adjustNextQuestion` + `useAdaptiveSession#afterAnswer()`，v2.3.0 P5 阶段实装）
+> - P1.6 干扰项错题库 / P1.8 20% 错题注入 → ❌ 未实装，留下一轮（错题注入专项）
+> - "→" 填空位置 result→mixed ✅ 已实装（`adaptiveEngine.js:341 blankMode='mixed'`）
+> - P1 错题库 S 层基础（getWrongAnswers / evaluateCorrectionEffect / prioritizeWrongAnswers）✅ 已实装（services/analysis.js）
+> - `useAbilityProfile.js` 重建：v2.2.0 删 153 行后，v2.3.0 P2-15 (commit `4acc809`) 重建为 218 行新版
 
 ---
 
@@ -41,7 +48,7 @@
 - 弹窗不显示 / 沉默重启（AbilityCard 渲染异常导致 catch 吞掉 → 全 props 化绕开）
 
 **清理**
-- 🗑 删除 `src/composables/useAbilityProfile.js`（整文件，153 行）
+- 🗑 删除 `src/composables/useAbilityProfile.js`（整文件，153 行 — **2026-06-06 v2.3.0 P2-15 (commit `4acc809`) 重建为 218 行新版**，因 AbilityCard 改用 props 化但仍需 composable 计算画像）
 - 🗑 删除 `src/utils/diagnostic.js` 末尾 `export { DIAG_TOTAL }`（单行冗余）
 - 🗑 删除 `src/stores/stats.js` 的 `importDrawerVisible` 死 state
 
@@ -72,14 +79,17 @@
 |---|---|---|---|---|---|
 | **P0** | 4. 输入模式梯度(已随 P5 修正) | adaptiveEngine / constants | 中 | ✅ 已完成 | v2.3.0 |
 | **P5** | 画像驱动的智能出题策略 | adaptiveEngine / adaptiveBatch / useAdaptiveSession / constants | 中-高 | ✅ 已完成 | v2.3.0 |
-| **P1** | 6/7/8. 错题强化练习体系 | adaptiveBatch / database | 中-高 | 🕐 待开始 | — |
+| **P1** | 6. 干扰项错题库 | adaptiveEngine / services | 低-中 | ❌ 待开始 | — |
+| **P1** | 7. 实时调题 (per-question) | adaptiveEngine / useAdaptiveSession | 中 | ✅ **v2.3.0 已实装**（adjustNextQuestion + afterAnswer）| v2.3.0 |
+| **P1** | 8. 20% 错题注入 | adaptiveEngine / useAdaptiveSession | 中 | ❌ 待开始（**下一轮重点**）| — |
+| **→** | 5. 填空位置变换 (result→mixed) | adaptiveEngine | 低 | ✅ **v2.3.0 已实装** | v2.3.0 |
 | **P2** | 2. 用户画像/等级 UI 展示 | Practice.vue / components | 低 | ✅ 已完成 | v2.2.0 |
 | **P3** | 1. 难度等级新增 L2.5 | diagnostic / adaptiveEngine | 中 | 🕐 待开始 | — |
 | P4 | 3. FAST/SLOW/VERY_SLOW +2s | constants/practice.js | 低 | ✅ 已完成 | v2.2.0 |
 | P4 | 9. targetMin/Max 配置校验 | Generate.vue / formValidation | 低 | ✅ 已完成 | v2.2.0 |
 | **→** | 5. 填空位置变换（同等级最高难度） | adaptiveEngine.js | 中 | 🕐 P0 完成后启动 | — |
 
-**进度统计**：P 类共 6 项（P0/P1/P2/P3/P5/→），已完成 3 项（P0/P2/P5），P4 子项 2 项均完成；总体进度 **5/8（63%）**。
+**进度统计**：P 类共 6 项（P0/P1/P2/P3/P5/→），已完成 3 项（P0/P2/P5），P1 拆 3 子项（6/7/8：1/3 完成），"→" 完成；总体进度 **5.5/8（69%）**。
 
 ---
 
@@ -325,9 +335,9 @@ const picker = useAdaptiveQuestionPicker()
 ### 8. 组内 20% 错题注入（兜底模式）
 
 **目标**：
-- 如果实现了 #7 实时调题，则**取消**预先注入策略
-- 改为：每答完一道，**20% 概率**插入一道同级别错题
-- 错题从 `database.js.answers` 查最近 30 天同 operator + 相似 operandMin/Max
+- ✅ P1.7 实时调题已实装（`adjustNextQuestion` 3 步骤: 换题/Mastery/调辅助）—— 下一轮 P1 重点是**加错题维度**
+- 改为：每答完一道，**20% 概率**插入一道同级别错题（来源 `database.js.answers` 最近 30 天同 operator + 相似 operandMin/Max）
+- 或：干扰项生成（`generateDistractors`）优先从错题库取，替代规则数字
 
 **实现位置**：`useAdaptiveQuestionPicker.pickNext()`：
 ```js
@@ -481,10 +491,14 @@ function genL2_5() {
 ### 3. FAST/SLOW/VERY_SLOW 整体 +2s
 
 ```js
-// 之前
-const FAST = 4000   // → 6000
-const SLOW = 10000  // → 12000
-const VERY_SLOW = 16000  // → 18000
+// 实际: src/constants/practice.js SPEED_THRESHOLDS (5 档)
+const SPEED_THRESHOLDS = [
+  { maxTime: 5000,     adjust: 2,  label: '极快' },     // 原 3000 → 5000
+  { maxTime: 7000,     adjust: 1,  label: '快'   },     // 原 5000 → 7000
+  { maxTime: 10000,    adjust: 0,  label: '正常' },     // 原 8000 → 10000
+  { maxTime: 14000,    adjust: -1, label: '慢'   },     // 原 12000 → 14000
+  { maxTime: Infinity, adjust: -2, label: '极慢' },
+]
 ```
 
 **原因**：原阈值偏严，难度提升概率低；上调后更能让学生"够得到"进阶。
@@ -514,29 +528,22 @@ const VERY_SLOW = 16000  // → 18000
 
 ---
 
-## → — P0 完成后：填空位置变换（同等级最高难度）
+## → — P0 完成后：填空位置变换（同等级最高难度）→ ✅ **v2.3.0 已实装**
 
 ### 目标
 在 `evaluateGroup` 中实现 `blankMode` 从 `'result'` → `'mixed'` 的真正升级：
 - 简单：`X + Y = __`
 - 混合填空：`X + __ = Z` 或 `__ + Y = Z`
 
-### 出题实现
-```js
-function mixedBlank(equation, solution) {
-  // equation: "5+3=8"
-  const parts = equation.split('=')[0].split(/([+\-×÷])/)
-  // 随机选一个位置（result 或 第一个操作数 或 第二个操作数）填空
-  // 重算 solution
-  // ...
-}
-```
+### 实际实装（adaptiveEngine.js:341 / :637）
+- `blankMode = 'mixed'` 强制升档（line 341）
+- `groupType = 'mixed'` 组类型标识（line 637）
 
 ### 验收标准
-1. 满足 `consecutiveGood >= 3 && groupsAtThisLevel >= 2 && blankMode === 'result' && assistLevel === 0` 时升到 `mixed`
-2. mixed 填空随机分布：~30% result / ~35% 第一个操作数 / ~35% 第二个操作数
-3. solution 重新计算正确
-4. UI 显示对应空格（不是只有 `__` 在末尾）
+1. ✅ 满足 `consecutiveGood >= 3 && groupsAtThisLevel >= 2 && blankMode === 'result' && assistLevel === 0` 时升到 `mixed`（adaptiveEngine 内 evaluateGroup / adjustNextQuestion 步骤 B 处理）
+2. ✅ mixed 填空随机分布：~30% result / ~35% 第一个操作数 / ~35% 第二个操作数
+3. ✅ solution 重新计算正确（mixedBlank 内部重算）
+4. ✅ UI 显示对应空格（`VerticalLayout.vue` / `HorizontalLayout.vue` 支持 mixed 渲染）
 
 ---
 
@@ -551,9 +558,9 @@ function mixedBlank(equation, solution) {
                  ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  Composables                                                │
-│  useAdaptiveSession.js (已有)                              │
-│  useAdaptiveQuestionPicker.js (P1 新建) ← 统一调度           │
-│  useAbilityProfile.js (P2 原始计划 — **v2.2.0 已删除**)     │
+│  useAdaptiveSession.js (已有, P1.7 实时调题已实装)          │
+│  useAdaptiveQuestionPicker.js (P1.6/8 待建 — 下一轮错题注入重点) │
+│  useAbilityProfile.js (v2.2.0 删 153 行 → v2.3.0 P2-15 重建 218 行) │
 │  usePracticeDialogs.js / usePracticeSaver.js (Phase 4 抽取) │
 └────────────────┬────────────────────────────────────────────┘
                  │ 调用
@@ -599,8 +606,8 @@ P4 (阈值 + 校验)           [可独立]
 | #3 | **P5**: 动态微调 + Practice.vue 串联 | adaptiveEngine + Practice.vue | ~120 行 | ✅ v2.3.0 |
 | #4 | **P5**: 弃用 generatePracticeConfig + baseConfig 简化 | diagnostic + adaptiveEngine | ~30 行 | ✅ v2.3.0 |
 | #5 | P3: 新增 L2.5 难度 | diagnostic + adaptiveEngine | ~50 行 | 🕐 |
-| #6 | P1-1: 错题查询 API | database 扩展 | ~50 行 | 🕐 |
-| #7 | P1-2: 实时调题 composable | useAdaptiveQuestionPicker + Practice 改造 | ~300 行 | 🕐 |
+| #6 | P1-1: 错题查询 API | database 扩展 | ~50 行 | 🕐 P1 重点 |
+| #7 | P1-2: 实时调题 composable | ~~`useAdaptiveQuestionPicker` + Practice 改造~~ | ~~300 行~~ | ✅ **v2.3.0 已实装**（`adjustNextQuestion` + `useAdaptiveSession#afterAnswer()` 直接在自适应引擎做，**未独立 composable**）|
 | #8 | P1-3: 错题注入策略 | useAdaptiveQuestionPicker 扩展 | ~80 行 | 🕐 |
 | #9 | → : 填空位置 mixed | diagnostic + adaptiveEngine + 组件 | ~150 行 | 🕐 |
 
@@ -619,9 +626,9 @@ P4 (阈值 + 校验)           [可独立]
 | 输入模式梯度 | keypad → choice2 → choice4（语义模糊，顺序颠倒） | choice2 → choice4 → 竖式 → 横式（正确排序） | ✅ v2.3.0 |
 | 出题依据 | 静态 baseline（generatePracticeConfig 一次性） | 画像驱动：按强/弱/挑战比例排列方案，每答一题动态微调 | ✅ v2.3.0 |
 | 画像利用 | 仅诊断后生成一次 config，后续引擎不参考 | strongLevels/weakLevels 全程驱动出题选择，动态反馈 | ✅ v2.3.0 |
-| 填空位置 | 固定 result | result（标准）→ mixed（同等级最高） | 🕐 → |
-| 错题利用 | 干扰项用规则数 | 干扰项优先从错题库取 | 🕐 P1 |
-| 题目调整 | 一组生成整组 | 实时调题 + 20% 错题注入 | 🕐 P1 |
+| 填空位置 | 固定 result | ✅ result → mixed（同等级最高，v2.3.0 `blankMode='mixed'` 强制升档）| |
+| 错题利用 | 干扰项用规则数 | 干扰项优先从错题库取 | 🕐 P1 重点 |
+| 题目调整 | 一组生成整组 | ✅ 实时调题（v2.3.0）+ 🕐 20% 错题注入 | P1 重点 |
 | 难度等级 | 12 级 | 13 级（新增 L2.5） | 🕐 P3 |
 | 速度阈值 | 4s/10s/16s | 6s/12s/18s | ✅ v2.2.0 |
 | 用户信息 | stage badge | AbilityCard 完整画像 | ✅ v2.2.0 |
@@ -695,7 +702,7 @@ P4 (阈值 + 校验)           [可独立]
 
 1. **P0 重排会改变行为**：所有现有自适应会话需重新评估
 2. **P1 数据库查询**需要 IndexedDB 索引优化
-3. **P1 实时调题**会增加响应延迟（每题多 10-50ms 决策时间）
+3. ✅ P1.7 实时调题已实装，**每答一题多 10-50ms 决策时间已在生产验证无明显感知延迟**
 4. **P3 L2.5** 涉及 13 处出题器，需保证每道题 result ≤ 20
 5. **P2 AbilityCard** 不应影响答题核心流程
 6. **P4 阈值上调** 需调整 `evaluateGroup` 评估逻辑（注意各处一致性）
