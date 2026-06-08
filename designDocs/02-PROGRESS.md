@@ -1,6 +1,6 @@
 # PrimarySchoolMathematics 进度记录
 
-> 跟踪版本、阶段、UI 可见性。最后更新：2026-06-08（v3 C4 sumResponseTimes + 修 totalDuration bug 落地）
+> 跟踪版本、阶段、UI 可见性。最后更新：2026-06-08（v3 D2 Phase 1 useStatsQuery 5 个 DB actions 落地）
 
 ---
 
@@ -203,9 +203,70 @@ analysis.js (887 行) + analysis.spec.js (733 行) 整体从 `utils/services/` �
 4. **sumResponseTimes 兜底较严**：除 `null/0/缺失` 外，**负数** 也兜底为 0（异常数据保护）。
 
 ### 已知遗留
-- C6 `paperGenerator.js` 升层待执行
+- C6 `paperGenerator.js` 升层待执行（用户决议跳过：单文件 1 函数移 1 改 3 性价比低）
 - `utils/score.js` 和 `utils/enum.js` 仍为根目录直留文件
 - 旧 session `totalDuration` 字段（写于 bug 期间）数据脏，历史显示不修（低优先级）
+
+---
+
+## v3 D2 Phase 1 useStatsQuery 5 个 DB 加载（2026-06-08）
+
+### 范围
+D2 分 2 阶段：Phase 1 抽 5 个 DB read，浏览器充分测后做 Phase 2 (3 个 write/IO + deleteSession)。
+
+分支：`chore/cleanup-d-group`（基于 c-group，1 个 commit：`399e3ba`）
+
+### Commits
+| hash | 范围 |
+|------|------|
+| `399e3ba` | feat: D2 Phase 1 — 抽 5 个 stats DB 加载 action 到 useStatsQuery |
+
+### 净增 / 减
+**6 files changed, +179/-96**（+useStatsQuery.js 新建 115 行 + stats store 删 -96 行 + 5 行桶补）
+- 新增 `src/composables/useStatsQuery.js`: 115 行（5 个 export）
+- 改 `src/stores/stats.js`: 244 → 155 行（-89）
+- 改 `src/composables/usePracticeSaver.js`: -2 行（refreshAll × 2 改直引）
+- 改 `src/composables/useStatsDrawer.js`: +10/-10 行（refreshAllDrawer/loadAllAnswersDrawer 包装）
+- 改 `src/components/dev/DebugPanel.vue`: +1/-1 行（refreshAllQuery/loadAllAnswersQuery 别名）
+- 改 `src/composables/index.js`: +5 行（D4 桶补 4 个 export）
+
+### UI 可见性：**🟡 0 视觉变化**（重构内部，UI 不变）
+
+### 5 个 export 与 4 处调用方对照
+
+| 函数 | 调用方 | 调用点 |
+|------|--------|--------|
+| `loadSessions` | (Phase 1 无外部调用，UI 通过 refreshAll 间接调) | — |
+| `loadSessionDetail` | `useStatsDrawer.openSessionDetail` | StatsDrawer 详情弹窗 |
+| `loadAggregatedStats` | (同 loadSessions) | — |
+| `loadAllAnswers` | `useStatsDrawer.openDrawer` / `loadAllAnswersDrawer` | Stats drawer 打开 + 详情页 |
+| `refreshAll` | `usePracticeSaver.saveAdaptiveFinal` + `savePracticeFinal` + `useStatsDrawer.openDrawer/refreshAllDrawer` | 答完触发 stats 刷新 |
+
+### 验证状态
+- ✅ `npx vitest run` 49/50（1 预存失败与本次无关）
+- ✅ `npx vite build` 736 modules
+- ✅ 浏览器实测（5 个函数直接调 + drawer 实操）：
+  - `refreshAll` → sessions: 1, accuracyTrend: 1, overallAccuracy: 100
+  - `loadAllAnswers` → allAnswers: 4
+  - `loadSessions` → sessions.length: 1
+  - `loadAggregatedStats` → aggregatedStats 设置
+  - `loadSessionDetail(1)` → selectedSession: {session: {id:1, totalQuestions:4}, answers: [4 条]}
+  - Stats drawer 完整显示：1 练习/4 题/100%/"4 题 · 24.1 秒"（sumResponseTimes 生效）
+- ✅ `grep "statsStore\.refreshAll|loadAllAnswers|loadSessions|loadSessionDetail|loadAggregatedStats"` 0 残留
+
+### 关键发现
+1. **stats store 删 refreshAll 后 deleteSession 失引用**：store 内 inline refreshAll 逻辑（getSessions + getAggregatedStats 并行），避免 store 跨文件依赖 useStatsQuery。Phase 2 抽 deleteSession 时改调 useStatsQuery().refreshAll()。
+2. **useStatsDrawer 重命名包装函数**：`refreshAll` / `loadAllAnswers` 与 useStatsQuery 同名冲突。改名为 `refreshAllDrawer` / `loadAllAnswersDrawer`，在 return 时用 `refreshAll: refreshAllDrawer` 别名保持外部 API 不变。
+3. **桶一致用**：usePracticeSaver / useStatsDrawer / DebugPanel 三处都改用 `from '@/composables'`（桶引用），不用直引。与 D4 "扩桶" 决策一致。
+4. **`refreshAll` 内联逻辑写入 store 临时用**：保持业务行为不变，Phase 2 整体抽到 useStatsQuery 时一行 `useStatsQuery().refreshAll()` 替换。
+
+### 已知遗留（Phase 2 目标）
+- `stores/stats.js` 仍含 3 个待迁 action:
+  - `deleteSession` (DB write + 内联 refreshAll)
+  - `exportData` (file IO)
+  - `importData` (file IO)
+- Phase 2 目标: 抽到 useStatsQuery.js，store 退化为只含 state + getter + drawer toggle
+- 预估 Phase 2 工作量: ~80 行（useStatsQuery 加 3 个 + store 删 3 个）
 
 ---
 
