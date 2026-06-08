@@ -1,32 +1,23 @@
 import { defineStore } from 'pinia'
-import {
-  deleteSession,
-  exportAllData,
-  importAllData,
-  // Phase 1 deleteSession 内联 refreshAll 用
-  getSessions,
-  getAggregatedStats,
-} from '@/utils/store/database'
 // 统一 operator 映射（ARCHITECTURE.md §3.5 消除重复）
 // OPERATOR_SYMBOLS 对应图表显示（＋ － × ÷）
 import { OPERATOR_SYMBOLS } from '@/services'
 
 /**
- * Stats Store — manages historical practice data, aggregated statistics,
- * and the stats drawer UI state.
+ * Stats Store — stats 状态字段 + UI toggle + 派生 getter
  *
- * Agent A contract (see plan: 接口契约 B).
- *
- * D 组 D2 整改 (2026-06-08): 5 个数据加载 action (loadSessions/SessionDetail/
- *   AggregatedStats/AllAnswers/refreshAll) 抽到 composables/useStatsQuery.js.
- *   业务行为 (C 层) 与状态字段 (M 层) 分离.
- *
- * 仍在本 store 的:
- * - 6 个 state 字段
- * - 5 个 getter
+ * D 组 D2 整改后 (2026-06-08) 职责只剩:
+ * - 6 个 state 字段 (sessions/selectedSession/aggregatedStats/allAnswers/drawerVisible/loading)
+ * - 5 个 getter (accuracyTrend/operatorBreakdown/weakAreas/overallAccuracyPercent/loading)
  * - 3 个 drawer UI toggle (toggleDrawer/openDrawer/closeDrawer)
- * - 1 个删除 action (deleteSession) — Phase 2 抽到 useStatsQuery
- * - 2 个文件 IO (exportData/importData) — Phase 2 抽到 useStatsQuery
+ *
+ * 8 个数据 action 全部抽到 composables/useStatsQuery.js (5 read + 3 write/IO):
+ * - loadSessions / loadSessionDetail / loadAggregatedStats / loadAllAnswers / refreshAll
+ * - deleteSessionById / exportData / importData
+ *
+ * D2 之前 (历史):
+ * - 8 个 DB IO 全部在 store, 250+ 行
+ * - V→S 直调 + 业务行为混在状态层
  */
 export const useStatsStore = defineStore('stats', {
   state: () => ({
@@ -34,7 +25,7 @@ export const useStatsStore = defineStore('stats', {
     selectedSession: null,
     aggregatedStats: null,
     // P2 阶段 14: 全量历史答案缓存
-    // - 由 StatsDrawer 打开时触发 loadAllAnswers() 填充
+    // - 由 StatsDrawer 打开时触发 useStatsQuery.loadAllAnswers() 填充
     // - 供 useAbilityProfile(options.answers) 用, 让"你掌握得怎么样"显示
     //   所有答题历史而非仅本轮 adaptiveAnswers
     allAnswers: [],
@@ -106,7 +97,7 @@ export const useStatsStore = defineStore('stats', {
   },
 
   actions: {
-    // ── UI 状态 (留 store) ──
+    // ── 仅 UI 状态 (留 store) ──
     toggleDrawer() {
       this.drawerVisible = !this.drawerVisible
     },
@@ -118,80 +109,5 @@ export const useStatsStore = defineStore('stats', {
     closeDrawer() {
       this.drawerVisible = false
     },
-
-    // ── Phase 2 待迁移 (留 store) ──
-    /**
-     * Delete a session and refresh.
-     * Phase 2: 抽到 useStatsQuery.deleteSessionById()，届时调 useStatsQuery().refreshAll()
-     * Phase 1: 内联 refreshAll 逻辑（避免 store 跨文件依赖 useStatsQuery）
-     */
-    async deleteSession(sessionId) {
-      this.loading = true
-      try {
-        await deleteSession(sessionId)
-        // 内联 refreshAll: loadSessions + loadAggregatedStats 并行
-        const [sessions, aggregated] = await Promise.all([
-          getSessions('default', 50).catch(err => {
-            console.error('[StatsStore] Failed to load sessions:', err)
-            return this.sessions
-          }),
-          getAggregatedStats('default').catch(err => {
-            console.error('[StatsStore] Failed to load aggregated stats:', err)
-            return this.aggregatedStats
-          }),
-        ])
-        this.sessions = sessions
-        this.aggregatedStats = aggregated
-      } catch (err) {
-        console.error('[StatsStore] Failed to delete session:', err)
-      } finally {
-        this.loading = false
-      }
-    },
-
-    /**
-     * Export all data — triggers a file download.
-     * Phase 2: 抽到 useStatsQuery.exportData()
-     */
-    async exportData(studentId = 'default') {
-      try {
-        const data = await exportAllData(studentId)
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `练习记录_${new Date().toISOString().slice(0, 10)}.json`
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
-        return true
-      } catch (err) {
-        console.error('[StatsStore] Failed to export data:', err)
-        return false
-      }
-    },
-
-    /**
-     * Import data from a JSON file.
-     * @param {File} file - The JSON file to import
-     * @returns {Promise<{imported: number, skipped: number}|null>}
-     * Phase 2: 抽到 useStatsQuery.importData()
-     */
-    async importData(file) {
-      this.loading = true
-      try {
-        const text = await file.text()
-        const data = JSON.parse(text)
-        const result = await importAllData(data)
-        await this.refreshAll()
-        return result
-      } catch (err) {
-        console.error('[StatsStore] Failed to import data:', err)
-        throw err
-      } finally {
-        this.loading = false
-      }
-    }
   }
 })

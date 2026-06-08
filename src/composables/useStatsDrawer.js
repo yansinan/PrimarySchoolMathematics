@@ -17,7 +17,10 @@ import { OPERATOR_LABELS } from '@/services'
 
 export function useStatsDrawer() {
   const statsStore = useStatsStore()
-  const { refreshAll, loadAllAnswers, loadSessionDetail } = useStatsQuery()
+  const {
+    refreshAll, loadAllAnswers, loadSessionDetail,
+    exportData: exportDataQuery, importData: importDataQuery,
+  } = useStatsQuery()
 
   // ── Drawer 可见性（C 层委托，V 不直接写 store） ──
   const drawerVisible = computed(() => statsStore.drawerVisible)
@@ -46,11 +49,11 @@ export function useStatsDrawer() {
   }
 
   async function exportData() {
-    await statsStore.exportData()
+    await exportDataQuery()
   }
 
   async function importData(file) {
-    return statsStore.importData(file)
+    return importDataQuery(file)
   }
 
   /**
