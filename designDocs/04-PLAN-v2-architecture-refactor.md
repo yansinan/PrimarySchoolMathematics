@@ -110,7 +110,7 @@ src/
 
 ## 2. 迁移路线(7 阶段)
 
-### 阶段 1 — utils 内部子目录化(🟡 路径变动) → 🟡 **部分完成**
+### 阶段 1 — utils 内部子目录化(🟡 路径变动) → ✅ **2026-06-08 完成**（B 组 commit `210c9b5`，6 个根 stub 删 + 8 stub 文件 mv）
 
 **目标**: `utils/` 内部分目录, 加桶导出兜底兼容旧 import
 
@@ -145,7 +145,7 @@ grep -r "from '@/utils/'" src/   # 应仍能找到
 
 **预计**: 0 净增(纯移动)
 
-### 阶段 2 — services 升顶层 + 新增(🟡 需补单测)
+### 阶段 2 — services 升顶层 + 新增(🟡 需补单测) → ✅ **2026-06-08 完成**（C 组 C1+C2+C3 commit `3f9f777`，C4 commit `ded867e`，C6 决议跳过留 v2.4+）
 
 **目标**: 把 `utils/services/` 升为 `src/services/`, 新增 4 个 service
 
@@ -179,7 +179,7 @@ grep -r "from '@/utils/services" src/   # 应只剩历史引用, 全部迁完后
 
 **预计**: +200 行(含新 service + 单测)
 
-### 阶段 3 — composables 补齐(🟠 续抽 250 行)
+### 阶段 3 — composables 补齐(🟠 续抽 250 行) → ✅ **2026-06-08 完成**（D2 useStatsQuery commit `399e3ba`+`4525335`，D1 usePrintPreview 跳过走 E3 路径 4，D3 useChart 留 v2.4）
 
 **目标**: 新增 4 个 composable, 把"散在组件/ store 的编排"抽出来
 
@@ -231,7 +231,7 @@ src/stores/
 
 **预计**: -20 行（实际 net -100+ 行）
 
-### 阶段 5 — components 目录归位(🟡 纯移动) → 🟡 **部分完成**
+### 阶段 5 — components 目录归位(🟡 纯移动) → ✅ **2026-06-08 完成**（F 组 commit `4829643`：home/→generate/ + Test*→dev/ + 删 3 死文件）
 
 **目标**: 顶层 `components/` 收敛为"通用 widget"目录
 
@@ -288,7 +288,7 @@ include: [
 
 **预计**: 0 净增(加目录)
 
-### 阶段 7 — 验证 + 文档更新(🟢)
+### 阶段 7 — 验证 + 文档更新(🟢) → ✅ **2026-06-08 完成**（H 组：全链路 build/test/浏览器手测通过，全文档同步 "v3 全部 ✅"）
 
 **目标**: 跑全链路验证, 更新架构文档"已落地"标记
 
@@ -305,8 +305,8 @@ include: [
 
 | 当前 | 目标 | 状态 |
 |---|---|:---:|
-| `src/utils/services/analysis.js` | `src/services/analysis.js` | ⏳ 阶段 2 未开始 |
-| `src/utils/services/__tests__/analysis.spec.js` | `src/services/__tests__/analysis.spec.js` | ⏳ |
+| `src/utils/services/analysis.js` | `src/services/analysis.js` | ✅ C1 落地 (`3f9f777`) |
+| `src/utils/services/__tests__/analysis.spec.js` | `src/services/__tests__/analysis.spec.js` | ✅ C2 落地 (`3f9f777`) |
 | `src/utils/database.js` | `src/utils/store/database.js` | ✅ 已迁 (子目录化 PR 1.1) |
 | `src/utils/database/__tests__/migration.spec.js` | `src/utils/store/database/__tests__/migration.spec.js` | ✅ |
 | `src/utils/configStorage.js` | `src/utils/store/configStorage.js` | ✅ |
@@ -338,7 +338,7 @@ include: [
 | `src/utils/store/persistedState.js` | localStorage 安全读写 | ⏳ |
 | `src/utils/time/timeConstants.js` | 时区/格式化选项 | ⏳ |
 | `src/utils/index.js` | utils 桶导出 | ✅ |
-| `src/services/sessionMetrics.js` | computeSessionTotalDuration | ⏳ 阶段 2 |
+| `src/services/sessionMetrics.js` | ~~computeSessionTotalDuration~~ | ⏸️ **被 C4 替代**（用 `utils/score.js#sumResponseTimes` 修 totalDuration bug，sessionMetrics 单独文件无需新建）|
 | **`src/services/chartBuilder.js`** | buildTrendChart / buildOperatorChart | ✅ **2026-06-07 新建** |
 | **`src/services/operatorMap.js`** | OPERATOR_DISPLAY / OPERATOR_NAME | ✅ **2026-06-07 新建** |
 | `src/services/abilityProfile.js` | 从 utils/abilityProfile.js 升来 | ✅ **2026-06-07 A4b 落地** |
@@ -358,9 +358,9 @@ include: [
 | `src/constants/index.js` | constants 桶导出 | ✅ 已有 |
 | `src/components/dialog/index.js` | dialog 桶导出 | ✅ 已有 |
 | `src/components/generate/index.js` | generate 桶导出 | ⏳ 留 v2.4 |
-| `src/components/dev/index.js` | dev 桶导出 | ⏳ 留 v2.4 |
-| `tests/` | 顶层测试目录 | ⏳ 阶段 6 |
-| `tests/integration/fullSessionFlow.spec.js` | 端到端测试 | ⏳ |
+| `src/components/dev/index.js` | ~~dev 桶导出~~ | ✅ F 组未建（无消费场景）|
+| `tests/` | 顶层测试目录 | ✅ G 组落地 (`208fad9`) |
+| `tests/integration/fullSessionFlow.spec.js` | 端到端测试 | 🕐 G3 留 v3.1 |
 
 ### 3.3 修改(不删不挪, 只改内容)
 

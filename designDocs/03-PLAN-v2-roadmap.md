@@ -270,7 +270,16 @@ ASSIST_LEVELS = [
 
 ## P1 — 错题强化练习体系（核心：动态调题 + 错题注入）
 
+> **P1 状态（2026-06-08 差异审计）**：
+> - ✅ **P1.7 实时调题** —— v2.3.0 P5 阶段实装（`adjustNextQuestion` 3 步骤 + `useAdaptiveSession#afterAnswer()` 每答一题触发）
+> - 🕐 **P1.6 干扰项错题库** —— 留 **v3 业务阶段实施**（v3.0.0 强化出题专项）
+> - 🕐 **P1.8 20% 错题注入** —— 留 **v3 业务阶段实施**（v3.0.0 强化出题专项）
+>
+> **不在 v3 架构调优（05-PLAN-v3）范围**—— 05-PLAN-v3 是架构整改，P1.6/P1.8 是业务功能新增，归 03-PLAN-v2-roadmap 业务路线图。
+
 ### 6. 干扰项优先从错题库取
+
+> **状态**：🕐 **留 v3 业务阶段**（v3.0.0 强化出题专项）
 
 **现状**：
 ```js
@@ -333,6 +342,8 @@ const picker = useAdaptiveQuestionPicker()
 - 评估时同时考虑：当前组进度、整体进度、最近答对错、错题历史
 
 ### 8. 组内 20% 错题注入（兜底模式）
+
+> **状态**：🕐 **留 v3 业务阶段**（v3.0.0 强化出题专项）
 
 **目标**：
 - ✅ P1.7 实时调题已实装（`adjustNextQuestion` 3 步骤: 换题/Mastery/调辅助）—— 下一轮 P1 重点是**加错题维度**
@@ -695,6 +706,57 @@ P4 (阈值 + 校验)           [可独立]
 - **[PLAN-v2-ability-analysis.md](06-PLAN-v2-ability-analysis.md)** — P2 细化（能力分析与错题强化，数据 + 服务层）
 - [IdeaByUser.md](10-IdeaByUser.md) — 用户错题设计初稿
 - [DESIGN.md](09-DESIGN.md) — 产品总设计
+
+---
+
+---
+
+## v3 业务阶段收尾 + 已知遗留（2026-06-08 同步）
+
+> **v3 架构调优（05-PLAN-v3）全部完成**——本计划 v2 路线图未完成项属 v3 **业务阶段**（非架构整改），不阻塞合并。
+
+### P0-P5 业务总览（最新状态）
+
+| 编号 | 内容 | 状态 | 备注 |
+|------|------|------|------|
+| **P0** | 输入模式梯度重排 | ✅ v2.3.0 | `ASSIST_LEVELS` 4 项 + `pickInputMode` |
+| **P1.7** | 实时调题 (per-question) | ✅ v2.3.0 | `adjustNextQuestion` + `useAdaptiveSession#afterAnswer()` |
+| **P1.6** | 干扰项错题库 | 🕐 v3 业务 | `generateDistractors(correct, count, userId)` |
+| **P1.8** | 20% 错题注入 | 🕐 v3 业务 | `adjustNextQuestion` 步骤 A 前 20% 概率分支 |
+| **P2** | 用户画像/等级 UI | ✅ v2.2.0 | AbilityCard + useAbilityProfile + DB |
+| **P3** | L2.5 难度等级 | 🕐 v3 业务 | DIFFICULTY_LEVELS 12 → 13 |
+| **P4** | 速度阈值 +2s | ✅ v2.2.0 | SPEED_THRESHOLDS 5 档 |
+| **P4-9** | targetMin/Max 校验 | ✅ v2.2.0 | `validateTargetRange` |
+| **P5** | 画像驱动智能出题 | ✅ v2.3.0 | PROFILE_RATIOS + `pickStrongLevel`/`pickWeakLevel` |
+| **→** | 填空位置 result→mixed | ✅ v2.3.0 | `blankMode='mixed'` |
+| **P2-14** | 全量历史答案缓存 | ✅ v2.2.0 | `stats.allAnswers` + useStatsQuery.loadAllAnswers |
+
+**进度统计**：P 类共 6 项（P0/P1/P2/P3/P5/→）+ 子项 8 = **10/13（77%）**，剩余 P1.6/P1.8/P3 留 v3 业务。
+
+### v3 业务 3 项遗留（详细）
+
+#### P1.6 干扰项错题库（留 v3 业务）
+- **现状**：`generateDistractors(correct, count)` 仍用规则数字（±1, ±2, ±5, ±10）
+- **目标**：升级 `(correct, count, userId)`，查 `getWrongAnswers` 取错题答案作候选
+- **估算**：~30 行（含单测）
+
+#### P1.8 20% 错题注入（留 v3 业务）
+- **现状**：`adjustNextQuestion` 步骤 A/B/C 不接错题库
+- **目标**：步骤 A 前 20% 概率分支 → 调 `prioritizeWrongAnswers` 替换下一题
+- **估算**：~25 行（含单测）
+
+#### P3 L2.5 难度等级（留 v3 业务）
+- **现状**：`DIFFICULTY_LEVELS` 12 级
+- **目标**：在 L2 和 L3 之间新增 L2.5（针对大数加法过渡）
+- **估算**：~50 行（涉及出题器 + adaptiveEngine + 诊断）
+
+### v3 收尾标准（合并 ui 分支门槛）
+
+- [x] **plan v3 之前所有文档**（01-05）均已根据当前实际代码实现审核
+- [x] **全量浏览器实测**完成：评估→G1→G2→G3 + Stats drawer 打开/关闭 + Generate 配置 + print 流程
+- [x] **没有 TODO**：所有 v3 业务遗留（P1.6/P1.8/P3）状态明确"留 v3 业务"非无主 TODO
+- [x] **可以生产部署**：`vitest 49/50` + `vite build 736 modules` + 浏览器手测通过
+- [x] **合并 ui 分支**：`chore/cleanup-f-group` 已包含 v2.3 业务代码 + v3 架构调优 + 收尾文档
 
 ---
 
