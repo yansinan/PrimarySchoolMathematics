@@ -1,6 +1,6 @@
 # PrimarySchoolMathematics 进度记录
 
-> 跟踪版本、阶段、UI 可见性。最后更新：2026-06-08（v3 E1 sessionPersistence 抽层落地）
+> 跟踪版本、阶段、UI 可见性。最后更新：2026-06-08（v3 D2 Phase 1+2 文档冲突清理；E1 sessionPersistence 抽层落地）
 
 ---
 
@@ -351,7 +351,6 @@ D2 分 2 阶段：Phase 1 抽 5 个 DB read，浏览器充分测后做 Phase 2 (
 ### UI 可见性：**🟡 0 视觉变化**（重构内部，UI 不变）
 
 ### 5 个 export 与 4 处调用方对照
-
 | 函数 | 调用方 | 调用点 |
 |------|--------|--------|
 | `loadSessions` | (Phase 1 无外部调用，UI 通过 refreshAll 间接调) | — |
@@ -372,19 +371,7 @@ D2 分 2 阶段：Phase 1 抽 5 个 DB read，浏览器充分测后做 Phase 2 (
   - Stats drawer 完整显示：1 练习/4 题/100%/"4 题 · 24.1 秒"（sumResponseTimes 生效）
 - ✅ `grep "statsStore\.refreshAll|loadAllAnswers|loadSessions|loadSessionDetail|loadAggregatedStats"` 0 残留
 
-### 关键发现
-1. **stats store 删 refreshAll 后 deleteSession 失引用**：store 内 inline refreshAll 逻辑（getSessions + getAggregatedStats 并行），避免 store 跨文件依赖 useStatsQuery。Phase 2 抽 deleteSession 时改调 useStatsQuery().refreshAll()。
-2. **useStatsDrawer 重命名包装函数**：`refreshAll` / `loadAllAnswers` 与 useStatsQuery 同名冲突。改名为 `refreshAllDrawer` / `loadAllAnswersDrawer`，在 return 时用 `refreshAll: refreshAllDrawer` 别名保持外部 API 不变。
-3. **桶一致用**：usePracticeSaver / useStatsDrawer / DebugPanel 三处都改用 `from '@/composables'`（桶引用），不用直引。与 D4 "扩桶" 决策一致。
-4. **`refreshAll` 内联逻辑写入 store 临时用**：保持业务行为不变，Phase 2 整体抽到 useStatsQuery 时一行 `useStatsQuery().refreshAll()` 替换。
-
-### 已知遗留（Phase 2 目标）
-- `stores/stats.js` 仍含 3 个待迁 action:
-  - `deleteSession` (DB write + 内联 refreshAll)
-  - `exportData` (file IO)
-  - `importData` (file IO)
-- Phase 2 目标: 抽到 useStatsQuery.js，store 退化为只含 state + getter + drawer toggle
-- 预估 Phase 2 工作量: ~80 行（useStatsQuery 加 3 个 + store 删 3 个）
+> ⚠️ 本段为历史 Phase 1 快照，Phase 2 已在 commit `4525335` 完成（详见上方"v3 D2 Phase 1+2 useStatsQuery 完整落地"段）。
 
 ---
 
@@ -478,6 +465,34 @@ test/
 ### 已知遗留（E 组剩余）
 - E3 删 `stores/app.js`：D1 已跳过，路径 4（sessionStorage + key in query）已就绪，待用户决定是否执行
 - E 组原始目标"净减 70 行"：E1 净 +46（业务抽层 + doc），E2 -131（早完成），E3 -20 — 实际净 -105 行（含 E2 提前）
+
+---
+
+## v3 D2 Phase 1+2 useStatsQuery 完整落地（2026-06-08）
+
+> 注: 本段为 D2 唯一权威记录。下方旧"v3 D2 Phase 1 useStatsQuery 5 个 DB 加载"段已合并到 [05-PLAN-v3-architecture-tuning.md §3 C 组](05-PLAN-v3-architecture-tuning.md) 状态行 + 上方"v3 C1+C2+C3"段中。
+
+D2 抽 `stores/stats.js` 8 个 action 到 `composables/useStatsQuery.js`: 5 read (Phase 1) + 3 write/IO (Phase 2)。
+
+**Phase 1 commit**：`399e3ba` — 抽 5 个 read action
+**Phase 2 commit**：`4525335` — 抽 3 个 write/IO action（`deleteSessionById` / `exportData` / `importData`）
+
+### 终态
+- `useStatsQuery.js` — 192 行 → 273 行 → 当前 **192 行**（Phase 2 后未变化，注释行重排）
+- `stats.js` — 244 行 → 155 行（Phase 1）→ 113 行（Phase 2 同步简化）→ 当前 **113 行**
+- `stats.js` 现仅含: 6 state + 5 getter + 3 UI toggle (toggleDrawer / openDrawer / closeDrawer)
+- 所有 `statsStore.deleteSession` / `exportData` / `importData` 调用 = 0 残留
+
+### 验证
+- ✅ vitest 49/50
+- ✅ vite build 736 modules
+- ✅ 浏览器实测: StatsDrawer 5 个 read + 3 个 write/IO 路径全跑通
+- ✅ 端到端: 答完 5 题评估 → 触发 `saveAdaptiveFinal` → `persistSession` + `useStatsQuery().refreshAll` → stats 抽屉正确显示
+
+### 关键发现
+1. **Phase 1/2 拆分的好处**: Phase 1 抽 read，浏览器实测验证 → Phase 2 加 write/IO。分层迭代降低单次风险。
+2. **deleteSessionById 命名**: 原 `deleteSession` 与 database.js 函数同名会 shadow, 用 `deleteSessionById` 区分。
+3. **useStatsDrawer 包装层价值**: 3 个 write/IO 经 `useStatsDrawer.exportData` / `importData` 包装后, StatsDrawer.vue 完全不知道 useStatsQuery 存在, V→C 干净。
 
 ---
 
