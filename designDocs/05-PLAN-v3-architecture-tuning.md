@@ -25,7 +25,7 @@ v2 arch 重构（7 阶段）是结构性整改（分层、路径）。**v3 调�
 | **D** | composables 补齐 | 🟡 | +100 | ✅ D2 useStatsQuery 完整落地 (`399e3ba`+`4525335`)，D1/D3 跳过 |
 | **E** | stores 瘦身 + 删 app.js | 🟠 | -70 | ⏸️ 依赖 D1（你跳过 D1 故暂停）；stats store 已 244→113 行（-54%）|
 | **F** | components 目录归位 | 🟡 | -63 | ✅ 完成 (`4829643`) — home→generate + Test*→dev/ + 删 3 死文件 |
-| **G** | 测试分区 | 🟢 | +1 | ⬜ 未开始 |
+| **G** | 测试分区 | 🟢 | +1 | ✅ **完成**（2026-06-08，G1+G2；G3 留 v3.1）|
 | **H** | 验证 + 文档 | 🟢 | 0 | ⬜ |
 
 > **不在 v3 范围**:
@@ -148,15 +148,30 @@ src/utils/
 
 ## 7. G 组：测试分区
 
-**目标**: 顶层 `tests/` + 集成测试
+**目标**: 顶层 `test/`（单数）集中所有 spec
 
-| 编号 | 任务 | 净行 | 风险 |
+**2026-06-08 完成。** G1+G2 落地；G3 端到端集成测试留 v3.1。
+
+| 编号 | 任务 | 净行 | 状态 |
 |------|------|------|------|
-| G1 | 新增 `tests/stores/` `tests/composables/` `tests/services/` | +1 | 🟢 |
-| G2 | 更新 `vitest.config.js` include 增 `tests/**/*.spec.js` | +1 | 🟢 |
-| G3 | 新增 `tests/integration/fullSessionFlow.spec.js` 端到端 | +50 | 🟡 |
+| G1 | 3 个 spec 迁出 `__tests__/` → 顶层 `test/<源层>/` | +0 | ✅ |
+| G2 | 更新 `vitest.config.js` include → `test/**/*.spec.js`；修 coverage 路径 | +1 | ✅ |
+| G3 | 端到端 `test/integration/fullSessionFlow.spec.js` | +50 | ⏸️ 留 v3.1 |
 
-**预计**: 净增 52 行，1 PR
+**实测**:
+- `npx vitest run` — 49/50 通过（1 预存失败: `analysis.spec.js:247` 与本改动无关）
+- 浏览器 `/reset` 加载正常，`__psm_debug.state()` 完整返回
+- 顺手修复: coverage 路径 `src/utils/services/analysis.js` → `src/services/analysis.js`（拼写错误）
+
+**新结构**:
+```
+test/
+├ services/analysis.spec.js
+├ utils/score.spec.js
+└ utils/database/migration.spec.js
+```
+
+**预计**: 净增 1 行（config），1 PR
 
 ---
 

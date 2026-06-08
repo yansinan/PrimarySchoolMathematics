@@ -1,6 +1,6 @@
 # PrimarySchoolMathematics 进度记录
 
-> 跟踪版本、阶段、UI 可见性。最后更新：2026-06-08（v3 D2 Phase 1 useStatsQuery 5 个 DB actions 落地）
+> 跟踪版本、阶段、UI 可见性。最后更新：2026-06-08（v3 G 组测试分区落地）
 
 ---
 
@@ -385,6 +385,53 @@ D2 分 2 阶段：Phase 1 抽 5 个 DB read，浏览器充分测后做 Phase 2 (
   - `importData` (file IO)
 - Phase 2 目标: 抽到 useStatsQuery.js，store 退化为只含 state + getter + drawer toggle
 - 预估 Phase 2 工作量: ~80 行（useStatsQuery 加 3 个 + store 删 3 个）
+
+---
+
+## v3 G 组测试分区（2026-06-08）
+
+### 范围
+3 个分散在 `src/**/__tests__/` 的 spec 迁出到顶层 `test/`（单数），按源文件位置分子目录；G3 端到端集成测试留 v3.1。
+
+分支：`chore/cleanup-g-group`（1 个 commit）
+
+### Commits
+| hash | 范围 |
+|------|------|
+| `<本 commit>` (`9646d20`) | G1 3 spec 迁出 + G2 vitest.config.js 改 `test/**/*.spec.js` + 修 coverage 路径 |
+
+### 净增 / 减
+**6 files changed, +2/-2**（净 0 移动 + 1 行 config 调整）
+- 移入: `test/services/analysis.spec.js` (733)
+- 移入: `test/utils/score.spec.js` (54)
+- 移入: `test/utils/database/migration.spec.js` (390)
+- 删空目录: `src/services/__tests__/` `src/utils/__tests__/` `src/utils/database/__tests__/`
+- 改 `vitest.config.js`: include `'test/**/*.spec.js'` + coverage 路径修正
+- 改 `test/services/analysis.spec.js:27`: 相对 import `../analysis` → `@/services/analysis`（与 score.spec 风格一致）
+
+### UI 可见性：**🟢 0 视觉变化**（dev 不读 vitest.config.js，spec 是 Node 单测）
+
+### 验证状态
+- ✅ `node ./node_modules/vitest/vitest.mjs run` 49/50（1 预存失败: `analysis.spec.js:247` 与本改动无关）
+- ✅ 浏览器 `/reset` 加载正常，`__psm_debug.state()` 完整返回（phase=practice, hasProfile=true）
+- ✅ 顺手修复: `vitest.config.js:13` coverage 路径 `src/utils/services/analysis.js` → `src/services/analysis.js`（拼写错误，原 config 永远跑空 coverage）
+
+### 新结构
+```
+test/
+├ services/analysis.spec.js
+├ utils/score.spec.js
+└ utils/database/migration.spec.js
+```
+
+### 关键发现
+1. **`__tests__/` 与源文件同目录的"贴源码"约定废弃**：集中顶层后更易管理，新增 spec 时不会出现"忘了在哪个 src 子目录建 __tests__"的混乱。
+2. **analysis.spec.js 用相对 import `../analysis`**：原本位置是 `src/services/__tests__/`，相对 import `../analysis` 等价 `@/services/analysis`。移走后相对路径失效，改为绝对 alias 统一风格。
+3. **vitest coverage 路径错误已久未触发**：`src/utils/services/analysis.js` 实际不存在（早已升到 `src/services/analysis.js`），config 一直跑空 coverage 但没人发现，因为 CI 不强检 coverage。
+
+### 已知遗留（G3 留 v3.1）
+- 端到端集成测试 `test/integration/fullSessionFlow.spec.js`（评估→答题→stats 完整流，+50 行）留 v3.1 排期
+- D2 Phase 2 仍待执行（独立分支）
 
 ---
 

@@ -47,7 +47,7 @@
 
 **辅助层**:
 - `K (Constants)` — `constants/*.js` 纯常量, 任意层引用
-- `T (Tests)` — 单元测试贴源码(`src/**/__tests__/`), 集成/契约放顶层(`tests/`)
+- `T (Tests)` — 顶层 `test/` 集中（单数；按源文件位置分子目录: `test/utils/` `test/services/` 等）
 
 ### 1.2 跨层规则(Enforcement)
 
@@ -113,8 +113,7 @@ src/
 │  ├ sessionMetrics.js                  📋 规划
 │  ├ chartBuilder.js                    ✅ 2026-06 arch-v2.3 新建
 │  ├ operatorMap.js                     ✅ 2026-06 arch-v2.3 新建
-│  ├ abilityProfile.js                   📋 规划(从 utils/ 升层)
-│  ├ __tests__/                         ⏳ 等阶段 2 analysis 迁后建
+│  ├ abilityProfile.js                   ✅ 2026-06-07 A4b 升层(从 utils/)
 │  └ index.js                           ✅ 桶导出
 │
 ├ composables/                          C 层
@@ -129,9 +128,8 @@ src/
 │  ├ useStatsDrawer.js                   ✅ 2026-06 arch-v2.3 新建 (V→M 整改)
 │  ├ useChart.js                         📋 规划
 │  ├ usePrintPreview.js                  📋 规划(替代 stores/app.js)
-│  ├ useStatsQuery.js                    📋 规划(替代 stats.js 业务规则)
-│  ├ __tests__/                          ⏳
-│  └ index.js                           ✅ 桶导出(注意: 待补 3 个新 composable)
+│  ├ useStatsQuery.js                    ✅ 2026-06-08 D2 落地（5 个 DB actions 拆出）
+│  └ index.js                           ✅ 桶导出
 │
 ├ stores/                               M 层(只放字段)
 │  ├ practice.js                         🟡 含 saveSessionToDB 业务(待拆)
@@ -177,8 +175,8 @@ src/
 | Store | `use` 前缀 + 角色 + `Store` | `usePracticeStore` |
 | Store ID | 与 store 同名(单数) | `'practice'` |
 | 组件 | `PascalCase` | `PracticeSummaryDialog` |
-| 测试文件 | `*.spec.js` 贴源码 | `analysis.spec.js` |
-| 测试目录 | `__tests__/` | `src/services/__tests__/` |
+| 测试文件 | `*.spec.js` 顶层 `test/` | `test/services/analysis.spec.js` |
+| 测试目录 | 顶层 `test/<源层>/<源名>.spec.js` | `test/services/` |
 
 ### 2.4 导入路径规范
 

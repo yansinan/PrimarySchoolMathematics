@@ -24,7 +24,7 @@ import {
   getNumberCurve,
   getDynamicWeakness,
   getDynamicStrength,
-} from '../analysis'
+} from '@/services/analysis'
 
 // ── Mock 数据生成器 ──────────────────────────────────────────────
 
