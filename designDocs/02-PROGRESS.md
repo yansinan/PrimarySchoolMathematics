@@ -1,6 +1,6 @@
 # PrimarySchoolMathematics 进度记录
 
-> 跟踪版本、阶段、UI 可见性。最后更新：2026-06-08（v3 C1+C2+C3 services 升顶层落地）
+> 跟踪版本、阶段、UI 可见性。最后更新：2026-06-08（v3 C4 sumResponseTimes + 修 totalDuration bug 落地）
 
 ---
 
@@ -150,9 +150,62 @@ analysis.js (887 行) + analysis.spec.js (733 行) 整体从 `utils/services/` �
 3. **C5 早于 C1+C2+C3 完成**：`services/abilityProfile.js` 在 A4b 已升层，桶中无 stub 残留。
 
 ### 已知遗留
-- C4 `sessionMetrics.js` 待新增（备 totalDuration bug）
+- C4 `sessionMetrics.js` 待新增（备 totalDuration bug）→ ✅ **已用 sumResponseTimes 替代**
 - C6 `paperGenerator.js` 升层待执行
 - `utils/score.js` 和 `utils/enum.js` 仍为根目录直留文件
+
+---
+
+## v3 C4 sumResponseTimes + 修 totalDuration bug（2026-06-08）
+
+### 范围
+新增 `sumResponseTimes(answers)` U 层函数 + 修 1 个 bug + 消 3 处 inline reduce 重复。
+
+分支：`chore/cleanup-c-group`（基于 b-group，2 个 commit：`3f9f777`/`c5a3436` C1+C2+C3 + `ded867e` C4）
+
+### Commits
+| hash | 范围 |
+|------|------|
+| `ded867e` | feat: C4 新增 sumResponseTimes + 修 totalDuration bug + 4 处 inline 集中 |
+
+### 净增 / 减
+**6 files changed, +67/-741**（含 1 旧 spec.js 漏删清理 +733 行）
+- 新增 `src/utils/score.js`: +23 行（sumResponseTimes 函数 + JSDoc）
+- 新增 `src/utils/__tests__/score.spec.js`: +38 行（5 个测试 case）
+- 改 `src/composables/useAdaptiveSession.js`: 2 行 inline → 2 行函数调用 + 1 行 import
+- 改 `src/utils/algorithm/adaptiveEngine.js`: 1 行 inline → 1 行函数调用 + 1 行 import
+- 改 `src/stores/practice.js`: 1 行 bug → 1 行函数调用 + 1 行 import
+- 删 `src/utils/services/__tests__/analysis.spec.js`（C1+C2+C3 残留）
+
+### UI 可见性：**🟡 0 视觉变化**（公式替换，结果数字精度更高）
+
+### 4 处调用点改造
+
+| # | 位置 | Before | After |
+|---|------|--------|-------|
+| 1 | `useAdaptiveSession.js:221` | `groupAnswers.reduce((s, a) => s + (a.responseTime \|\| 0), 0)` | `sumResponseTimes(groupAnswers)` |
+| 2 | `useAdaptiveSession.js:260` | `finalAnswers.reduce((s, a) => s + (a.responseTime \|\| 0), 0)` | `sumResponseTimes(finalAnswers)` |
+| 3 | `adaptiveEngine.js:286` | `groupAnswers.reduce(...) / total` | `sumResponseTimes(groupAnswers) / total` |
+| 4 | `stores/practice.js:233` | `Date.now() - sessionStartTime` ❌ **bug** | `sumResponseTimes(uniqueAnswers)` ✓ |
+
+### 验证状态
+- ✅ `npx vitest run` 49/50（+5 新增 sumResponseTimes 测试全过，1 预存失败与本次无关）
+- ✅ `npx vite build` 736 modules
+- ✅ 浏览器实测：
+  - G1 弹窗显示 **7.9 秒**（4 题累计活跃时间）
+  - IndexedDB ID 1 `totalDuration: 7857ms` 与弹窗完全一致（修复前是末题时长 ~2s）
+  - `score.js` `sumResponseTimes` 通过 `import('/src/utils/score.js')` 可达
+
+### 关键发现
+1. **放 `utils/score.js` 比新建 `utils/sessionMetrics.js` 更好**：与 `sumAnswerScores` 完全平行（`sum*` 聚合函数），0 新文件，主题一致。
+2. **C1+C2+C3 漏删 1 个老文件**：`src/utils/services/__tests__/analysis.spec.js` 在 C1+C2+C3 提交时只 `git add` 新位置没 `git rm` 老位置，HEAD 中仍残留。在 C4 提交时清理。
+3. **retry 不重置 timer 已确认（用户提醒）**：`useSubmitHandler.js` 整条覆盖 + `initPractice` 才重置 timer。所以 `sumResponseTimes` 不存在"重试累加"问题。
+4. **sumResponseTimes 兜底较严**：除 `null/0/缺失` 外，**负数** 也兜底为 0（异常数据保护）。
+
+### 已知遗留
+- C6 `paperGenerator.js` 升层待执行
+- `utils/score.js` 和 `utils/enum.js` 仍为根目录直留文件
+- 旧 session `totalDuration` 字段（写于 bug 期间）数据脏，历史显示不修（低优先级）
 
 ---
 
