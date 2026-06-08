@@ -9,7 +9,7 @@
  * 架构标准: ARCHITECTURE.md § 2.4 "Composable→Service 走 @/services 桶"
  */
 
-export * from '@/utils/services/analysis'
+export * from './analysis'
 // 统一 operator 映射 (ARCHITECTURE.md §2.1 目标树)
 export * from './operatorMap'
 // 能力画像计算 (2026-06-07 升层自 utils/abilityProfile.js)
