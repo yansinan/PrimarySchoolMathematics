@@ -9,7 +9,7 @@
  */
 
 import { DIFFICULTY_LEVELS } from '@/constants/difficulty'
-// DB 使用动态 import（回避 services/database → store/database 循环依赖）
+// DB lazy loader（Answer/WrongAnswer 通过 `this._getDB()` 继承）
 let _db
 async function _getDB() {
   if (!_db) _db = (await import('@/services/database')).DB
@@ -17,6 +17,8 @@ async function _getDB() {
 }
 
 export class Question {
+
+  static _getDB() { return _getDB() }
   /**
    * @param {Object} raw — db.questions 表的 plain object
    *   或 useSubmitHandler 构造的 currentQuestion

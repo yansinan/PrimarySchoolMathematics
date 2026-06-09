@@ -13,12 +13,7 @@
  * @see ../services/wrongAnswerService.js — DB CRUD，查询委托本类
  * @see answer.js — 父类
  */
-// DB 使用动态 import（回避 services/database → store/database 循环依赖）
-let _db
-async function _getDB() {
-  if (!_db) _db = (await import('@/services/database')).DB
-  return _db
-}
+// DB lazy — 继承 Question._getDB()
 import { Answer, Question } from './'
 export class WrongAnswer extends Answer {
   // ── 构造 ──
@@ -118,15 +113,15 @@ export class WrongAnswer extends Answer {
     const cutoff = Date.now() - days * 86400e3
     let candidates
     if (operator) {
-      const qList = await (await _getDB()).questions.where('operator').equals(operator).toArray()
+      const qList = await (await Question._getDB()).questions.where('operator').equals(operator).toArray()
       const qIds = qList.map((q) => q.id)
       if (!qIds.length) return []
-      candidates = await (await _getDB()).answers
+      candidates = await (await Question._getDB()).answers
         .where('questionId').anyOf(qIds)
         .and((a) => a.timestamp > cutoff)
         .toArray()
     } else {
-      candidates = await (await _getDB()).answers
+      candidates = await (await Question._getDB()).answers
         .where('timestamp').above(cutoff)
         .and((a) => !Answer.isCorrect(a))
         .toArray()

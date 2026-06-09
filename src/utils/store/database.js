@@ -586,42 +586,9 @@ export async function importAllData(data) {
 }
 
 /**
- * Get all answers for a student (used by weak area analysis, phase 2).
- * @param {string} studentId
- * @returns {Promise<Array<object>>}
- */
-// ─── getAllAnswers / saveQuestion / getQuestion / getQuestionByEquation ───
-// 已迁至 Answer.getAllByStudent / Question.save / Question.loadByIds / Question.findByEquation
-// 保留定义但不再导出（无外部调用）
-// 未来 v4.0d 删
-
-export async function getAllAnswers(studentId = 'default') {
-  const sessions = await db.practiceSessions
-    .where('studentId').equals(studentId)
-    .toArray()
-
-  const sessionIds = sessions.map(s => s.id)
-  if (!sessionIds.length) return []
-
-  const answers = await db.answers
-    .where('sessionId').anyOf(sessionIds)
-    .toArray()
-
-  // Enrich answers with session-level config info
-  const sessionMap = {}
-  for (const s of sessions) {
-    sessionMap[s.id] = s
-  }
-
-  return answers.map(a => ({
-    ...a,
-    config: sessionMap[a.sessionId]?.config || null
-  }))
-}
-
-/**
  * 清空所有练习记录（IndexedDB + localStorage）
  * 用于 /reset 页面
+ * @returns {Promise<void>}
  */
 export async function clearAllData() {
   await db.transaction('rw', db.practiceSessions, db.answers, async () => {
@@ -631,59 +598,14 @@ export async function clearAllData() {
   try { localStorage.removeItem('psm_profile') } catch {}
 }
 
-// ─── Question CRUD ──────────────────────────────────────────────────────
-
 /**
- * Upsert a question by equation. Returns { id, isNew }.
- * - 题目已存在 → 返回原 id, isNew=false
- * - 题目不存在 → 创建, isNew=true
- *
- * @param {object} questionData
- * @returns {Promise<{id:number, isNew:boolean}>}
+ * Get all answers for a student (used by weak area analysis, phase 2).
+ * @param {string} studentId
+ * @returns {Promise<Array<object>>}
  */
-// 已迁至 Question.save，保留历史实现
-export async function saveQuestion(questionData) {
-  const existing = await db.questions.where('equation').equals(questionData.equation).first()
-  if (existing) return { id: existing.id, isNew: false }
-
-  const id = await db.questions.add({
-    equation: questionData.equation,
-    solution: questionData.solution ?? 0,
-    operator: questionData.operator || '',
-    operandMin: questionData.operandMin ?? 0,
-    operandMax: questionData.operandMax ?? 0,
-    operands: questionData.operands || [],
-    isCarry: !!questionData.isCarry,
-    isBorrow: !!questionData.isBorrow,
-    difficulty: questionData.difficulty ?? 0,
-    inputMode: questionData.inputMode || '',
-    layout: questionData.layout || '',
-    assistLevel: questionData.assistLevel ?? 0,
-    blankMode: questionData.blankMode || 'result',
-    createdAt: Date.now(),
-    synced: 0,
-  })
-  return { id, isNew: true }
-}
-
-/**
- * Get a question by id.
- * @param {number} id
- * @returns {Promise<object|null>}
- */
-// 已迁至 Question.loadByIds / Answer.getAllByStudent，保留历史实现
-export async function getQuestion(id) {
-  return db.questions.get(id) ?? null
-}
-
-/**
- * Get a question by equation string.
- * @param {string} equation
- * @returns {Promise<object|null>}
- */
-// 已迁至 Question.findByEquation（memory 版），保留历史实现
-export async function getQuestionByEquation(equation) {
-  return db.questions.where('equation').equals(equation).first() ?? null
-}
+// ─── 已迁至 Answer.getAllByStudent / Question.save / Question.loadByIds ─────
+// 4 函数（getAllAnswers/saveQuestion/getQuestion/getQuestionByEquation）
+// 2026-06-08 无外部调用者，已清理
+// =========================================================================
 
 export default db
