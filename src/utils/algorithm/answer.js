@@ -30,13 +30,13 @@ export class Answer extends Question {
     this.userAnswer = raw.userAnswer
 
     // 答题元数据
-    this.responseTime = raw.responseTime ?? 0
+    this.responseTime = raw.responseTime ?? null
     this.questionIndex = raw.questionIndex ?? 0
 
     // 时间戳
     this.timestamp = raw.timestamp ?? Date.now()
-    this.startedAt = raw.startedAt ?? this.timestamp
-    this.endedAt = raw.endedAt ?? this.timestamp
+    this.startedAt = raw.startedAt ?? null
+    this.endedAt = raw.endedAt ?? null
 
     // 重试上下文（attemptCount getter 用）
     //   兼容老数据：stored attemptCount 字段 → 反推 previousAttemptCount
@@ -82,6 +82,29 @@ export class Answer extends Question {
   /** 答对且非修正（即"真正掌握"） */
   get isMastered() {
     return this.isCorrect && !this.isFixed
+  }
+
+  /**
+   * 有效 responseTime（兜底计算）
+   * - 优先用 this.responseTime（v1/v2 旧字段，可能为 0/undefined）
+   * - 兜底用 this.endedAt - this.startedAt（v3 新增字段，迁移时补齐）
+   * @returns {number|null}
+   */
+  get effectiveResponseTime() {
+    if (this.responseTime != null) return this.responseTime
+    if (this.endedAt != null && this.startedAt != null) {
+      return this.endedAt - this.startedAt
+    }
+    return null
+  }
+
+  /**
+   * 是否被视为"超时/异常"（太快 < 200ms 或太久 > 5min）
+   * @returns {boolean}
+   */
+  get isTimeout() {
+    const rt = this.effectiveResponseTime
+    return rt != null && (rt < 200 || rt > 5 * 60 * 1000)
   }
 
   // ── 业务操作 ──

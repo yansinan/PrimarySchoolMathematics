@@ -40,18 +40,14 @@ import { WrongAnswer } from '@/utils/algorithm/wrongAnswer'
  * }}
  */
 export function getEffectiveResponseTime(answer) {
-  let rt = answer.responseTime
-  let computed = false
-  if (rt == null && answer.endedAt != null && answer.startedAt != null) {
-    rt = answer.endedAt - answer.startedAt
-    computed = true
-  }
-  const isTimeout = rt != null && (rt < 200 || rt > 5 * 60 * 1000)
+  const inst = answer instanceof Answer ? answer : new Answer(answer)
+  const rt = inst.effectiveResponseTime
+  const wasFallback = answer.responseTime == null && inst.endedAt != null && inst.startedAt != null
   return {
     responseTime: rt,
     computedResponseTime: rt,
-    isComputed: computed,
-    isTimeout,
+    isComputed: wasFallback,
+    isTimeout: rt != null && (rt < 200 || rt > 5 * 60 * 1000),
   }
 }
 
@@ -661,16 +657,15 @@ export async function getLearningCurve(questionId, { days = 30 } = {}) {
   if (answers.length === 0) return []
 
   return answers.map((a, idx) => {
-    // 包成 Answer 实例，用 getter 读 isCorrect、responseTime 等
+    // 用 Answer getter 读 isCorrect、effectiveResponseTime 等
     const ans = a instanceof Answer ? a : new Answer(a)
-    const { responseTime, isTimeout } = getEffectiveResponseTime(ans)
     return {
       timestamp: ans.timestamp,
       startedAt: ans.startedAt,
       endedAt: ans.endedAt,
       isCorrect: ans.isCorrect,  // 用 Answer getter（统一计算）
-      responseTime,
-      isTimeout,
+      responseTime: ans.effectiveResponseTime,
+      isTimeout: ans.isTimeout,
       userAnswer: ans.userAnswer,
       attemptIndex: idx,
     }
@@ -783,9 +778,10 @@ async function _aggregateQuestions({ minSample = 3 } = {}) {
     }
     g.total += 1
     if (a.isCorrect) g.correct += 1  // 用 Answer getter
-    // 复用 getEffectiveResponseTime（不内联）——落实阶段 3 review 建议
-    const { responseTime, isTimeout } = getEffectiveResponseTime(a)
-    if (responseTime != null) g.totalRT += responseTime
+    // 用 Answer getter 读响应时间
+    const rt = a.effectiveResponseTime
+    const isTimeout = a.isTimeout
+    if (rt != null) g.totalRT += rt
     // v2.3.0 1-strike 软规则：仅在"真错"时计数（isTimeout/快错不算）
     // 边界：isCorrect=false 且 !isTimeout 才算"真错"
     if (!a.isCorrect && !isTimeout) g.realWrongCount += 1
