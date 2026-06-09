@@ -1,4 +1,4 @@
-import { DB } from '@/services/databaseInit'
+import { DB } from '@/services'
 import { parseEquation } from '@/utils/algorithm/equationParser'
 const db = DB
 
