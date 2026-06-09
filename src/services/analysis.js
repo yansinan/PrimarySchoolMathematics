@@ -530,12 +530,10 @@ export async function evaluateCorrectionEffect(questionId, { days = 30 } = {}) {
  * }>>}
  */
 export async function prioritizeWrongAnswers({ limit = 20 } = {}) {
-  // 1. 取所有错题（用 stored isCorrect 字段，不用 Answer/WrongAnswer 包装：
-  //   - Answer.isCorrect getter 严格要求 userAnswer===solution
-  //   - 测试 fixture 经常用 isCorrect:false + userAnswer=任意值这种"假错题"组合
-  //   - stored isCorrect 才是数据真实状态，getter 不一定匹配
+  // 1. 取所有错题（用 Answer.isCorrect 静态方法——数学真理：userAnswer === solution）
+  //    Answer.isCorrect 是 getter 优先的静态方法，兼容 Answer 实例和 plain object
   const allAnswers = await db.answers.toArray()
-  const wrongAnswers = allAnswers.filter((a) => a.isCorrect === false)
+  const wrongAnswers = allAnswers.filter((a) => !Answer.isCorrect(a))
   if (wrongAnswers.length === 0) return []
 
   // 2. 按 questionId 聚合：wrongCount + lastWrongAt
@@ -568,7 +566,7 @@ export async function prioritizeWrongAnswers({ limit = 20 } = {}) {
   const lastCorrectByQ = new Map()
   for (const a of allForQ) {
     totalByQ.set(a.questionId, (totalByQ.get(a.questionId) || 0) + 1)
-    if (a.isCorrect === true) {
+    if (Answer.isCorrect(a)) {
       const cur = lastCorrectByQ.get(a.questionId) || 0
       if (a.timestamp > cur) lastCorrectByQ.set(a.questionId, a.timestamp)
     }
@@ -715,7 +713,7 @@ export async function getNumberCurve(number, { days = 30 } = {}) {
   if (answers.length === 0) return []
 
   // 3. 按日期桶聚合（YYYY-MM-DD 字符串）
-  //    用 stored isCorrect 字段（不用 Answer getter——同 prioritizeWrongAnswers 注释）
+  //    用 Answer.isCorrect 静态方法（getter 优先——数学真理）
   const buckets = new Map() // date -> { total, correct, qIds: Set }
   for (const a of answers) {
     const date = new Date(a.timestamp).toISOString().slice(0, 10)
@@ -725,7 +723,7 @@ export async function getNumberCurve(number, { days = 30 } = {}) {
       buckets.set(date, bucket)
     }
     bucket.total += 1
-    if (a.isCorrect) bucket.correct += 1
+    if (Answer.isCorrect(a)) bucket.correct += 1
     if (a.questionId != null) bucket.qIds.add(a.questionId)
   }
 

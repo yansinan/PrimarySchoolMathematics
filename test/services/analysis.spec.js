@@ -401,16 +401,21 @@ describe('prioritizeWrongAnswers', () => {
       mkAnswer({ questionId: 1, isCorrect: false, userAnswer: 60, timestamp: now - 1000 }),
       mkAnswer({ questionId: 1, isCorrect: false, userAnswer: 60, timestamp: now - 2000 }),
       mkAnswer({ questionId: 1, isCorrect: false, userAnswer: 60, timestamp: now - 3000 }),
-      mkAnswer({ questionId: 1, isCorrect: true, timestamp: now - 4000 }),
+      mkAnswer({ questionId: 1, isCorrect: true, userAnswer: 70, solution: 70, timestamp: now - 4000 }),
       // Q2 错 1 次（最近）
       mkAnswer({ questionId: 2, isCorrect: false, userAnswer: 60, timestamp: now - 100 }),
     ])
     const r = await prioritizeWrongAnswers({ limit: 5 })
     expect(r).toHaveLength(2)
-    // Q1 错 3 次未改正 priority = 30 + 0 (resolved=false +5? no, Q1 has lastCorrect) + recency
-    // Q2 错 1 次未改正 priority = 10 + 0 + 10 (1d) = 20
-    // 排序 Q1 > Q2 (wrongCount 主导)
+    // Q1: 3 wrong (userAnswer=60, 60, 60; solution=70 → getter false)
+    //     1 correct (userAnswer=70, solution=70 → getter true)
+    //     isResolved=true (lastCorrectAt exists) → recencyScore from lastWrongAt=now-1000
+    //     priority = 3 * 10 + 0 (resolved) + 10 (<1d) = 40
+    // Q2: 1 wrong (no correct) → isResolved=false → recencyScore=10
+    //     priority = 1 * 10 + 5 (unresolved) + 10 (<1d) = 25
+    // 排序: Q1(40) > Q2(25)
     expect(r[0].questionId).toBe(1)
+    expect(r[0].priority).toBeGreaterThan(r[1].priority)
   })
 })
 
@@ -460,11 +465,11 @@ describe('getNumberCurve', () => {
     const now = Date.now()
     // 昨天 3 题（2 对 1 错）
     await db.answers.bulkAdd([
-      mkAnswer({ questionId: 1, isCorrect: true, timestamp: now - 86400e3 - 1000 }),
-      mkAnswer({ questionId: 1, isCorrect: true, timestamp: now - 86400e3 - 2000 }),
-      mkAnswer({ questionId: 2, isCorrect: false, userAnswer: 60, timestamp: now - 86400e3 - 3000 }),
+      mkAnswer({ questionId: 1, isCorrect: true, userAnswer: 11, solution: 11, timestamp: now - 86400e3 - 1000 }),
+      mkAnswer({ questionId: 1, isCorrect: true, userAnswer: 11, solution: 11, timestamp: now - 86400e3 - 2000 }),
+      mkAnswer({ questionId: 2, isCorrect: false, userAnswer: 60, solution: 5, timestamp: now - 86400e3 - 3000 }),
       // 今天 1 题（对）
-      mkAnswer({ questionId: 1, isCorrect: true, timestamp: now - 1000 }),
+      mkAnswer({ questionId: 1, isCorrect: true, userAnswer: 11, solution: 11, timestamp: now - 1000 }),
     ])
   })
 
