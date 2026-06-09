@@ -196,6 +196,40 @@ export class Question {
     // 至少一方 result 未知 → 仅比较操作数
     return sorted(t1.bodyA, t1.bodyB) === sorted(t2.bodyA, t2.bodyB)
   }
+  // ── 静态助手（从 analysis.js 迁入） ──
+
+  /**
+   * 批量加载 questions，返回 Map<id, Question>
+   * @param {number[]} ids
+   * @returns {Promise<Map<number, Question>>}
+   */
+  static async loadByIds(ids) {
+    if (!ids?.length) return new Map()
+    const { default: db } = await import('@/utils/store/database')
+    const qs = await db.questions.where('id').anyOf(ids).toArray()
+    return new Map(qs.map(q => [q.id, Question.fromJSON(q)]))
+  }
+
+  /**
+   * 从 operandMin/Max 反推涉及的数字（0-9）
+   * @param {{operandMin?:number, operandMax?:number}} q
+   * @returns {number[]}
+   */
+  static extractOperandDigits(q) {
+    if (!q) return []
+    const min = q.operandMin
+    const max = q.operandMax
+    if (min == null && max == null) return []
+    const digits = new Set()
+    for (const n of [min, max]) {
+      if (n == null) continue
+      for (const ch of String(n)) {
+        const d = Number(ch)
+        if (!isNaN(d) && d >= 0) digits.add(d)
+      }
+    }
+    return [...digits]
+  }
 }
 
 // ═══════════════════════════════════════════════════════════

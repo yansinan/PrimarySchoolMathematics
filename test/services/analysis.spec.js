@@ -9,7 +9,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import db from '@/utils/store/database'
 import {
-  getEffectiveResponseTime,
   findEquivalent,
   findRelated,
   getMasteryByNumber,
@@ -85,54 +84,9 @@ beforeEach(async () => {
   await db.answers.clear()
   nextId = 1
 })
+// ── 3.0 effectiveResponseTime 测试已迁 answer.spec.js ──────────────
 
-// ── 3.0 getEffectiveResponseTime ─────────────────────────────────────
-
-describe('getEffectiveResponseTime', () => {
-  it('passes through valid rt', () => {
-    const r = getEffectiveResponseTime({ responseTime: 1500 })
-    expect(r.responseTime).toBe(1500)
-    expect(r.isComputed).toBe(false)
-    expect(r.isTimeout).toBe(false)
-  })
-
-  it('falls back to endedAt - startedAt when rt is null', () => {
-    const r = getEffectiveResponseTime({
-      responseTime: null,
-      startedAt: 1000,
-      endedAt: 3000,
-    })
-    expect(r.responseTime).toBe(2000)
-    expect(r.isComputed).toBe(true)
-  })
-
-  it('does NOT fall back when rt is 0', () => {
-    const r = getEffectiveResponseTime({
-      responseTime: 0,
-      startedAt: 1000,
-      endedAt: 3000,
-    })
-    expect(r.responseTime).toBe(0)
-    expect(r.isComputed).toBe(false)
-  })
-
-  it('marks isTimeout for rt < 200ms', () => {
-    expect(getEffectiveResponseTime({ responseTime: 100 }).isTimeout).toBe(true)
-  })
-
-  it('marks isTimeout for rt > 5min', () => {
-    expect(getEffectiveResponseTime({ responseTime: 6 * 60 * 1000 }).isTimeout).toBe(true)
-  })
-
-  it('returns nulls when no time data', () => {
-    const r = getEffectiveResponseTime({ responseTime: null })
-    expect(r.responseTime).toBeNull()
-    expect(r.isComputed).toBe(false)
-    expect(r.isTimeout).toBe(false)
-  })
-})
-
-// ── 3.1 findEquivalent ─────────────────────────────────────────────
+// ── 3.1 findEquivalent
 
 describe('findEquivalent', () => {
   beforeEach(async () => {

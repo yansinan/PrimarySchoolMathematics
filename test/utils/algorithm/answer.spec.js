@@ -281,6 +281,41 @@ describe('Answer', () => {
     expect(json.correctedAt).toBe(null)
   })
 
+  describe('effectiveResponseTime + isTimeout', () => {
+    it('uses responseTime when present', () => {
+      const a = new Answer({ ...questionPart, ...answerPart, responseTime: 1500 })
+      expect(a.effectiveResponseTime).toBe(1500)
+      expect(a.isTimeout).toBe(false)
+    })
+
+    it('falls back to endedAt - startedAt when rt is null', () => {
+      const a = new Answer({ ...questionPart, ...answerPart, responseTime: null, startedAt: 1000, endedAt: 3000 })
+      expect(a.effectiveResponseTime).toBe(2000)
+      expect(a.isTimeout).toBe(false)
+    })
+
+    it('does NOT fall back when rt is 0', () => {
+      const a = new Answer({ ...questionPart, ...answerPart, responseTime: 0, startedAt: 1000, endedAt: 3000 })
+      expect(a.effectiveResponseTime).toBe(0)
+    })
+
+    it('marks isTimeout for rt < 200ms', () => {
+      const a = new Answer({ ...questionPart, ...answerPart, responseTime: 100 })
+      expect(a.isTimeout).toBe(true)
+    })
+
+    it('marks isTimeout for rt > 5min', () => {
+      const a = new Answer({ ...questionPart, ...answerPart, responseTime: 6 * 60 * 1000 })
+      expect(a.isTimeout).toBe(true)
+    })
+
+    it('returns null when no time data', () => {
+      const a = new Answer({ ...questionPart, ...answerPart, responseTime: null, startedAt: null, endedAt: null })
+      expect(a.effectiveResponseTime).toBeNull()
+      expect(a.isTimeout).toBe(false)
+    })
+  })
+
   it('fromJSON + toJSON round-trips', () => {
     const a1 = new Answer({ ...questionPart, ...answerPart, id: 42, createdAt: 1700000000000 })
     const a2 = Answer.fromJSON(a1.toJSON())

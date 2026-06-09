@@ -39,17 +39,6 @@ import { WrongAnswer } from '@/utils/algorithm/wrongAnswer'
  *   isTimeout: boolean
  * }}
  */
-export function getEffectiveResponseTime(answer) {
-  const inst = answer instanceof Answer ? answer : new Answer(answer)
-  const rt = inst.effectiveResponseTime
-  const wasFallback = answer.responseTime == null && inst.endedAt != null && inst.startedAt != null
-  return {
-    responseTime: rt,
-    computedResponseTime: rt,
-    isComputed: wasFallback,
-    isTimeout: rt != null && (rt < 200 || rt > 5 * 60 * 1000),
-  }
-}
 
 // ─── 3.1 题目聚合 ────────────────────────────────────────────────
 
@@ -145,7 +134,7 @@ export async function getMasteryByNumber(number, { days = 30 } = {}) {
   // P2 阶段 13：不依赖 questions.operands 字段（migration 不一致），
   // 改从 operandMin + operandMax 反推数位（“3”' ’、‘8' 也击 number=3、8）
   const allQuestions = await db.questions.toArray()
-  const questions = allQuestions.filter((q) => _extractOperandDigits(q).includes(number))
+  const questions = allQuestions.filter((q) => Question.extractOperandDigits(q).includes(number))
   const questionIds = questions.map((q) => q.id)
 
   if (questionIds.length === 0) {
@@ -204,7 +193,7 @@ async function _getMasteryByNumberFromAnswers(answers, number) {
   const qIds = [...new Set(ansList.map((a) => a.questionId).filter((id) => id != null))]
   // 兼容：无 questionId 时直接用 answer 自身字段
   const useAnswerDirectly = qIds.length === 0
-  const qMap = useAnswerDirectly ? null : await loadQuestionsByIds(qIds)
+  const qMap = useAnswerDirectly ? null : await Question.loadByIds(qIds)
 
   let total = 0
   let correct = 0
@@ -214,7 +203,7 @@ async function _getMasteryByNumberFromAnswers(answers, number) {
     // 优先用 question 字段，没有则用 answer 自身
     const q = qMap ? qMap.get(a.questionId) : null
     const refForDigits = q || a
-    if (!refForDigits || !_extractOperandDigits(refForDigits).includes(number)) continue
+    if (!refForDigits || !Question.extractOperandDigits(refForDigits).includes(number)) continue
     total += 1
     // 用 getAnswerScore 而非 Answer.score getter：
     //   - getter 严格要求 userAnswer === solution
@@ -243,26 +232,14 @@ async function _getMasteryByNumberFromAnswers(answers, number) {
  *   而设计意图是"按数位拆分"（13+15 → [1,3,1,5]）。直接查 equals(n) 会丢失 0-9 范围。
  * - 修正：反推方式同时保证代码与设计语义一致，不依赖 questions.operands。
  * - 现用 Question 类的 operandMin/operandMax getter 访问字段。
- *
- * @param {{operandMin:number, operandMax:number}} q - question
- * @returns {number[]} 涉及的所有数字（0-9，去重）
- */
-function _extractOperandDigits(q) {
-  if (!q) return []
-  const inst = q instanceof Question ? q : Question.fromJSON(q)
-  const min = inst.operandMin
-  const max = inst.operandMax
-  if (min == null && max == null) return []
-  const digits = new Set()
-  for (const n of [min, max]) {
-    if (n == null) continue
-    for (const ch of String(n)) {
-      const d = Number(ch)
-      if (!isNaN(d) && d >= 0) digits.add(d)
-    }
-  }
-  return [...digits]
-}
+ /**
+  * @param {{operandMin:number, operandMax:number}} q - question
+  * @returns {number[]} 涉及的所有数字（0-9，去重）
+  * @deprecated 用 Question.extractOperandDigits(q)
+  */
+ function _extractOperandDigits(q) {
+   return Question.extractOperandDigits(q)
+ }
 
 /**
  * P2 阶段 11：批量查 0-9 数字 mastery（从 caller 传入的 answers 算）
@@ -377,7 +354,7 @@ export async function getWrongAnswers({
   const uniqueQIds = [
     ...new Set(filtered.map((a) => a.questionId).filter((id) => id != null)),
   ]
-  const qMap = await loadQuestionsByIds(uniqueQIds)
+  const qMap = await Question.loadByIds(uniqueQIds)
 
   // 4. 拼装返回结构（保持原 shape 不变）
   return filtered.map((a) => {
@@ -550,7 +527,7 @@ export async function prioritizeWrongAnswers({ limit = 20 } = {}) {
   if (uniqueQIds.length === 0) return []
 
   // 3. 批量取 questions 元数据（PK 查找，**复用 loadQuestionsByIds helper**）
-  const qMap = await loadQuestionsByIds(uniqueQIds)
+  const qMap = await Question.loadByIds(uniqueQIds)
 
   // 4. 一次 anyOf 取这些题目的所有记录，内存里求 totalAttempts + lastCorrectAt
   //    用 stored isCorrect 字段（不用 Answer getter，见函数头部注释）
@@ -617,11 +594,6 @@ export async function prioritizeWrongAnswers({ limit = 20 } = {}) {
  * @param {Array<number>} ids
  * @returns {Promise<Map<number, Question>>}
  */
-async function loadQuestionsByIds(ids) {
-  if (!ids.length) return new Map()
-  const qs = await db.questions.where('id').anyOf(ids).toArray()
-  return new Map(qs.map((q) => [q.id, Question.fromJSON(q)]))
-}
 
 // ─── 3.3 学习曲线 ────────────────────────────────────────────────
 
@@ -789,7 +761,7 @@ async function _aggregateQuestions({ minSample = 3 } = {}) {
   }
 
   // 3. 关联 questions 表拿权威 equation（**复用 loadQuestionsByIds**）
-  const qMap = await loadQuestionsByIds([...map.keys()])
+  const qMap = await Question.loadByIds([...map.keys()])
   for (const g of map.values()) {
     const q = qMap.get(g.questionId)
     g.equation = q?.equation ?? g.equation
