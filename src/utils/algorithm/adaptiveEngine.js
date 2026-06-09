@@ -284,20 +284,23 @@ export function diversifyBatch(baseEquations, engine) {
     const recomputed = EquationSolver.solve(equation)
     const mismatch = recomputed == null || recomputed !== solution
     if (mismatch) {
-      // equation-solution 失配 → 降级为 keypad（不要出无正确答案的选项）
-      return { ...q, equation, solution, options: undefined, inputMode: 'vertical_keypad' }
+      console.warn('[P0:diversifyBatch] equation=%s solution=%d recomputed=%d → 需要修根因', equation, solution, recomputed)
     }
 
     // 选择题 → 生成干扰选项
     if (modeConfig.input === 'options' && modeConfig.optionCount > 0) {
       const count = modeConfig.optionCount
       const distractors = generateDistractors(solution, count - 1, engine.wrongAnswerPool, q.equation)
-      // P0: 校验 distractor 合法性
-      if (distractors.length < count - 1) {
-        // distractor 不足 → 降级为 keypad
-        return { ...q, equation, solution, options: undefined, inputMode: 'vertical_keypad' }
-      }
+      // P0: 确保正确答案一定在选项中（防止 metadata 脏数据/解法不一致导致无正确答案的选择题）
       options = [solution, ...distractors].sort(() => Math.random() - 0.5)
+      if (!options.includes(solution)) {
+        options = [solution]
+        while (options.length < count) {
+          const d = solution + (options.length + 1)
+          if (d > 0) options.push(d)
+        }
+        options.sort(() => Math.random() - 0.5)
+      }
     }
 
     return { ...q, equation, solution, options, inputMode: modeKey }
