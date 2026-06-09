@@ -1,3 +1,5 @@
+import { Answer } from '@/utils/algorithm/answer'
+
 /**
  * 题目得分工具
  *
@@ -14,16 +16,35 @@ export function computeScore(attemptCount = 1) {
   return Math.max(0, 1 - (normalizedAttemptCount - 1) / 3)
 }
 
-export function buildAttemptScore(previousAttemptCount = 0, isCorrect = false) {
+/**
+ * 构建 attempt 级别的 attemptCount + score
+ * - isCorrect 现在从 userAnswer === solution 计算（数学真理）
+ * - 不再依赖外部传入的 isCorrect 字段
+ */
+export function buildAttemptScore(previousAttemptCount = 0, userAnswer, solution) {
   const attemptCount = Math.max(1, (Number.isFinite(previousAttemptCount) ? previousAttemptCount : 0) + 1)
+  const isCorrect = Number(userAnswer) === Number(solution)
   return {
     attemptCount,
     score: isCorrect ? computeScore(attemptCount) : 0,
   }
 }
 
+/**
+ * 获取答题得分
+ * - 优先走 Answer.score getter（数学真理：userAnswer === solution）
+ * - fallback 到 stored 字段（兼容老数据 + 测试 fixture）
+ * - 缺字段全部退化到 stored 字段兜底
+ */
 export function getAnswerScore(answer) {
   if (!answer) return 0
+  // 1. Answer 实例 → 走 getter（真理）
+  if (answer instanceof Answer) return answer.score
+  // 2. plain object → 包成 Answer 实例让 getter 算（数学）
+  if (answer.userAnswer != null && answer.solution != null) {
+    return new Answer(answer).score
+  }
+  // 3. 极端 fallback：缺字段，退到 stored
   if (typeof answer.score === 'number') return answer.score
   return answer.isCorrect ? 1 : 0
 }

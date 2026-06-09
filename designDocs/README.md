@@ -6,7 +6,7 @@
 
 ## 当前状态（2026-06-08）
 
-**v3 架构调优已全部完成**（A/B/C/D/E/F/G/H 8 大组 + 收尾审计 + ui 分支合并）。详见 [IMPLEMENTATION_HISTORY.md](./IMPLEMENTATION_HISTORY.md)。
+**v4.0b 错题模块 + P1.6 干扰项 + P1.8 错题复盘全部完成**（WrongAnswer 类 + wrongAnswerService + 干扰项错题优先 + 3 连对触发复习题）。**下一步**：v4.2 L2.5 难度等级。详见 [IMPLEMENTATION_HISTORY.md](./IMPLEMENTATION_HISTORY.md)。
 
 **下一目标**（[v4-PLAN-error-injection.md](./v4-PLAN-error-injection.md) 完整规划）：
 - **v4.1** 错题注入专项（P1.6 干扰项错题库 + P1.8 20% 注入）— 用户指定下一目标

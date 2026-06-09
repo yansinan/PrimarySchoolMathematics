@@ -29,12 +29,14 @@ export function useAnswerBuilder() {
 
   /**
    * 计算尝试次数和得分（含重试逻辑）
+   * - isCorrect 改为内部从 userAnswer === solution 计算（数学真理）
    * @param {number} previousAttemptCount 之前尝试次数
-   * @param {boolean} isCorrect 本次是否正确
+   * @param {number} userAnswer 用户输入的答案
+   * @param {number} solution 题目的正确答案
    * @returns {{ attemptCount: number, score: number }}
    */
-  function buildScore(previousAttemptCount, isCorrect) {
-    return buildAttemptScore(previousAttemptCount, isCorrect)
+  function buildScore(previousAttemptCount, userAnswer, solution) {
+    return buildAttemptScore(previousAttemptCount, userAnswer, solution)
   }
 
   return { buildAnswerMeta, buildScore }

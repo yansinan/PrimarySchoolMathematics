@@ -203,7 +203,7 @@ describe('getMasteryByNumber', () => {
     await db.answers.bulkAdd([
       mkAnswer({ questionId: 1, isCorrect: true }),
       mkAnswer({ questionId: 1, isCorrect: true }),
-      mkAnswer({ questionId: 2, isCorrect: false }),
+      mkAnswer({ questionId: 2, isCorrect: false, userAnswer: 60 }),
       mkAnswer({ questionId: 3, isCorrect: true }),
     ])
   })
@@ -253,7 +253,7 @@ describe('getMasteryByNumberFromAnswersBatch', () => {
     const answers = [
       mkAnswer({ questionId: 1, isCorrect: true, sessionId: 1 }),
       mkAnswer({ questionId: 1, isCorrect: true, sessionId: 1 }),
-      mkAnswer({ questionId: 1, isCorrect: false, sessionId: 1 }),
+      mkAnswer({ questionId: 1, isCorrect: false, userAnswer: 60, sessionId: 1 }),
       mkAnswer({ questionId: 3, isCorrect: true, sessionId: 1 }),
     ]
     const batch = await getMasteryByNumberFromAnswersBatch(answers)
@@ -273,7 +273,7 @@ describe('getMasteryByNumberFromAnswersBatch', () => {
 
   it('is scope-bounded by caller-provided answers (本组/本轮/全量 同一函数不同数据)', async () => {
     // 模拟“本组”只有 1 个 answer
-    const groupAnswers = [mkAnswer({ questionId: 1, isCorrect: false, sessionId: 1 })]
+    const groupAnswers = [mkAnswer({ questionId: 1, isCorrect: false, userAnswer: 60, sessionId: 1 })]
     const groupBatch = await getMasteryByNumberFromAnswersBatch(groupAnswers)
     // 数字 8 只 1 次（错）
     const r8group = groupBatch.find((r) => r.number === 8)
@@ -283,7 +283,7 @@ describe('getMasteryByNumberFromAnswersBatch', () => {
     const roundAnswers = [
       mkAnswer({ questionId: 1, isCorrect: true, sessionId: 1 }),
       mkAnswer({ questionId: 2, isCorrect: true, sessionId: 1 }),
-      mkAnswer({ questionId: 3, isCorrect: false, sessionId: 1 }),
+      mkAnswer({ questionId: 3, isCorrect: false, userAnswer: 60, sessionId: 1 }),
     ]
     const roundBatch = await getMasteryByNumberFromAnswersBatch(roundAnswers)
     // 数字 8 出现 2 次（Q1 + Q2）
@@ -292,11 +292,14 @@ describe('getMasteryByNumberFromAnswersBatch', () => {
     expect(r8round.correct).toBe(2)
   })
 
-  it('treats score 0.5 as mid, not weakness', async () => {
+  it('treats score ~0.67 (mid retry) as mid, not weakness', async () => {
+    // 注：以前用 score: 0.5 测试边界值；现在 getter 优先
+    // (score 由 userAnswer === solution + attemptCount 算)
+    // 要测 mid 区间，用 attemptCount: 2 (score=0.67) 替代
     const answers = [
-      mkAnswer({ questionId: 1, score: 0.5, isCorrect: true, sessionId: 1 }),
-      mkAnswer({ questionId: 1, score: 0.5, isCorrect: true, sessionId: 1 }),
-      mkAnswer({ questionId: 1, score: 0.5, isCorrect: true, sessionId: 1 }),
+      mkAnswer({ questionId: 1, attemptCount: 2, userAnswer: 70, solution: 70, sessionId: 1 }),
+      mkAnswer({ questionId: 1, attemptCount: 2, userAnswer: 70, solution: 70, sessionId: 1 }),
+      mkAnswer({ questionId: 1, attemptCount: 2, userAnswer: 70, solution: 70, sessionId: 1 }),
     ]
     const mid = await _getMidByNumberBatch(answers)
     const weak = await _getWeaknessByNumberBatch(answers)
@@ -395,12 +398,12 @@ describe('prioritizeWrongAnswers', () => {
     ])
     // Q1 错 3 次（含 1 改正）
     await db.answers.bulkAdd([
-      mkAnswer({ questionId: 1, isCorrect: false, timestamp: now - 1000 }),
-      mkAnswer({ questionId: 1, isCorrect: false, timestamp: now - 2000 }),
-      mkAnswer({ questionId: 1, isCorrect: false, timestamp: now - 3000 }),
+      mkAnswer({ questionId: 1, isCorrect: false, userAnswer: 60, timestamp: now - 1000 }),
+      mkAnswer({ questionId: 1, isCorrect: false, userAnswer: 60, timestamp: now - 2000 }),
+      mkAnswer({ questionId: 1, isCorrect: false, userAnswer: 60, timestamp: now - 3000 }),
       mkAnswer({ questionId: 1, isCorrect: true, timestamp: now - 4000 }),
       // Q2 错 1 次（最近）
-      mkAnswer({ questionId: 2, isCorrect: false, timestamp: now - 100 }),
+      mkAnswer({ questionId: 2, isCorrect: false, userAnswer: 60, timestamp: now - 100 }),
     ])
     const r = await prioritizeWrongAnswers({ limit: 5 })
     expect(r).toHaveLength(2)
@@ -418,7 +421,7 @@ describe('getLearningCurve', () => {
     await db.questions.add(mkQuestion({ id: 1, equation: '23+47=' }))
     const now = Date.now()
     await db.answers.bulkAdd([
-      mkAnswer({ questionId: 1, isCorrect: false, responseTime: 5000, startedAt: now - 3000 }),
+      mkAnswer({ questionId: 1, isCorrect: false, userAnswer: 60, responseTime: 5000, startedAt: now - 3000 }),
       mkAnswer({ questionId: 1, isCorrect: true, responseTime: 1500, startedAt: now - 2000 }),
       mkAnswer({ questionId: 1, isCorrect: true, responseTime: 100, startedAt: now - 1000 }), // 异常
     ])
@@ -459,7 +462,7 @@ describe('getNumberCurve', () => {
     await db.answers.bulkAdd([
       mkAnswer({ questionId: 1, isCorrect: true, timestamp: now - 86400e3 - 1000 }),
       mkAnswer({ questionId: 1, isCorrect: true, timestamp: now - 86400e3 - 2000 }),
-      mkAnswer({ questionId: 2, isCorrect: false, timestamp: now - 86400e3 - 3000 }),
+      mkAnswer({ questionId: 2, isCorrect: false, userAnswer: 60, timestamp: now - 86400e3 - 3000 }),
       // 今天 1 题（对）
       mkAnswer({ questionId: 1, isCorrect: true, timestamp: now - 1000 }),
     ])

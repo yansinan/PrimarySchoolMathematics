@@ -1,20 +1,16 @@
 /**
  * 错题服务（S 层）— v4.0b
  *
- * 基于 services/database.js（v4.0a 薄封装）提供错题 CRUD + 多维过滤。
- * 读取时通过 Answer.fromJSON(plain) 包成 Answer 实例，所有判断走 getter（isWrong/isFixed）。
+ * 基于 services/database.js（v4.0a 薄封装）提供错题 CRUD + DB 查询。
+ * 查询结果委托 WrongAnswer.filterBy 做纯函数过滤/排序。
+ * DB 写操作（标记修正/删除/清空）直接操作 Dexie。
  *
- * 与 services/analysis.js#getWrongAnswers 关系：分析服务用 readonly 视角
- * （拼接题目表，做统计），本服务是错题"全生命周期"管理（查/标修正/删/清空）。
- *
- * 调用方：import { getWrongAnswers } from '@/services/wrongAnswerService'
- *
- * @see v4-PLAN-error-injection.md § v4.0b
- * @see utils/algorithm/answer.js Answer 类
+ * @see ../utils/algorithm/wrongAnswer.js — 过滤逻辑内聚到类
+ * @see services/analysis.js — 分析服务用 readonly 视角
  */
 
 import { DB, getAllAnswers } from '@/services/database'
-import { Answer } from '@/utils/algorithm/answer'
+import { WrongAnswer } from '@/utils/algorithm/wrongAnswer'
 
 /**
  * 错题查询（多维过滤，按 timestamp 倒序）
@@ -26,33 +22,12 @@ import { Answer } from '@/utils/algorithm/answer'
  * @param {number} [opts.days=30]        — 近 N 天
  * @param {number} [opts.limit=20]       — 返回条数
  * @param {boolean} [opts.includeFixed=false] — 是否包含已标记修正的
- * @returns {Promise<Array<Answer>>} — Answer 实例数组（isWrong/isFixed getter）
+ * @returns {Promise<Array<WrongAnswer>>}
  */
 export async function getWrongAnswers(opts = {}) {
-  const {
-    studentId = 'default',
-    operator,
-    minOperand,
-    maxOperand,
-    days = 30,
-    limit = 20,
-    includeFixed = false,
-  } = opts
-
+  const { studentId = 'default', days = 30, limit = 20, ...rest } = opts
   const all = await getAllAnswers(studentId)
-  const cutoff = Date.now() - days * 864e5
-
-  return all
-    .map(plain => Answer.fromJSON(plain))   // ← 包成 Answer 实例
-    .filter(a => !a.isCorrect)              // ← 仅"用户答错过"（含已修正的）
-    .filter(a => !operator || a.operator === operator)
-    // operand 范围"重叠"语义：错题 [minQ, maxQ] 与查询 [minF, maxF] 有交集
-    .filter(a => minOperand == null || maxOperand == null
-      || ((a.operandMax ?? 0) >= minOperand && (a.operandMin ?? 0) <= maxOperand))
-    .filter(a => includeFixed || !a.isFixed)  // ← 用 getter
-    .filter(a => (a.timestamp ?? a.startedAt ?? 0) >= cutoff)
-    .sort((a, b) => (b.timestamp ?? b.startedAt ?? 0) - (a.timestamp ?? a.startedAt ?? 0))
-    .slice(0, limit)
+  return WrongAnswer.filterBy(all, { days, limit, ...rest })
 }
 
 /**
@@ -61,20 +36,20 @@ export async function getWrongAnswers(opts = {}) {
  * @returns {Promise<number>}
  */
 export async function countWrongAnswers(opts = {}) {
-  const all = await getWrongAnswers({ ...opts, limit: Number.MAX_SAFE_INTEGER })
-  return all.length
+  const all = await getAllAnswers(opts.studentId || 'default')
+  return WrongAnswer.filterBy(all, { ...opts, limit: Infinity }).length
 }
 
 /**
  * 按 equation 精确查找错题
  * @param {string} equation
  * @param {string} [studentId='default']
- * @returns {Promise<Answer|null>}
+ * @returns {Promise<WrongAnswer|null>}
  */
 export async function getWrongAnswerByEquation(equation, studentId = 'default') {
   const all = await getAllAnswers(studentId)
   const found = all.find(a => a.equation === equation && a.isCorrect === false)
-  return found ? Answer.fromJSON(found) : null
+  return found ? WrongAnswer.fromJSON(found) : null
 }
 
 /**

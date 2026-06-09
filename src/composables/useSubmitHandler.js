@@ -39,6 +39,7 @@ export function useSubmitHandler({ practiceStore, saver }) {
       return { feedbackType: 'invalid' }
     }
 
+    // isCorrect 走数学真理（userAnswer === solution），不再用 stored 字段
     const isCorrect = userAnswer === currentQuestion.solution
     const responseTime = endQuestionTimer()
 
@@ -50,14 +51,19 @@ export function useSubmitHandler({ practiceStore, saver }) {
     const newQuestionIndex = groupAnswerOffset + currentIndex
     const existingIdx = session.answers.findIndex(a => a.questionIndex === newQuestionIndex)
     const previousAttemptCount = existingIdx >= 0 ? (session.answers[existingIdx].attemptCount || 1) : 0
-    const { attemptCount, score } = buildScore(previousAttemptCount, isCorrect)
+    // buildScore 内部从 userAnswer === solution 算 isCorrect
+    const { attemptCount, score } = buildScore(previousAttemptCount, userAnswer, currentQuestion.solution)
 
+    // 不再写 isCorrect / score 字段到 answerEntry
+    // - isCorrect: 存进去的 stored 字段不可靠；getter 实时算
+    // - score: 同上；getter 实时算
+    // 旧数据兼容：读取时 getAnswerScore 会用 getter 优先，stored 字段仅 fallback
     const answerEntry = {
       ...currentQuestion,
       userAnswer,
-      isCorrect,
+      // isCorrect  ← 移除
       attemptCount,
-      score,
+      // score     ← 移除
       timestamp: Date.now(),
       responseTime,
       operator,

@@ -39,7 +39,9 @@ export class Answer extends Question {
     this.endedAt = raw.endedAt ?? this.timestamp
 
     // 重试上下文（attemptCount getter 用）
-    this.previousAttemptCount = raw.previousAttemptCount ?? 0
+    //   兼容老数据：stored attemptCount 字段 → 反推 previousAttemptCount
+    //   getter = previousAttemptCount + 1 = attemptCount（逻辑一致）
+    this.previousAttemptCount = raw.previousAttemptCount ?? (raw.attemptCount != null ? Math.max(0, raw.attemptCount - 1) : 0)
 
     // 错题修正时间戳（user action，isFixed getter 用）
     this.correctedAt = raw.correctedAt ?? null
@@ -116,6 +118,18 @@ export class Answer extends Question {
       sessionId: this.sessionId,
       questionId: this.questionId,
     }
+  }
+
+  // ── 静态方法（不受实例限制） ──
+
+  /**
+   * 静态版 isCorrect 判定（不实例化）
+   * 用法：caller 拿到 plain object 时用，无需 new Answer()
+   * @param {{userAnswer:any, solution:any}} answerLike
+   * @returns {boolean} true 当且仅当 userAnswer === solution
+   */
+  static isCorrect(answerLike) {
+    return Number(answerLike?.userAnswer) === Number(answerLike?.solution)
   }
 
   static fromJSON(plain) {

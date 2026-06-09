@@ -1,7 +1,8 @@
 # v4 业务阶段：错误注入专项 + 难度等级扩展
 
 > **性质**：业务规划 (Business Plan) — v3 架构调优后的业务功能新增
-> **状态**：🕐 **待执行**
+> **状态**：✅ v4.0b 完成 | ✅ P1.6 完成 | ✅ P1.8 完成 | ❌ v4.2 未开始
+> **核心设计原则**：增强学生信心是本系统的最优先考虑。在此基础上，练习掌握以往错题是系统第二目标。
 > **配套**：
 > - [ARCHITECTURE.md](../ARCHITECTURE.md) — 架构宪法（实施时遵守）
 > - [IMPLEMENTATION_HISTORY.md](../IMPLEMENTATION_HISTORY.md) — v2.3+v3 实施过程
@@ -19,8 +20,8 @@ v3 架构调优落地后，3 项未完成业务功能重组到本计划：
 | Phase | 内容 | 净行 | 风险 | 起点 |
 |-------|------|------|------|------|
 | **v4.0a 前置** | S 层数据库代理 `services/database.js`（薄封装 re-export）| +18 | 🟢 独立 | **立即** |
-| **v4.0b 前置** | S 层错题模块 `services/wrongAnswerService.js`（基于 v4.0a）| +80 | 🟢 独立 | v4.0a 完成后 |
-| **v4.1** | P1.6 + P1.8 错题注入（基于 v4.0b）| +56 | 🟡 | v4.0b 完成后 |
+|| **v4.0b 前置** | S 层错题模块 `services/wrongAnswerService.js`（基于 v4.0a）| +80 | 🟢 独立 | v4.0a 完成后 |
+|| **v4.1** | P1.6 ✅ + P1.8 ❌ 错题注入（基于 v4.0b）| +56 | 🟡 | v4.0b 已完成 |
 | **v4.2** | P3 L2.5 难度等级 | +57 | 🟡 | v4.1 之后 |
 
 **预计总时间**：2-3 周（含 S 层前置 2-3 天）
@@ -396,8 +397,8 @@ async function pickRandomWrongAnswer(levelIdx, operator) {
 
 | PR | 内容 | 估行 | 依赖 |
 |----|------|------|------|
-| **PR-1** | v4.1.1 P1.6 干扰项错题库（改 `generateDistractors` + 调 `wrongAnswerService.getWrongAnswers`）| +30 | v4.0 已完成 |
-| **PR-2** | v4.1.2 P1.8 20% 错题注入（改 `adjustNextQuestion` + `pickRandomWrongAnswer`）| +26 | PR-1 基础 |
+|| **PR-1** | v4.1.1 P1.6 干扰项错题库（改 `generateDistractors` + 调 `wrongAnswerService.getWrongAnswers`）| ✅ 完成 | v4.0 已完成 |
+|| **PR-2** | v4.1.2 P1.8 20% 错题注入（改 `adjustNextQuestion` + `pickRandomWrongAnswer`）| ✅ 完成（改用方案 B：3 连对触发复习题）| PR-1 基础 |
 
 PR-1 和 PR-2 可同 PR 也可以独立。**推荐同 PR** —— 同一天做，P1.6 是"干扰项"，P1.8 是"注入策略"，两个功能配套。
 

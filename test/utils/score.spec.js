@@ -11,10 +11,12 @@ describe('score helpers', () => {
   })
 
   it('builds attempt score with incremented attemptCount', () => {
-    expect(buildAttemptScore(0, false)).toEqual({ attemptCount: 1, score: 0 })
-    expect(buildAttemptScore(1, false)).toEqual({ attemptCount: 2, score: 0 })
-    expect(buildAttemptScore(1, true)).toEqual({ attemptCount: 2, score: computeScore(2) })
-    expect(buildAttemptScore(2, true)).toEqual({ attemptCount: 3, score: computeScore(3) })
+    // 新签名：buildAttemptScore(previousAttemptCount, userAnswer, solution)
+    // isCorrect 内部从 userAnswer === solution 计算
+    expect(buildAttemptScore(0, 5, 5)).toEqual({ attemptCount: 1, score: 1 })
+    expect(buildAttemptScore(1, 5, 5)).toEqual({ attemptCount: 2, score: computeScore(2) })
+    expect(buildAttemptScore(1, 4, 5)).toEqual({ attemptCount: 2, score: 0 })  // 答错
+    expect(buildAttemptScore(2, 5, 5)).toEqual({ attemptCount: 3, score: computeScore(3) })
   })
 })
 

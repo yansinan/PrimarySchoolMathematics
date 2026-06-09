@@ -294,9 +294,94 @@ router.beforeEach((to, from) => {
 
 **收益**：删 20 行 `stores/app.js` 整文件；跨页 state 用 sessionStorage 临时传递。
 
----
+|---
 
-## 7. 元信息
+## 7. v4.0b 错题模块增强（2026-06-09）
+
+**目标**：从 Answer 继承 WrongAnswer 类 + 整合 wrongAnswerService + 选择题干扰项优先使用错题。
+
+### 7.1 WrongAnswer 类（U 层）
+
+**Before**:
+```js
+// answers 存 DB 时用 Answer.fromJSON，过滤逻辑在 service
+// wrongAnswerService.js 里手写 filter + sort 链
+```
+
+**After**:
+```js
+// utils/algorithm/wrongAnswer.js
+export class WrongAnswer extends Answer {
+  static fromJSON(plain)         // → WrongAnswer 实例
+  static filterBy(answers, opts) // 纯函数过滤+排序（从 service 迁入）
+  static findByEquation(...)     // 按算式查找，重载为自动限定错题
+  static filterByLevel(...)      // 按难度查找，重载为自动限定错题
+  isRecent(days)                 // N 天内？
+  matchesOperand(min, max)       // 操作数范围重叠？
+}
+```
+
+**迁移**：`matchLevel` + `groupAnswersByLevel` 从 adaptiveEngine → question.js；`DIFFICULTY_LEVELS` → `constants/difficulty.js`。adaptiveEngine 通过桶 `./` 引用。
+
+**Question 新增**：`static findByEquation(collection, equation, { exact })` — 支持精确匹配和等价匹配（交换律 + 事实家族）。Answer/WrongAnswer 继承。WrongAnswer 重载以自动圈定错题。`collectDistractors` 被 `findByEquation(exact:false)` 替代，已删除。
+
+### 7.2 选择题干扰项错题库（P1.6 前置）
+
+**Before**: `generateDistractors` 纯算法（±1/±2/±5/±10/随机）
+
+**After**: `generateDistractors(correct, count, wrongPool, equation)` 优先取等价算式的错题 userAnswer（含交换律 + 事实家族），不够再算法兜底。
+
+**调用链**:
+```
+afterAnswer() 答错时 → getWrongAnswers() → engine.wrongAnswerPool
+diversifyBatch → generateDistractors(solution, count, engine.wrongAnswerPool, q.equation)
+                → WrongAnswer.findByEquation(wrongPool, eq, {exact:false})
+```
+
+**收益**：选择题 options 优先使用学生真实错误答案，覆盖同方程 + 交换律 + 逆运算族。
+
+### 7.3 剩余工作
+
+| 项 | 状态 | 说明 |
+|----|------|------|
+| P1.6 干扰项错题库 | ✅ 完成 | 选择题优先用错题 userAnswer 做干扰项 |
+| P1.8 20% 错题注入 | ✅ 完成（方案 B：3 连对触发复习题）| `adjustNextQuestion` Step D |
+| v4.2 L2.5 难度等级 | ❌ 未开始 | 计划 v4.1 之后 ||
+
+### 7.4 P1.8 错题复盘（方案 B：连续 3 对触发）
+
+**Before**: 错题只在选择题中作为干扰项出现（P1.6）
+
+**After**: 连续 3 题答对后，下一题动态切换为历史错题复盘。
+
+**实现**:
+- `adjustNextQuestion` 新增 Step D（在 Step A 之前）
+- 从 `roundAnswers` 尾部算连续答对 streak
+- `streak ≥ 3` 且 `wrongAnswerPool` 有错题：
+  - 选 `matchLevel ≤ engine.difficultyIdx` 的错题（同难度或更易）
+  - 用 `buildReviewQuestion(wa)` 构建复习题对象（equation 复原为 `=__`、强制 `vertical_keypad`）
+  - 替换 `listPractices[nextIdx]`
+  - 跳过 Step A/B（复习题不换题、不改横式）
+  - Step C 照常执行
+- 从 `wrongAnswerPool` 中移除已选错题，避免重复
+- `afterAnswer` 每次都刷新错题池（去掉原 `if (!isCorrect)` 守卫）保证 P1.8 用最新池
+
+**修复的 bug**（实测中发现）:
+- `services/index.js` 桶里 `analysis.js` 和 `wrongAnswerService.js` 都 export `getWrongAnswers` → 冲突导致 Vue 应用不挂载
+  - 修复：桶不导 `wrongAnswerService`，调用方直引
+- `afterAnswer` 错题池刷新有竞态：只在答错时刷 → 下一次答对时池可能还是空的
+  - 修复：去掉守卫，每次都 await 刷新
+
+**浏览器实测结果**:
+- ✅ 直接注入错题 `1+2=__` (ua=4, sol=3) → DB 1 条
+- ✅ 答 3 对后第 4 题变成 `1+2=__`（复习题触发）
+- ✅ 答对复习题 → DB 更新、正常流程继续
+- ⚠️ 复习题被显示为 choice 模式（不是 keypad）— `applyDisplayModeForCurrentQuestion` 在组 init 时设定 displayMode，每题不重算。后续可优化：替换题后重设 displayMode
+
+|--
+|---
+
+## 8. 元信息
 
 - 编制时间：2026-06-08（v3 收尾 + ui 合并后）
 - 关联：[ARCHITECTURE.md](./ARCHITECTURE.md) — "现在是什么"

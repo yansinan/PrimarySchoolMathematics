@@ -16,3 +16,5 @@ export * from './operatorMap'
 export * from './abilityProfile'
 // Session 持久化 (2026-06-08 E1 抽层自 stores/practice.js#saveSessionToDB)
 export * from './sessionPersistence'
+// 注意: wrongAnswerService 不走桶 — 与 analysis.js#getWrongAnswers 同名冲突
+// 调用方直引: import { getWrongAnswers } from '@/services/wrongAnswerService'

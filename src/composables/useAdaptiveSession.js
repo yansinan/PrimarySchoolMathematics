@@ -29,6 +29,7 @@ import { getGroupComment, getCommentByRate } from '@/constants/practice'
 import { sumAnswerScores, sumResponseTimes } from '@/utils/score'
 import { TARGET_LIMITS } from '@/utils/form/formDefaults'
 import { formatDuration } from '@/utils/time/timeFormat'
+import { getWrongAnswers } from '@/services/wrongAnswerService'
 
 /**
  * 自适应会话 composable 工厂
@@ -102,7 +103,7 @@ export function useAdaptiveSession(options = {}) {
    * - 已有能力画像：基于画像直接生成新一轮
    * - 没有画像：进入空闲态，重新生成诊断题开始评估
    */
-  function startNewAdaptiveSession() {
+  async function startNewAdaptiveSession() {
     const profile = practiceStore.abilityProfile
     if (!profile) {
       // 无画像 → 重新评估
@@ -117,13 +118,12 @@ export function useAdaptiveSession(options = {}) {
     }
 
     // 基于已有画像生成新一轮练习
-    // 从 adaptiveConfig 读取（由 completeAssessment 设置，不受 Generate.vue 污染）
-    // 退回到 configSnapshot 仅当 adaptiveConfig 不存在时（已接入旧数据的用户）
     const adaptiveConfig = practiceStore.session.adaptiveConfig || {}
     const fallbackConfig = practiceStore.session.configSnapshot || {}
     const targetMin = adaptiveConfig.targetMin ?? fallbackConfig.targetMin ?? 10
     const targetMax = adaptiveConfig.targetMax ?? fallbackConfig.targetMax ?? 30
     const engine = createAdaptiveEngine(profile, targetMin, targetMax)
+    engine.wrongAnswerPool = await getWrongAnswers({ days: 90, limit: 100 })
     adaptiveEngine.value = engine
     adaptiveGroupIndex.value = 1
     // 同步到 store（供 AbilityCard 等其他组件读取）
@@ -179,6 +179,7 @@ export function useAdaptiveSession(options = {}) {
     practiceStore.completeAssessment(profile, snapshot, { targetMin, targetMax })
 
     const engine = createAdaptiveEngine(practiceStore.abilityProfile, targetMin, targetMax)
+    engine.wrongAnswerPool = await getWrongAnswers({ days: 90, limit: 100 })
     adaptiveEngine.value = engine
     adaptiveGroupIndex.value = 1
 
@@ -324,9 +325,11 @@ export function useAdaptiveSession(options = {}) {
    * P5: 答完一题后触发 — 封装动态微调（C 层中转，避免 V 层直接 import U 层）
    * 由 Practice.vue handleNext 中调用
    */
-  function afterAnswer() {
+  async function afterAnswer() {
     if (!adaptiveEngine.value || !practiceStore.abilityProfile) return
     const eng = adaptiveEngine.value
+    // 每次都刷新错题池（答对也刷，确保 P1.8 错题复盘能用最新池）
+    eng.wrongAnswerPool = await getWrongAnswers({ days: 90, limit: 100 })
     // DEBUG BUG-1: 验证画像等级索引实际值
     // console.log('[DEBUG] strong:', eng.strongLevelIndices, 'weak:', eng.weakLevelIndices, 'difficulty:', eng.difficultyIdx)
     const roundAnswers = [...(practiceStore.adaptiveAnswers || []), ...session.value.answers]

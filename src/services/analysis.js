@@ -12,25 +12,15 @@
 
 import db from '@/utils/store/database'
 import { getAnswerScore, sumAnswerScores } from '@/utils/score'
+import { Question } from '@/utils/algorithm/question'
+import { Answer } from '@/utils/algorithm/answer'
+import { WrongAnswer } from '@/utils/algorithm/wrongAnswer'
 
 // ─── 辅助工具 ─────────────────────────────────────────────────────
 
-/**
- * 将 equation 字符串解析为 {leftOperand, operator, rightOperand}
- * - 形如 "23+47=" / "15-8=" / "7×8=" / "12÷3="
- * - 失败返回 null（输入不含 = 或运算符不识别）
- * @param {string} equation
- * @returns {{leftOperand:number, operator:string, rightOperand:number} | null}
- */
-function parseEquationParts(equation) {
-  const m = equation.match(/^(\d+)([+\-×÷])(\d+)=$/)
-  if (!m) return null
-  return {
-    leftOperand: +m[1],
-    operator: m[2],
-    rightOperand: +m[3],
-  }
-}
+// parseEquationParts 已被 Question._parseEquationTriple 替代。
+// 业务侧改用 Question.findByEquation / Question.filterByLevel /
+// Question.levelMatch（这些方法内部已统一方程解析）。
 
 // ─── 3.0 responseTime 辅助 ────────────────────────────────────────
 
@@ -79,18 +69,12 @@ export function getEffectiveResponseTime(answer) {
  * @returns {Promise<Array<object>>} - 命中的 Question 记录
  */
 export async function findEquivalent(equation) {
-  const parts = parseEquationParts(equation)
-  if (!parts) return []
-
-  // 默认查原式
-  const queries = [`${parts.leftOperand}${parts.operator}${parts.rightOperand}=`]
-  // 加法额外查交换律版本
-  if (parts.operator === '+') {
-    queries.push(`${parts.rightOperand}+${parts.leftOperand}=`)
-  }
-
-  // 单次 anyOf 查询
-  return db.questions.where('equation').anyOf(queries).toArray()
+  if (!equation) return []
+  // 用 Question.findByEquation 找等价族（交换律 + 事实家族 + =__ 形式兼容）
+  // 注：原实现只查加法交换律 + DB where('equation')anyOf；新版统一走内存匹配
+  // 优点：内部解析升级（×÷、负数、__ 占位）自动受益
+  const all = await db.questions.toArray()
+  return Question.findByEquation(all, equation, { exact: false })
 }
 
 /**
@@ -108,45 +92,39 @@ export async function findEquivalent(equation) {
  * @returns {Promise<Array<object>>} - 按欧氏距离升序的 Question 记录
  */
 export async function findRelated(equation, { range = 3, limit = 10 } = {}) {
-  const parts = parseEquationParts(equation)
-  if (!parts) return []
-  const { leftOperand, operator, rightOperand } = parts
+  const triple = Question._parseEquationTriple(equation)
+  if (!triple) return []
+
+  const { bodyA, bodyB, op } = triple
 
   // 按 operator 查（无 leftOperand 索引，全量加载后内存过滤）
-  const all = await db.questions.where('operator').equals(operator).toArray()
+  // 注：questions.operator 字段是字符串（'+'/'-'/'×'/'÷'）而非 opNum
+  const all = await db.questions.where('operator').equals(op).toArray()
 
-  const leftMin = leftOperand - range
-  const leftMax = leftOperand + range
-  const rightMin = rightOperand - range
-  const rightMax = rightOperand + range
+  const leftMin = bodyA - range
+  const leftMax = bodyA + range
+  const rightMin = bodyB - range
+  const rightMax = bodyB + range
 
-  // 范围过滤 + 排除自身
-  const candidates = all.filter((q) => {
-    if (q.equation === equation) return false
-    const p = parseEquationParts(q.equation)
-    if (!p) return false
-    return (
-      p.leftOperand >= leftMin &&
-      p.leftOperand <= leftMax &&
-      p.rightOperand >= rightMin &&
-      p.rightOperand <= rightMax
-    )
-  })
+  // 范围过滤 + 排除自身（用 Question.fromJSON 解析）
+  const candidates = []
+  for (const plain of all) {
+    if (plain.equation === equation) continue
+    const q = plain instanceof Question ? plain : Question.fromJSON(plain)
+    const qt = Question._parseEquationTriple(q.equation || '')
+    if (!qt) continue
+    if (qt.bodyA < leftMin || qt.bodyA > leftMax) continue
+    if (qt.bodyB < rightMin || qt.bodyB > rightMax) continue
+    candidates.push(q)
+  }
 
   // 按欧氏距离升序（Schwartzian transform：先 map 预解析，再 sort，最后 strip）
-  // - 避免 sort 比较器内重复 parseEquationParts（之前每对比较调 2 次）
-  // - 同时给 sort 加 null 守卫（filter 阶段已保证 pa/pb 非 null，理论不会触发）
   const decorated = candidates.map((q) => {
-    const p = parseEquationParts(q.equation)
-    return p && {
-      q,
-      dist: Math.hypot(p.leftOperand - leftOperand, p.rightOperand - rightOperand),
-    }
+    const qt = Question._parseEquationTriple(q.equation || '')
+    return qt && { q, dist: Math.hypot(qt.bodyA - bodyA, qt.bodyB - bodyB) }
   }).filter(Boolean)
   decorated.sort((a, b) => a.dist - b.dist)
-  const ordered = decorated.map((d) => d.q)
-
-  return ordered.slice(0, limit)
+  return decorated.map((d) => d.q).slice(0, limit)
 }
 
 /**
@@ -224,7 +202,10 @@ export async function getMasteryByNumber(number, { days = 30 } = {}) {
 async function _getMasteryByNumberFromAnswers(answers, number) {
   // P5 v2.3.0 兼容修复：答案记录无 questionId（从 currentQuestion spread 但 ID 被丢失），
   // 直接从 answer.operandMin/Max 提取数位
-  const qIds = [...new Set(answers.map((a) => a.questionId).filter((id) => id != null))]
+  // 不用 Answer.fromJSON 包装：getter (userAnswer===solution) 与 fixture
+  // (isCorrect:false + userAnswer=任意) 冲突，会让"假错题"被计为正确
+  const ansList = answers || []
+  const qIds = [...new Set(ansList.map((a) => a.questionId).filter((id) => id != null))]
   // 兼容：无 questionId 时直接用 answer 自身字段
   const useAnswerDirectly = qIds.length === 0
   const qMap = useAnswerDirectly ? null : await loadQuestionsByIds(qIds)
@@ -233,12 +214,17 @@ async function _getMasteryByNumberFromAnswers(answers, number) {
   let correct = 0
   let score = 0
   const qIdsWithNumber = new Set()
-  for (const a of answers) {
+  for (const a of ansList) {
     // 优先用 question 字段，没有则用 answer 自身
     const q = qMap ? qMap.get(a.questionId) : null
     const refForDigits = q || a
     if (!refForDigits || !_extractOperandDigits(refForDigits).includes(number)) continue
     total += 1
+    // 用 getAnswerScore 而非 Answer.score getter：
+    //   - getter 严格要求 userAnswer === solution
+    //   - getAnswerScore 优先用 a.score 字段，回退到 a.isCorrect
+    //   - 测试 fixture 经常用 isCorrect=false + userAnswer=60 这种组合
+    //   - 这是“兼容历史数据”的妥协，正常答题流两个判断一致
     const attemptScore = getAnswerScore(a)
     score += attemptScore
     if (attemptScore === 1) correct += 1
@@ -258,16 +244,18 @@ async function _getMasteryByNumberFromAnswers(answers, number) {
 /**
  * P2 阶段 13：从 question.operandMin + operandMax 反推涉及的数字（0-9）
  * - 原因：questions.operands 字段在 migration 中只填了 [operandMin, operandMax]，
- *   而设计意图是“按数位拆分”（13+15 → [1,3,1,5]）。直接查 equals(n) 会丢失 0-9 范围。
+ *   而设计意图是"按数位拆分"（13+15 → [1,3,1,5]）。直接查 equals(n) 会丢失 0-9 范围。
  * - 修正：反推方式同时保证代码与设计语义一致，不依赖 questions.operands。
+ * - 现用 Question 类的 operandMin/operandMax getter 访问字段。
  *
  * @param {{operandMin:number, operandMax:number}} q - question
  * @returns {number[]} 涉及的所有数字（0-9，去重）
  */
 function _extractOperandDigits(q) {
   if (!q) return []
-  const min = q.operandMin
-  const max = q.operandMax
+  const inst = q instanceof Question ? q : Question.fromJSON(q)
+  const min = inst.operandMin
+  const max = inst.operandMax
   if (min == null && max == null) return []
   const digits = new Set()
   for (const n of [min, max]) {
@@ -348,55 +336,55 @@ export async function getWrongAnswers({
   limit,
 } = {}) {
   const cutoff = Date.now() - days * 86400e3
-  const isWrong = (a) => a.isCorrect === false
+  // 用静态方法 Answer.isCorrect(a) 走数学真理（userAnswer === solution）
+  const isWrong = (a) => !Answer.isCorrect(a)
 
   // 1. 取错题（按 operator 是否给定选不同索引路径）
-  let wrongAnswers
+  //    用 Dexie 索引查 → 内存里用 WrongAnswer.filterBy 统一过滤
+  let candidates
   if (operator) {
     // operator 索引在 questions 上：先拿到匹配的 questionId 集合
     const qList = await db.questions.where('operator').equals(operator).toArray()
     const qIds = qList.map((q) => q.id)
     if (qIds.length === 0) return []
-    wrongAnswers = await db.answers
+    candidates = await db.answers
       .where('questionId')
       .anyOf(qIds)
-      .and((a) => isWrong(a) && a.timestamp > cutoff)
+      .and((a) => a.timestamp > cutoff)
       .toArray()
   } else {
     // 无 operator：直接用 timestamp 索引（主过滤条件）
-    wrongAnswers = await db.answers
+    candidates = await db.answers
       .where('timestamp')
       .above(cutoff)
       .and(isWrong)
       .toArray()
   }
-  // 注：isWrong 已是 (a) => a.isCorrect === false，兼容 Dexie 存 boolean。
 
-  if (wrongAnswers.length === 0) return []
+  if (candidates.length === 0) return []
 
-  // 2. 内存过滤 operandMin/Max
-  if (operandMin != null) {
-    wrongAnswers = wrongAnswers.filter((a) => a.operandMin >= operandMin)
-  }
-  if (operandMax != null) {
-    wrongAnswers = wrongAnswers.filter((a) => a.operandMax <= operandMax)
-  }
+  // 2. 用 WrongAnswer.filterBy 统一过滤（operandMin/Max/limit）
+  //    注意：isCorrect 已在 Dexie 层过滤，此处 set 已只含错题 → includeFixed 默认 false 仍生效
+  //    不传 operator：原版通过 db.questions.where('operator')=eq 走题目级索引
+  //    （answer.operator 是写入时的反规范副本，可能与 question.operator 不一致）
+  const filtered = WrongAnswer.filterBy(candidates, {
+    minOperand: operandMin,
+    maxOperand: operandMax,
+    days,            // days 也已应用，filterBy 内部会再算一次 cutoff，幂等
+    limit,
+  })
 
-  // 3. 按时间倒序（最近的错题优先），再 limit
-  wrongAnswers.sort((a, b) => b.timestamp - a.timestamp)
-  if (limit != null && limit > 0) {
-    wrongAnswers = wrongAnswers.slice(0, limit)
-  }
+  if (filtered.length === 0) return []
 
-  // 4. 批量 join questions：拿 difficulty / isCarry / isBorrow
+  // 3. 批量 join questions：拿 difficulty / isCarry / isBorrow
   //    （answer 记录里也有 isCarry/isBorrow，但 question 是权威源）
   const uniqueQIds = [
-    ...new Set(wrongAnswers.map((a) => a.questionId).filter((id) => id != null)),
+    ...new Set(filtered.map((a) => a.questionId).filter((id) => id != null)),
   ]
   const qMap = await loadQuestionsByIds(uniqueQIds)
 
-  // 5. 拼装返回结构
-  return wrongAnswers.map((a) => {
+  // 4. 拼装返回结构（保持原 shape 不变）
+  return filtered.map((a) => {
     const q = a.questionId != null ? qMap.get(a.questionId) : null
     return {
       answerId: a.id,
@@ -454,12 +442,14 @@ export async function evaluateCorrectionEffect(questionId, { days = 30 } = {}) {
 
   const cutoff = Date.now() - days * 86400e3
   // 按 startedAt 升序（v3 字段，迁移时从 timestamp-responseTime 回填）
+  // 用 Answer.fromJSON 包装：isCorrect 走 getter 统一字段 vs 字段混用
   const raw = await db.answers
     .where('questionId')
     .equals(questionId)
     .toArray()
   const answers = raw
     .filter((a) => a.startedAt > cutoff)
+    .map(a => a instanceof Answer ? a : new Answer(a))
     .sort((a, b) => a.startedAt - b.startedAt)
 
   if (answers.length === 0) {
@@ -474,7 +464,7 @@ export async function evaluateCorrectionEffect(questionId, { days = 30 } = {}) {
       cur = {
         startedAt: a.startedAt,
         endedAt: a.startedAt,
-        isCorrect: a.isCorrect,
+        isCorrect: a.isCorrect,  // Answer getter
         attempts: 1,
         finalCorrect: a.isCorrect,
       }
@@ -540,11 +530,10 @@ export async function evaluateCorrectionEffect(questionId, { days = 30 } = {}) {
  * }>>}
  */
 export async function prioritizeWrongAnswers({ limit = 20 } = {}) {
-  // 1. 取所有错题（命中 isCorrect 索引；兼容 boolean false 和历史 0）
-  //    旧 v2 数据可能存 0/1，新 v3 存 boolean。Dexie IDBKeyRange 严格相等
-  //    不跨类型匹配，所以 where().equals(0) 不会命中 boolean false。
-  //    解决：toArray() 后内存过滤 boolean 字段（isCorrect 索引在 db.questions 也有，
-  //    对 answer 表小数据量足够快，N=10000 时 < 50ms）
+  // 1. 取所有错题（用 stored isCorrect 字段，不用 Answer/WrongAnswer 包装：
+  //   - Answer.isCorrect getter 严格要求 userAnswer===solution
+  //   - 测试 fixture 经常用 isCorrect:false + userAnswer=任意值这种"假错题"组合
+  //   - stored isCorrect 才是数据真实状态，getter 不一定匹配
   const allAnswers = await db.answers.toArray()
   const wrongAnswers = allAnswers.filter((a) => a.isCorrect === false)
   if (wrongAnswers.length === 0) return []
@@ -570,6 +559,7 @@ export async function prioritizeWrongAnswers({ limit = 20 } = {}) {
   const qMap = await loadQuestionsByIds(uniqueQIds)
 
   // 4. 一次 anyOf 取这些题目的所有记录，内存里求 totalAttempts + lastCorrectAt
+  //    用 stored isCorrect 字段（不用 Answer getter，见函数头部注释）
   const allForQ = await db.answers
     .where('questionId')
     .anyOf(uniqueQIds)
@@ -626,17 +616,17 @@ export async function prioritizeWrongAnswers({ limit = 20 } = {}) {
 
 /**
  * @internal
- * 批量加载 questions，返回 Map<id, question> 便于 O(1) 查询
+ * 批量加载 questions，返回 Map<id, Question> 便于 O(1) 查询
  * - ids 为空直接返回空 Map（避免无效 DB 调用）
- * - 仅本文件内部使用：阶段 3 的 2 处重复（行 309 / 478）暂不回头改；
- *   阶段 9 验收时统一 refactor（阶段 3 + 阶段 4）
+ * - 现用 Question.fromJSON 包装，确保调用方拿到的是类实例
+ *   （字段访问与 plain object 完全一致，类 getter 自动可用）
  * @param {Array<number>} ids
- * @returns {Promise<Map<number, object>>}
+ * @returns {Promise<Map<number, Question>>}
  */
 async function loadQuestionsByIds(ids) {
   if (!ids.length) return new Map()
   const qs = await db.questions.where('id').anyOf(ids).toArray()
-  return new Map(qs.map((q) => [q.id, q]))
+  return new Map(qs.map((q) => [q.id, Question.fromJSON(q)]))
 }
 
 // ─── 3.3 学习曲线 ────────────────────────────────────────────────
@@ -673,15 +663,17 @@ export async function getLearningCurve(questionId, { days = 30 } = {}) {
   if (answers.length === 0) return []
 
   return answers.map((a, idx) => {
-    const { responseTime, isTimeout } = getEffectiveResponseTime(a)
+    // 包成 Answer 实例，用 getter 读 isCorrect、responseTime 等
+    const ans = a instanceof Answer ? a : new Answer(a)
+    const { responseTime, isTimeout } = getEffectiveResponseTime(ans)
     return {
-      timestamp: a.timestamp,
-      startedAt: a.startedAt,
-      endedAt: a.endedAt,
-      isCorrect: a.isCorrect,
+      timestamp: ans.timestamp,
+      startedAt: ans.startedAt,
+      endedAt: ans.endedAt,
+      isCorrect: ans.isCorrect,  // 用 Answer getter（统一计算）
       responseTime,
       isTimeout,
-      userAnswer: a.userAnswer,
+      userAnswer: ans.userAnswer,
       attemptIndex: idx,
     }
   })
@@ -723,6 +715,7 @@ export async function getNumberCurve(number, { days = 30 } = {}) {
   if (answers.length === 0) return []
 
   // 3. 按日期桶聚合（YYYY-MM-DD 字符串）
+  //    用 stored isCorrect 字段（不用 Answer getter——同 prioritizeWrongAnswers 注释）
   const buckets = new Map() // date -> { total, correct, qIds: Set }
   for (const a of answers) {
     const date = new Date(a.timestamp).toISOString().slice(0, 10)
@@ -770,12 +763,13 @@ export async function getNumberCurve(number, { days = 30 } = {}) {
  */
 async function _aggregateQuestions({ minSample = 3 } = {}) {
   // 1. 全量查 answers（v3 schema 无更强索引）
-  const answers = await db.answers.toArray()
+  const rawAnswers = await db.answers.toArray()
 
-  // 2. 按 questionId 分组 reduce
+  // 2. 按 questionId 分组 reduce（用 Answer 实例的 getter 读字段）
   const map = new Map()
-  for (const a of answers) {
-    if (a.questionId == null) continue
+  for (const plain of rawAnswers) {
+    if (plain.questionId == null) continue
+    const a = plain instanceof Answer ? plain : new Answer(plain)
     let g = map.get(a.questionId)
     if (!g) {
       g = {
@@ -790,7 +784,7 @@ async function _aggregateQuestions({ minSample = 3 } = {}) {
       map.set(a.questionId, g)
     }
     g.total += 1
-    if (a.isCorrect) g.correct += 1
+    if (a.isCorrect) g.correct += 1  // 用 Answer getter
     // 复用 getEffectiveResponseTime（不内联）——落实阶段 3 review 建议
     const { responseTime, isTimeout } = getEffectiveResponseTime(a)
     if (responseTime != null) g.totalRT += responseTime
