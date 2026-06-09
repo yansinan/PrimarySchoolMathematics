@@ -9,15 +9,16 @@
  */
 
 import { DIFFICULTY_LEVELS } from '@/constants/difficulty'
-// DB lazy loader（Answer/WrongAnswer 通过 `this._getDB()` 继承）
+import { matchLevel, groupAnswersByLevel } from './matchLevel'
+// DB 使用异步懒加载（services/database → equationParser → matchLevel 无循环，
+// 但 module 执行次序在部分 Vite/Node 场景仍须动态 import）
 let _db
 async function _getDB() {
-  if (!_db) _db = (await import('@/services/database')).DB
+  if (!_db) _db = (await import('@/utils/store/database')).default
   return _db
 }
 
 export class Question {
-
   static _getDB() { return _getDB() }
   /**
    * @param {Object} raw — db.questions 表的 plain object
@@ -95,7 +96,7 @@ export class Question {
   }
 
   static fromJSON(plain) {
-    return new Question(plain)
+    return new this(plain)
   }
 
   // ── 难度映射 ──
@@ -290,9 +291,9 @@ export class Question {
     if (!questionData?.equation) return
     const existing = await (await _getDB()).questions.where('equation').equals(questionData.equation).toArray()
     if (existing.length > 0) {
-      await (await _getDB()).questions.update(existing[0].id, questionData)
+      (await _getDB()).questions.update(existing[0].id, questionData)
     } else {
-      await (await _getDB()).questions.add(questionData)
+      (await _getDB()).questions.add(questionData)
     }
   }
 }
@@ -303,124 +304,5 @@ export class Question {
 // ═══════════════════════════════════════════════════════════
 
 /** 运算符字符 → DIFFICULTY_LEVELS 数字编码 */
-const _OP_TO_NUM = { '+': 1, '-': 2, '*': 3, '/': 4, '×': 3, '÷': 4, '＋': 1, '－': 2 }
-
-/** 从算式拆出两个操作数（保持原始顺序：a=被加数/被减数） */
-function _parseOperands(equation, operator) {
-  if (!equation || !operator) return [null, null]
-  const eq = equation.replace(/=.*$/, '').trim()
-  const idx = eq.indexOf(operator)
-  if (idx === -1) return [null, null]
-  const left = parseInt(eq.substring(0, idx).trim())
-  const right = parseInt(eq.substring(idx + 1).trim())
-  if (isNaN(left) || isNaN(right)) return [null, null]
-  return [left, right]
-}
-
-/** 加法是否进位（个位相加≥10） */
-function _isCarry(a, b) {
-  return (a % 10) + (b % 10) >= 10
-}
-
-/** 减法是否退位（被减数个位 < 减数个位；非减法返回 false） */
-function _isBorrow(a, b, opNum) {
-  if (opNum !== 2) return false
-  return (a % 10) < (b % 10)
-}
-
-/**
- * 将一道题匹配到 DIFFICULTY_LEVELS 档位
- * （无状态纯函数，不读任何外部状态 / IO）
- *
- * @param {object} answer - 答题记录
- * @param {string} answer.equation - 算式，"12+5=__" 或 "12+5=17"
- * @param {string} [answer.operator] - 运算符 '+' | '-' | '*' | '/'
- * @param {number} [answer.operandMin] - 最小操作数（有则跳过解析）
- * @param {number} [answer.operandMax] - 最大操作数
- * @param {boolean} [answer.isCarry] - 是否进位（有则跳过计算）
- * @param {boolean} [answer.isBorrow] - 是否退位
- * @returns {{ levelIdx: number, label: string } | null}
- */
-export function matchLevel(answer) {
-  if (!answer || !answer.equation) return null
-
-  // 运算符：优先用显式字段，否则从算式首字符提取
-  const opChar = answer.operator || answer.equation.replace(/=.*$/, '').trim().match(/[+\-*/×÷＋－]/)?.[0] || ''
-  const opNum = _OP_TO_NUM[opChar]
-  if (opNum == null) return null
-
-  // 提取操作数（优先用已有字段，否则解算式）
-  const [a, b] = (answer.operandMin != null && answer.operandMax != null)
-    ? [answer.operandMin, answer.operandMax]
-    : _parseOperands(answer.equation, opChar)
-  if (a == null || b == null) return null
-
-  const operandMin = Math.min(a, b)
-  const operandMax = Math.max(a, b)
-
-  // 进位/退位判定
-  const hasCarry = answer.isCarry ?? _isCarry(a, b)
-  const hasBorrow = answer.isBorrow ?? _isBorrow(a, b, opNum)
-
-  // 逐级匹配 DIFFICULTY_LEVELS
-  for (let i = 0; i < DIFFICULTY_LEVELS.length; i++) {
-    const level = DIFFICULTY_LEVELS[i]
-
-    // 进退位约束（仅加减法）
-    if (opNum === 1) {
-      if (level.carry === '2' && !hasCarry) continue
-      if (level.carry === '3' && hasCarry) continue
-    }
-    if (opNum === 2) {
-      if (level.abdication === '2' && !hasBorrow) continue
-      if (level.abdication === '3' && hasBorrow) continue
-    }
-
-    // 数字范围 + 运算符匹配
-    const rangeMatch = (() => {
-      const specific = level.formulaList.find(f => {
-        if (operandMax > f.max) return false
-        if (!(operandMin >= f.min || operandMax >= f.min)) return false
-        return f.operators != null && f.operators.includes(opNum)
-      })
-      if (specific) return true
-      const hasExplicitOp = level.formulaList.some(f => f.operators != null)
-      if (hasExplicitOp) return false
-      return level.formulaList.some(f => {
-        if (operandMax > f.max) return false
-        if (!(operandMin >= f.min || operandMax >= f.min)) return false
-        return f.operators == null
-      })
-    })()
-    if (!rangeMatch) continue
-
-    return { levelIdx: i, label: level.label }
-  }
-
-  return null
-}
-
-/**
- * 将答题记录按 matchLevel 分组，每组合计总数和正确数
- * 供动态微调计算本轮 strongLevels/weakLevels
- *
- * @param {Array} answers - 答题记录数组
- * @returns {Array<{levelIdx:number, label:string, total:number, correct:number, accuracy:number}>}
- */
-export function groupAnswersByLevel(answers) {
-  const map = {}
-  for (const a of (answers || [])) {
-    const match = matchLevel(a)
-    if (!match) continue
-    const key = match.levelIdx
-    if (!map[key]) {
-      map[key] = { levelIdx: key, label: match.label, total: 0, correct: 0 }
-    }
-    map[key].total++
-    if (a.isCorrect) map[key].correct++
-  }
-  return Object.values(map).map((g) => ({
-    ...g,
-    accuracy: g.total > 0 ? g.correct / g.total : 0,
-  }))
-}
+// ── matchLevel + groupAnswersByLevel 已迁至 ./matchLevel ──────
+// =========================================================================

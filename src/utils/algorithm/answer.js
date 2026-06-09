@@ -156,8 +156,16 @@ export class Answer extends Question {
     return Number(answerLike?.userAnswer) === Number(answerLike?.solution)
   }
 
-  static fromJSON(plain) {
-    return new Answer(plain)
+  /** 此 Answer 是否在 N 天以内 */
+  isRecent(days) {
+    const cutoff = Date.now() - days * 864e5
+    return (this.timestamp ?? this.startedAt ?? 0) >= cutoff
+  }
+
+  /** operand 范围是否与 [min, max] 重叠 */
+  matchesOperand(min, max) {
+    return (this.operandMax ?? 0) >= min
+        && (this.operandMin ?? 0) <= max
   }
 
   /** 单题学习曲线（答题历史时间序列） */

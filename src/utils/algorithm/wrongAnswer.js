@@ -20,9 +20,6 @@ export class WrongAnswer extends Answer {
   constructor(raw) {
     super(raw)
   }
-  static fromJSON(plain) {
-    return new WrongAnswer(plain)
-  }
   // ── 查询（静态） ──
   /**
    * 纯函数过滤 + 排序错题数组。
@@ -57,17 +54,6 @@ export class WrongAnswer extends Answer {
       .sort((a, b) => (b.timestamp ?? b.startedAt ?? 0)
                     - (a.timestamp ?? a.startedAt ?? 0))
       .slice(0, limit || Infinity)
-  }
-  // ── 便捷查询（实例方法） ──
-  /** 此错题是否在 N 天以内 */
-  isRecent(days) {
-    const cutoff = Date.now() - days * 864e5
-    return (this.timestamp ?? this.startedAt ?? 0) >= cutoff
-  }
-  /** 此错题的 operand 范围是否与 [min, max] 重叠 */
-  matchesOperand(min, max) {
-    return (this.operandMax ?? 0) >= min
-        && (this.operandMin ?? 0) <= max
   }
   // ── 继承自 Question 的查询方法，重载以限为错题 ──
   /**

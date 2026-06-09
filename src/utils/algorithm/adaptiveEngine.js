@@ -708,4 +708,4 @@ export function adjustNextQuestion(engine, roundAnswers, nextIdx, listPractices,
 //   constants/difficulty       → DIFFICULTY_LEVELS
 //   utils/algorithm/question   → matchLevel, groupAnswersByLevel
 export { DIFFICULTY_LEVELS } from '../../constants/difficulty'
-export { matchLevel, groupAnswersByLevel } from './question'
+export { matchLevel, groupAnswersByLevel } from './matchLevel'
