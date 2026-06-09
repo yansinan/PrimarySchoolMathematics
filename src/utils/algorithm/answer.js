@@ -17,39 +17,21 @@
 
 import { Question } from './question'
 import { DB } from '@/services/databaseInit'
+// 引入 DB Answer 确保 domain Answer 覆盖其全部字段
+import { Answer as DBAnswer } from '@/services/databaseInit'
 
 export class Answer extends Question {
-  /**
-   * @param {Object} raw — db.answers 表的 plain object
-   *   或 useSubmitHandler 构造的 answerEntry
-   */
+  /** @param {Object} [raw] — db.answers 行或 useSubmitHandler 构造的 answerEntry */
   constructor(raw) {
-    if (!raw) throw new Error('Answer: raw is required')
     super(raw)
-
-    // 答题主体
-    this.userAnswer = raw.userAnswer
-
-    // 答题元数据
+    if (!raw) return
+    // Override DB 默认值（0→null/undefined）用于空值语义
     this.responseTime = raw.responseTime ?? null
-    this.questionIndex = raw.questionIndex ?? 0
-
-    // 时间戳
-    this.timestamp = raw.timestamp ?? Date.now()
+    this.previousAttemptCount = raw.previousAttemptCount ?? (raw.attemptCount != null ? Math.max(0, raw.attemptCount - 1) : 0)
+    this.correctedAt = raw.correctedAt ?? null
     this.startedAt = raw.startedAt ?? null
     this.endedAt = raw.endedAt ?? null
-
-    // 重试上下文（attemptCount getter 用）
-    //   兼容老数据：stored attemptCount 字段 → 反推 previousAttemptCount
-    //   getter = previousAttemptCount + 1 = attemptCount（逻辑一致）
-    this.previousAttemptCount = raw.previousAttemptCount ?? (raw.attemptCount != null ? Math.max(0, raw.attemptCount - 1) : 0)
-
-    // 错题修正时间戳（user action，isFixed getter 用）
-    this.correctedAt = raw.correctedAt ?? null
-
-    // 系统字段（来自 db.answers）
-    this.sessionId = raw.sessionId
-    this.questionId = raw.questionId
+    this.questionIndex = raw.questionIndex ?? 0
   }
 
   // ── 派生属性（getter）──

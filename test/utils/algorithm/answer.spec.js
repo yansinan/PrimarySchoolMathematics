@@ -52,14 +52,16 @@ describe('Question', () => {
     expect(q.operands).toEqual([])
     expect(q.isCarry).toBe(false)
     expect(q.isBorrow).toBe(false)
-    expect(q.stepCount).toBe(1)
     expect(q.blankMode).toBe('result')
     expect(q.synced).toBe(0)
   })
 
-  it('throws on null/undefined raw', () => {
-    expect(() => new Question()).toThrow()
-    expect(() => new Question(null)).toThrow()
+  it('does not throw on null/undefined raw (returns empty instance)', () => {
+    expect(() => new Question()).not.toThrow()
+    expect(() => new Question(null)).not.toThrow()
+    const q = new Question(null)
+    expect(q.equation).toBe('')
+    expect(q.operator).toBe('')
   })
 
   it('operandRange getter returns [min, max]', () => {

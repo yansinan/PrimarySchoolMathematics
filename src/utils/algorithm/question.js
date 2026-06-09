@@ -10,41 +10,17 @@
 
 import { DIFFICULTY_LEVELS } from '@/constants/difficulty'
 import { matchLevel, groupAnswersByLevel } from './matchLevel'
-import { DB } from '@/services/databaseInit'
+import { DB, Question as DBQuestion } from '@/services/databaseInit'
 
-export class Question {
+export class Question extends DBQuestion {
   static _getDB() { return DB }
-  /**
-   * @param {Object} raw — db.questions 表的 plain object
-   *   或 useSubmitHandler 构造的 currentQuestion
-   */
+  /** @param {Object} [raw] — db.questions 行或 useSubmitHandler 构造的 currentQuestion */
   constructor(raw) {
-    if (!raw) throw new Error('Question: raw is required')
-
-    // 必填：题目主体
-    this.equation = raw.equation
-    this.solution = raw.solution ?? 0
-
-    // 题目元数据
-    this.operator = raw.operator ?? ''
-    this.difficulty = raw.difficulty ?? 0
-    this.operandMin = raw.operandMin ?? 0
-    this.operandMax = raw.operandMax ?? 0
-    this.operands = raw.operands ?? []
-    this.isCarry = raw.isCarry ?? false
-    this.isBorrow = raw.isBorrow ?? false
-    this.stepCount = raw.stepCount ?? 1
-
-    // 显示相关
-    this.inputMode = raw.inputMode ?? ''
-    this.layout = raw.layout ?? ''
-    this.assistLevel = raw.assistLevel ?? 0
-    this.blankMode = raw.blankMode ?? 'result'
-
-    // 系统字段（来自 db.questions）
-    this.id = raw.id
-    this.createdAt = raw.createdAt
-    this.synced = raw.synced ?? 0
+    super()  // DB schema 默认值（equation='', solution=0, …）
+    if (!raw) return  // 保留 DB 默认值（mapToClass 空行用）
+    // 只复制非 getter 字段（避免 Answer 的只读 getter 被 Object.assign 覆盖）
+    const { isCorrect, attemptCount, score, ...rest } = raw
+    Object.assign(this, rest)
   }
 
   // ── 派生属性 ──

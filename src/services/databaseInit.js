@@ -127,3 +127,5 @@ class PracticeDB extends Dexie {
 const db = new PracticeDB()
 export { db as DB }
 export default db
+// ─── Schema classes（供 domain 类继承对齐） ──────────────────────────
+export { PracticeSession, Answer, Question }
