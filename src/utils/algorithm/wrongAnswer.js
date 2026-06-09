@@ -14,7 +14,9 @@
  * @see answer.js — 父类
  */
 
-import { Answer } from './'
+// 注：DB 使用动态 import（循环依赖：services/database → score.js → answer → question）
+import { Answer, Question } from './'
+// DB 使用动态 import（同上）
 
 export class WrongAnswer extends Answer {
 
@@ -108,5 +110,59 @@ export class WrongAnswer extends Answer {
       .map(a => (a instanceof WrongAnswer) ? a : WrongAnswer.fromJSON(a))
       .filter(a => !a.isCorrect)
     return super.filterByLevel(scoped, levelIdx)
+  }
+
+  // ── DB 查询 ──
+
+  /**
+   * 错题查询（DB → filterBy 合并）
+   * @param {Object} [opts]
+   * @param {string} [opts.operator]
+   * @param {number} [opts.minOperand]
+   * @param {number} [opts.maxOperand]
+   * @param {number} [opts.days=30]
+   * @param {number} [opts.limit=20]
+   * @param {boolean} [opts.includeFixed=false]
+   * @returns {Promise<WrongAnswer[]>}
+   */
+  static async getWrongAnswers(opts = {}) {
+    const { operator, minOperand, maxOperand, days = 30, limit = 20, includeFixed = false } = opts
+    const cutoff = Date.now() - days * 86400e3
+    const { DB: DB_ } = await import('@/services/database')
+
+    let candidates
+    if (operator) {
+      const qList = await DB_.questions.where('operator').equals(operator).toArray()
+      const qIds = qList.map((q) => q.id)
+      if (!qIds.length) return []
+      candidates = await DB_.answers
+        .where('questionId').anyOf(qIds)
+        .and((a) => a.timestamp > cutoff)
+        .toArray()
+    } else {
+      candidates = await DB_.answers
+        .where('timestamp').above(cutoff)
+        .and((a) => !Answer.isCorrect(a))
+        .toArray()
+    }
+
+    if (!candidates.length) return []
+
+    const filtered = WrongAnswer.filterBy(candidates, { minOperand, maxOperand, includeFixed, limit })
+    // 批量 join questions（取出权威字段）
+    const qIds = [...new Set(filtered.map(a => a.questionId).filter(Boolean))]
+    const qMap = await Question.loadByIds(qIds)
+    return filtered.map(a => {
+      const q = a.questionId != null ? qMap.get(a.questionId) : null
+      return WrongAnswer.fromJSON({
+        ...a,
+        equation: q?.equation ?? a.equation,
+        operator: q?.operator ?? a.operator,
+        solution: q?.solution ?? a.solution,
+        difficulty: q?.difficulty ?? (a.difficulty ?? null),
+        isCarry: q?.isCarry ?? !!a.isCarry,
+        isBorrow: q?.isBorrow ?? !!a.isBorrow,
+      })
+    })
   }
 }

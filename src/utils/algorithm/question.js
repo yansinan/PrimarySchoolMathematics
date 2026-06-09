@@ -9,6 +9,7 @@
  */
 
 import { DIFFICULTY_LEVELS } from '@/constants/difficulty'
+// DB 使用动态 import（@/services/database → score.js → answer 循环依赖）
 
 export class Question {
   /**
@@ -205,8 +206,8 @@ export class Question {
    */
   static async loadByIds(ids) {
     if (!ids?.length) return new Map()
-    const { default: db } = await import('@/utils/store/database')
-    const qs = await db.questions.where('id').anyOf(ids).toArray()
+    const { DB: DB_ } = await import('@/services/database')
+    const qs = await DB_.questions.where('id').anyOf(ids).toArray()
     return new Map(qs.map(q => [q.id, Question.fromJSON(q)]))
   }
 
@@ -229,6 +230,80 @@ export class Question {
       }
     }
     return [...digits]
+  }
+
+  // ── DB 查询（直接读 services/database，U 层领域查询） ──
+
+  /**
+   * 查找等价题（交换律 + 事实家族 + =__ 兼容）
+   * @param {string} equation
+   * @returns {Promise<Question[]>}
+   */
+  static async findEquivalent(equation) {
+    if (!equation) return []
+    const { DB: DB_ } = await import('@/services/database')
+    const all = await DB_.questions.toArray()
+    return Question.findByEquation(all, equation, { exact: false })
+  }
+
+  /**
+   * 查找相关题（同 operator + 数字在 ±range 内，按欧氏距离升序）
+   * @param {string} equation
+   * @param {{range?:number, limit?:number}} [opts]
+   * @returns {Promise<Question[]>}
+   */
+  static async findRelated(equation, { range = 3, limit = 10 } = {}) {
+    const triple = Question._parseEquationTriple(equation)
+    if (!triple) return []
+    const { bodyA, bodyB, op } = triple
+    const { DB: DB_ } = await import('@/services/database')
+    const all = await DB_.questions.where('operator').equals(op).toArray()
+    const leftMin = bodyA - range; const leftMax = bodyA + range
+    const rightMin = bodyB - range; const rightMax = bodyB + range
+    const candidates = []
+    for (const plain of all) {
+      if (plain.equation === equation) continue
+      const q = plain instanceof Question ? plain : Question.fromJSON(plain)
+      const qt = Question._parseEquationTriple(q.equation || '')
+      if (!qt) continue
+      if (qt.bodyA < leftMin || qt.bodyA > leftMax) continue
+      if (qt.bodyB < rightMin || qt.bodyB > rightMax) continue
+      candidates.push(q)
+    }
+    const decorated = candidates.map(q => {
+      const qt = Question._parseEquationTriple(q.equation || '')
+      return qt && { q, dist: Math.hypot(qt.bodyA - bodyA, qt.bodyB - bodyB) }
+    }).filter(Boolean)
+    decorated.sort((a, b) => a.dist - b.dist)
+    return decorated.map(d => d.q).slice(0, limit)
+  }
+
+  /**
+   * 单题学习曲线（答题历史时间序列）
+   * @param {number} questionId
+   * @param {{days?:number}} [opts]
+   * @returns {Promise<Answer[]>} — Answer 实例数组（含有效 responseTime）
+   */
+  static async getLearningCurve(questionId, { days = 30 } = {}) {
+    if (questionId == null) return []
+    const cutoff = Date.now() - days * 86400e3
+    const { DB: DB_ } = await import('@/services/database')
+    const raw = await DB_.answers
+      .where('questionId').equals(questionId)
+      .toArray()
+    const { Answer } = await import('./answer')
+    return raw
+      .filter(a => a.startedAt > cutoff)
+      .sort((a, b) => a.startedAt - b.startedAt)
+      .map((a, idx) => {
+        const ans = a instanceof Answer ? a : new Answer(a)
+        return {
+          timestamp: ans.timestamp, startedAt: ans.startedAt, endedAt: ans.endedAt,
+          isCorrect: ans.isCorrect,
+          responseTime: ans.effectiveResponseTime, isTimeout: ans.isTimeout,
+          userAnswer: ans.userAnswer, attemptIndex: idx,
+        }
+      })
   }
 }
 

@@ -54,12 +54,7 @@ import { WrongAnswer } from '@/utils/algorithm/wrongAnswer'
  * @returns {Promise<Array<object>>} - 命中的 Question 记录
  */
 export async function findEquivalent(equation) {
-  if (!equation) return []
-  // 用 Question.findByEquation 找等价族（交换律 + 事实家族 + =__ 形式兼容）
-  // 注：原实现只查加法交换律 + DB where('equation')anyOf；新版统一走内存匹配
-  // 优点：内部解析升级（×÷、负数、__ 占位）自动受益
-  const all = await db.questions.toArray()
-  return Question.findByEquation(all, equation, { exact: false })
+  return Question.findEquivalent(equation)
 }
 
 /**
@@ -77,39 +72,7 @@ export async function findEquivalent(equation) {
  * @returns {Promise<Array<object>>} - 按欧氏距离升序的 Question 记录
  */
 export async function findRelated(equation, { range = 3, limit = 10 } = {}) {
-  const triple = Question._parseEquationTriple(equation)
-  if (!triple) return []
-
-  const { bodyA, bodyB, op } = triple
-
-  // 按 operator 查（无 leftOperand 索引，全量加载后内存过滤）
-  // 注：questions.operator 字段是字符串（'+'/'-'/'×'/'÷'）而非 opNum
-  const all = await db.questions.where('operator').equals(op).toArray()
-
-  const leftMin = bodyA - range
-  const leftMax = bodyA + range
-  const rightMin = bodyB - range
-  const rightMax = bodyB + range
-
-  // 范围过滤 + 排除自身（用 Question.fromJSON 解析）
-  const candidates = []
-  for (const plain of all) {
-    if (plain.equation === equation) continue
-    const q = plain instanceof Question ? plain : Question.fromJSON(plain)
-    const qt = Question._parseEquationTriple(q.equation || '')
-    if (!qt) continue
-    if (qt.bodyA < leftMin || qt.bodyA > leftMax) continue
-    if (qt.bodyB < rightMin || qt.bodyB > rightMax) continue
-    candidates.push(q)
-  }
-
-  // 按欧氏距离升序（Schwartzian transform：先 map 预解析，再 sort，最后 strip）
-  const decorated = candidates.map((q) => {
-    const qt = Question._parseEquationTriple(q.equation || '')
-    return qt && { q, dist: Math.hypot(qt.bodyA - bodyA, qt.bodyB - bodyB) }
-  }).filter(Boolean)
-  decorated.sort((a, b) => a.dist - b.dist)
-  return decorated.map((d) => d.q).slice(0, limit)
+  return Question.findRelated(equation, { range, limit })
 }
 
 /**
@@ -308,76 +271,7 @@ export async function getWrongAnswers({
   days = 30,
   limit,
 } = {}) {
-  const cutoff = Date.now() - days * 86400e3
-  // 用静态方法 Answer.isCorrect(a) 走数学真理（userAnswer === solution）
-  const isWrong = (a) => !Answer.isCorrect(a)
-
-  // 1. 取错题（按 operator 是否给定选不同索引路径）
-  //    用 Dexie 索引查 → 内存里用 WrongAnswer.filterBy 统一过滤
-  let candidates
-  if (operator) {
-    // operator 索引在 questions 上：先拿到匹配的 questionId 集合
-    const qList = await db.questions.where('operator').equals(operator).toArray()
-    const qIds = qList.map((q) => q.id)
-    if (qIds.length === 0) return []
-    candidates = await db.answers
-      .where('questionId')
-      .anyOf(qIds)
-      .and((a) => a.timestamp > cutoff)
-      .toArray()
-  } else {
-    // 无 operator：直接用 timestamp 索引（主过滤条件）
-    candidates = await db.answers
-      .where('timestamp')
-      .above(cutoff)
-      .and(isWrong)
-      .toArray()
-  }
-
-  if (candidates.length === 0) return []
-
-  // 2. 用 WrongAnswer.filterBy 统一过滤（operandMin/Max/limit）
-  //    注意：isCorrect 已在 Dexie 层过滤，此处 set 已只含错题 → includeFixed 默认 false 仍生效
-  //    不传 operator：原版通过 db.questions.where('operator')=eq 走题目级索引
-  //    （answer.operator 是写入时的反规范副本，可能与 question.operator 不一致）
-  const filtered = WrongAnswer.filterBy(candidates, {
-    minOperand: operandMin,
-    maxOperand: operandMax,
-    days,            // days 也已应用，filterBy 内部会再算一次 cutoff，幂等
-    limit,
-  })
-
-  if (filtered.length === 0) return []
-
-  // 3. 批量 join questions：拿 difficulty / isCarry / isBorrow
-  //    （answer 记录里也有 isCarry/isBorrow，但 question 是权威源）
-  const uniqueQIds = [
-    ...new Set(filtered.map((a) => a.questionId).filter((id) => id != null)),
-  ]
-  const qMap = await Question.loadByIds(uniqueQIds)
-
-  // 4. 拼装返回结构（保持原 shape 不变）
-  return filtered.map((a) => {
-    const q = a.questionId != null ? qMap.get(a.questionId) : null
-    return {
-      answerId: a.id,
-      questionId: a.questionId ?? null,
-      // 以下字段 question 是权威源（answer 行里的是写入时的反规范化副本，可能过期）
-      // 找不到 question 时回落到 answer 旧字段，与 difficulty/isCarry/isBorrow 一致
-      equation: q ? q.equation : a.equation,
-      operator: q ? q.operator : a.operator,
-      solution: q ? q.solution : a.solution,
-      operandMin: q ? q.operandMin : a.operandMin,
-      operandMax: q ? q.operandMax : a.operandMax,
-      userAnswer: a.userAnswer,
-      responseTime: a.responseTime,
-      timestamp: a.timestamp,
-      // 来自 questions（找不到时回落到 answer 旧字段）
-      difficulty: q ? q.difficulty : (a.difficulty ?? null),
-      isCarry: q ? q.isCarry : !!a.isCarry,
-      isBorrow: q ? q.isBorrow : !!a.isBorrow,
-    }
-  })
+  return WrongAnswer.getWrongAnswers({ operator, minOperand: operandMin, maxOperand: operandMax, days, limit })
 }
 
 /**
@@ -614,34 +508,7 @@ export async function prioritizeWrongAnswers({ limit = 20 } = {}) {
  * }>>}
  */
 export async function getLearningCurve(questionId, { days = 30 } = {}) {
-  if (questionId == null) return []
-
-  // 命中 questionId 索引；时间窗口内存过滤（与 evaluateCorrectionEffect 一致）
-  const cutoff = Date.now() - days * 86400e3
-  const raw = await db.answers
-    .where('questionId')
-    .equals(questionId)
-    .toArray()
-  const answers = raw
-    .filter((a) => a.startedAt > cutoff)
-    .sort((a, b) => a.startedAt - b.startedAt)
-
-  if (answers.length === 0) return []
-
-  return answers.map((a, idx) => {
-    // 用 Answer getter 读 isCorrect、effectiveResponseTime 等
-    const ans = a instanceof Answer ? a : new Answer(a)
-    return {
-      timestamp: ans.timestamp,
-      startedAt: ans.startedAt,
-      endedAt: ans.endedAt,
-      isCorrect: ans.isCorrect,  // 用 Answer getter（统一计算）
-      responseTime: ans.effectiveResponseTime,
-      isTimeout: ans.isTimeout,
-      userAnswer: ans.userAnswer,
-      attemptIndex: idx,
-    }
-  })
+  return Question.getLearningCurve(questionId, { days })
 }
 
 /**
