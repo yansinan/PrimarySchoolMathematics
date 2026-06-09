@@ -1,16 +1,5 @@
-/**
- * 数据访问（U 层）— CRUD 函数集合。
- *
- * PracticeDB 类 + db 实例已移至 @/services/databaseInit（纯叶子模块）。
- * 本文件从此获取 DB 实例，提供 session/stat/export/import CRUD。
- *
- * @see services/databaseInit.js — PracticeDB 定义 + db 实例
- * @see services/database.js — S 层代理（re-export 垫片）
- */
-
-import { parseEquation } from '@/utils/algorithm/equationParser'
 import { DB } from '@/services/databaseInit'
-
+import { parseEquation } from '@/utils/algorithm/equationParser'
 const db = DB
 
 // ─── Session CRUD ──────────────────────────────────────────────────────
@@ -121,37 +110,7 @@ function emptyStats() {
   return { totalSessions: 0, totalQuestions: 0, totalCorrect: 0, overallAccuracy: 0, operatorStats: {}, carryStats: { withCarry: { count: 0, correct: 0 }, withoutCarry: { count: 0, correct: 0 } }, borrowStats: { withBorrow: { count: 0, correct: 0 }, withoutBorrow: { count: 0, correct: 0 } }, stepStats: {}, numberStats: [], weakNumbers: [], dailyStreak: 0 }
 }
 
-// ─── Export / Import ──────────────────────────────────────────────────
+// ─── 3 函数已迁至 @/services/database（exportAllData/importAllData/clearAllData）──
+// ─── Session CRUD ──────────────────────────────────────────────────────
 
-export async function exportAllData(studentId = 'default') {
-  const sessions = await db.practiceSessions.where('studentId').equals(studentId).toArray()
-  const sessionIds = sessions.map(s => s.id)
-  const answers = sessionIds.length ? await db.answers.where('sessionId').anyOf(sessionIds).toArray() : []
-  const snapshots = await db.abilitySnapshots.where('studentId').equals(studentId).toArray()
-  const questions = await db.questions.toArray()
-  return { version: '2.0', exportedAt: new Date().toISOString(), studentId, sessions, answers, abilitySnapshots: snapshots, questions }
-}
-
-export async function importAllData(data) {
-  if (!data?.sessions) return { importedSessions: 0, skippedSessions: 0 }
-  let importedSessions = 0
-  for (const session of data.sessions) {
-    if (await db.practiceSessions.where('id').equals(session.id).first()) continue
-    const { answers: _, ...sessionData } = session
-    await db.practiceSessions.add(sessionData)
-    importedSessions++
-    const sessAnswers = (data.answers || []).filter(a => a.sessionId === session.id)
-    if (sessAnswers.length) await db.answers.bulkAdd(sessAnswers.map(a => { const { _answers, ...rest } = a; return rest }))
-  }
-  return { importedSessions, skippedSessions: 0 }
-}
-
-export async function clearAllData() {
-  await db.transaction('rw', db.practiceSessions, db.answers, async () => {
-    await db.practiceSessions.clear(); await db.answers.clear()
-  })
-  try { localStorage.removeItem('psm_profile') } catch {}
-}
-
-export { db as default }
-export { DB } from '@/services/databaseInit'
+export { default, DB } from '@/services/databaseInit'

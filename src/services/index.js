@@ -18,3 +18,4 @@ export * from './abilityProfile'
 export * from './sessionPersistence'
 // 注意: wrongAnswerService 不走桶 — 与 analysis.js#getWrongAnswers 同名冲突
 // 调用方直引: import { getWrongAnswers } from '@/services/wrongAnswerService'
+export * from './databaseInit'

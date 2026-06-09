@@ -32,9 +32,8 @@ import {
   getSessionDetail,
   getAggregatedStats,
   deleteSession as dbDeleteSession,
-  exportAllData,
-  importAllData,
 } from '@/utils/store/database'
+import { exportAllData, importAllData } from '@/services/database'
 import { Answer } from '@/utils/algorithm/answer'
 
 export function useStatsQuery() {
