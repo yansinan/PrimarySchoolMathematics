@@ -16,6 +16,7 @@
 // P5 v2.3.0: generatePracticeConfig 不再被 adaptiveEngine 调用
 // import { generatePracticeConfig } from './diagnostic'
 import { sumResponseTimes } from '../score'
+import { EquationSolver } from './EquationSolver'
 import {
   ACCURACY_THRESHOLDS,
   SPEED_THRESHOLDS,
@@ -41,6 +42,18 @@ const GROUP_SIZES = [6, 10, 14, 18, 22]
 // ─── 为选择题生成干扰选项 ───
 function generateDistractors(correct, count, wrongPool = [], equation = '') {
   const distractors = new Set()
+
+  // P0: 参数验证 — 无效 correct 直接返回（调用方自动降级）
+  if (correct == null || isNaN(correct) || correct <= 0) return []
+
+  // P0: 校验 correct 是否与 equation 一致（equation 有解时）
+  if (equation) {
+    const expected = EquationSolver.solve(equation)
+    if (expected != null && expected > 0 && expected !== correct) {
+      console.warn('[generateDistractors] correct=%d != solve(%s)=%d → 降级', correct, equation, expected)
+      return []
+    }
+  }
 
   // P0: 从错题池找等价算式的错误答案（含交换律 + 事实家族）
   if (wrongPool.length && equation) {
@@ -264,13 +277,26 @@ export function diversifyBatch(baseEquations, engine) {
     let options = undefined
 
     // 统一使用 result 填空
-    const eqPart = equation.replace(/\=$/, '').split('=')[0]
+    const eqPart = equation.replace(/\\=$/, '').split('=')[0]
     equation = `${eqPart}=__`
+
+    // P0: 校验 solution 与 equation 一致（防止 metadata 脏数据出无正确答案的选择题）
+    const recomputed = EquationSolver.solve(equation)
+    const mismatch = recomputed == null || recomputed !== solution
+    if (mismatch) {
+      // equation-solution 失配 → 降级为 keypad（不要出无正确答案的选项）
+      return { ...q, equation, solution, options: undefined, inputMode: 'vertical_keypad' }
+    }
 
     // 选择题 → 生成干扰选项
     if (modeConfig.input === 'options' && modeConfig.optionCount > 0) {
       const count = modeConfig.optionCount
       const distractors = generateDistractors(solution, count - 1, engine.wrongAnswerPool, q.equation)
+      // P0: 校验 distractor 合法性
+      if (distractors.length < count - 1) {
+        // distractor 不足 → 降级为 keypad
+        return { ...q, equation, solution, options: undefined, inputMode: 'vertical_keypad' }
+      }
       options = [solution, ...distractors].sort(() => Math.random() - 0.5)
     }
 
