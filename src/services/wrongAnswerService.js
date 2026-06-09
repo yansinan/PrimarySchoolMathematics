@@ -2,16 +2,19 @@
  * 错题服务（S 层）— v4.0b
  *
  * 基于 services/database.js（v4.0a 薄封装）提供错题 CRUD + 多维过滤。
+ * 读取时通过 Answer.fromJSON(plain) 包成 Answer 实例，所有判断走 getter（isWrong/isFixed）。
+ *
  * 与 services/analysis.js#getWrongAnswers 关系：分析服务用 readonly 视角
  * （拼接题目表，做统计），本服务是错题"全生命周期"管理（查/标修正/删/清空）。
  *
  * 调用方：import { getWrongAnswers } from '@/services/wrongAnswerService'
  *
  * @see v4-PLAN-error-injection.md § v4.0b
- * @see ARCHITECTURE.md § 1.1 S 层 = 领域规则
+ * @see utils/algorithm/answer.js Answer 类
  */
 
 import { DB, getAllAnswers } from '@/services/database'
+import { Answer } from '@/utils/algorithm/answer'
 
 /**
  * 错题查询（多维过滤，按 timestamp 倒序）
@@ -23,7 +26,7 @@ import { DB, getAllAnswers } from '@/services/database'
  * @param {number} [opts.days=30]        — 近 N 天
  * @param {number} [opts.limit=20]       — 返回条数
  * @param {boolean} [opts.includeFixed=false] — 是否包含已标记修正的
- * @returns {Promise<Array<AnswerRecord>>}
+ * @returns {Promise<Array<Answer>>} — Answer 实例数组（isWrong/isFixed getter）
  */
 export async function getWrongAnswers(opts = {}) {
   const {
@@ -40,14 +43,13 @@ export async function getWrongAnswers(opts = {}) {
   const cutoff = Date.now() - days * 864e5
 
   return all
-    .filter(a => a.isCorrect === false)
+    .map(plain => Answer.fromJSON(plain))   // ← 包成 Answer 实例
+    .filter(a => !a.isCorrect)              // ← 仅"用户答错过"（含已修正的）
     .filter(a => !operator || a.operator === operator)
     // operand 范围"重叠"语义：错题 [minQ, maxQ] 与查询 [minF, maxF] 有交集
-    //   错题在范围外: maxQ < minF 或 minQ > maxF
-    //   重叠: maxQ >= minF && minQ <= maxF
     .filter(a => minOperand == null || maxOperand == null
       || ((a.operandMax ?? 0) >= minOperand && (a.operandMin ?? 0) <= maxOperand))
-    .filter(a => includeFixed || a.correctedAt == null)
+    .filter(a => includeFixed || !a.isFixed)  // ← 用 getter
     .filter(a => (a.timestamp ?? a.startedAt ?? 0) >= cutoff)
     .sort((a, b) => (b.timestamp ?? b.startedAt ?? 0) - (a.timestamp ?? a.startedAt ?? 0))
     .slice(0, limit)
@@ -67,11 +69,12 @@ export async function countWrongAnswers(opts = {}) {
  * 按 equation 精确查找错题
  * @param {string} equation
  * @param {string} [studentId='default']
- * @returns {Promise<AnswerRecord|null>}
+ * @returns {Promise<Answer|null>}
  */
 export async function getWrongAnswerByEquation(equation, studentId = 'default') {
   const all = await getAllAnswers(studentId)
-  return all.find(a => a.equation === equation && a.isCorrect === false) || null
+  const found = all.find(a => a.equation === equation && a.isCorrect === false)
+  return found ? Answer.fromJSON(found) : null
 }
 
 /**
@@ -117,7 +120,7 @@ export async function clearWrongAnswers(studentId = 'default') {
   if (!sessionIds.length) return 0
 
   const answers = await DB.answers.where('sessionId').anyOf(sessionIds).toArray()
-  const wrongIds = answers.filter(a => a.isCorrect === false).map(a => a.id)
+  const wrongIds = answers.filter(a => !a.isCorrect).map(a => a.id)
   if (!wrongIds.length) return 0
 
   await DB.answers.bulkDelete(wrongIds)

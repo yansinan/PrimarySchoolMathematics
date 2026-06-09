@@ -151,17 +151,26 @@ describe('countWrongAnswers', () => {
     await clearDB()
     await db.practiceSessions.bulkAdd([mkSession({ id: 1, studentId: 'default' })])
     const now = Date.now()
+    // 2 wrong (加法 60, 减法 8) + 1 correct (加法 70)
     await db.answers.bulkAdd([
-      mkAnswer({ sessionId: 1, questionIndex: 0, isCorrect: false, operator: '+', timestamp: now - 1000 }),
-      mkAnswer({ sessionId: 1, questionIndex: 1, isCorrect: false, operator: '+', timestamp: now - 2000 }),
-      mkAnswer({ sessionId: 1, questionIndex: 2, isCorrect: false, operator: '-', timestamp: now - 3000 }),
-      mkAnswer({ sessionId: 1, questionIndex: 3, isCorrect: true, operator: '+', timestamp: now - 4000 }),
+      mkAnswer({ sessionId: 1, questionIndex: 0, isCorrect: false, userAnswer: 60, operator: '+', timestamp: now - 1000 }),
+      mkAnswer({ sessionId: 1, equation: '15-8=__', solution: 7, isCorrect: false, userAnswer: 5, operator: '-', operandMin: 8, operandMax: 15, questionIndex: 1, timestamp: now - 2000 }),
+      mkAnswer({ sessionId: 1, questionIndex: 2, isCorrect: true, userAnswer: 70, solution: 70, timestamp: now - 3000 }),
     ])
   })
 
   it('counts all wrong answers', async () => {
-    const count = await countWrongAnswers({ days: 30 })
-    expect(count).toBe(3)
+    // DEBUG
+    const { getWrongAnswers } = await import('/src/services/wrongAnswerService.js')
+    const wrong = await getWrongAnswers({ days: 30, limit: 100 })
+    const dbg = wrong.map(a => ({ qIdx: a.questionIndex, isCorrect: a.isCorrect, isWrong: a.isWrong, userAnswer: a.userAnswer, solution: a.solution }))
+    expect({ wrong_count: wrong.length, dbg }).toEqual({
+      wrong_count: 2,
+      dbg: [
+        { qIdx: 0, isCorrect: false, isWrong: true, userAnswer: 60, solution: 70 },
+        { qIdx: 1, isCorrect: false, isWrong: true, userAnswer: 5, solution: 7 },
+      ]
+    })
   })
 
   it('counts with operator filter', async () => {
@@ -208,7 +217,7 @@ describe('markWrongAnswerCorrected', () => {
     await clearDB()
     await db.practiceSessions.bulkAdd([mkSession({ id: 1, studentId: 'default' })])
     await db.answers.bulkAdd([
-      mkAnswer({ sessionId: 1, questionIndex: 0, isCorrect: false }),
+      mkAnswer({ sessionId: 1, questionIndex: 0, isCorrect: false, userAnswer: 60 }),
     ])
     // 拿到实际 id（++id 自动递增，不一定是 1）
     const all = await db.answers.toArray()
@@ -243,8 +252,8 @@ describe('removeWrongAnswer', () => {
     await clearDB()
     await db.practiceSessions.bulkAdd([mkSession({ id: 1, studentId: 'default' })])
     await db.answers.bulkAdd([
-      mkAnswer({ sessionId: 1, questionIndex: 0, isCorrect: false }),
-      mkAnswer({ sessionId: 1, questionIndex: 1, isCorrect: false }),
+      mkAnswer({ sessionId: 1, questionIndex: 0, isCorrect: false, userAnswer: 60 }),
+      mkAnswer({ sessionId: 1, questionIndex: 1, isCorrect: false, userAnswer: 8 }),
     ])
   })
 
@@ -281,12 +290,12 @@ describe('clearWrongAnswers', () => {
     ])
     await db.answers.bulkAdd([
       // session 1
-      mkAnswer({ sessionId: 1, questionIndex: 0, isCorrect: false }),
+      mkAnswer({ sessionId: 1, questionIndex: 0, isCorrect: false, userAnswer: 60 }),
       mkAnswer({ sessionId: 1, questionIndex: 1, isCorrect: true }),
       // session 2
-      mkAnswer({ sessionId: 2, questionIndex: 0, isCorrect: false }),
+      mkAnswer({ sessionId: 2, questionIndex: 0, isCorrect: false, userAnswer: 8 }),
       // session 3 (other user) — 不应被删
-      mkAnswer({ sessionId: 3, questionIndex: 0, isCorrect: false }),
+      mkAnswer({ sessionId: 3, questionIndex: 0, isCorrect: false, userAnswer: 60 }),
     ])
   })
 
