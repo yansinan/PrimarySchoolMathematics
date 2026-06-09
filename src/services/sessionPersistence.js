@@ -18,7 +18,8 @@
  */
 
 import { sumAnswerScores, sumResponseTimes } from '@/utils/score'
-import db, { saveSession, saveQuestion } from '@/utils/store/database'
+import db, { saveSession } from '@/utils/store/database'
+import { Question } from '@/utils/algorithm/question'
 
 /**
  * 持久化 1 个练习 session 到 IndexedDB。
@@ -104,7 +105,7 @@ export async function persistSingleAnswer(answer) {
     // 写 answers 表（不关联 sessionId，group checkpoint / final 时 persistSession 会再写带 sessionId 的完整 record）
     await db.answers.put(answer)
     // ✨ B-2 修复：同步写入 questions 表（equation 唯一键去重，首次创建后续复用 id）
-    await saveQuestion({
+    await Question.save({
       ...answer,
       operands: [answer.operandMin, answer.operandMax].filter(x => x > 0),
     })

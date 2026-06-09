@@ -31,11 +31,11 @@ import {
   getSessions,
   getSessionDetail,
   getAggregatedStats,
-  getAllAnswers,
   deleteSession as dbDeleteSession,
   exportAllData,
   importAllData,
 } from '@/utils/store/database'
+import { Answer } from '@/utils/algorithm/answer'
 
 export function useStatsQuery() {
   const store = useStatsStore()
@@ -93,7 +93,7 @@ export function useStatsQuery() {
   async function loadAllAnswers(studentId = 'default') {
     store.loading = true
     try {
-      store.allAnswers = await getAllAnswers(studentId)
+      store.allAnswers = await Answer.getAllByStudent(studentId)
     } catch (err) {
       console.error('[useStatsQuery] Failed to load all answers:', err)
       // 失败保持上次缓存, 不清空 (与原 store 行为一致)

@@ -284,13 +284,17 @@ export class Question {
    * @param {{days?:number}} [opts]
    * @returns {Promise<Answer[]>} — Answer 实例数组（含有效 responseTime）
    */
+  /**
+   * 单题学习曲线（答题历史时间序列）
+   * @param {number} questionId
+   * @param {{days?:number}} [opts]
+   * @returns {Promise<Answer[]>} — Answer 实例数组（含有效 responseTime）
+   */
   static async getLearningCurve(questionId, { days = 30 } = {}) {
     if (questionId == null) return []
     const cutoff = Date.now() - days * 86400e3
     const { DB: DB_ } = await import('@/services/database')
-    const raw = await DB_.answers
-      .where('questionId').equals(questionId)
-      .toArray()
+    const raw = await DB_.answers.where('questionId').equals(questionId).toArray()
     const { Answer } = await import('./answer')
     return raw
       .filter(a => a.startedAt > cutoff)
@@ -304,6 +308,21 @@ export class Question {
           userAnswer: ans.userAnswer, attemptIndex: idx,
         }
       })
+  }
+
+  /**
+   * 保存/更新一道题（upsert by equation）
+   * @param {Object} questionData — 须含 equation 字段
+   */
+  static async save(questionData) {
+    if (!questionData?.equation) return
+    const { DB: DB_ } = await import('@/services/database')
+    const existing = await DB_.questions.where('equation').equals(questionData.equation).toArray()
+    if (existing.length > 0) {
+      await DB_.questions.update(existing[0].id, questionData)
+    } else {
+      await DB_.questions.add(questionData)
+    }
   }
 }
 

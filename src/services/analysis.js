@@ -508,7 +508,7 @@ export async function prioritizeWrongAnswers({ limit = 20 } = {}) {
  * }>>}
  */
 export async function getLearningCurve(questionId, { days = 30 } = {}) {
-  return Question.getLearningCurve(questionId, { days })
+  return Answer.getLearningCurve(questionId, { days })
 }
 
 /**

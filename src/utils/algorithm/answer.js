@@ -158,4 +158,45 @@ export class Answer extends Question {
   static fromJSON(plain) {
     return new Answer(plain)
   }
+
+  /** 单题学习曲线（答题历史时间序列） */
+  static async getLearningCurve(questionId, { days = 30 } = {}) {
+    if (questionId == null) return []
+    const cutoff = Date.now() - days * 86400e3
+    const { DB: DB_ } = await import('@/services/database')
+    const raw = await DB_.answers.where('questionId').equals(questionId).toArray()
+    return raw
+      .filter(a => a.startedAt > cutoff)
+      .sort((a, b) => a.startedAt - b.startedAt)
+      .map((a, idx) => {
+        const ans = a instanceof Answer ? a : new Answer(a)
+        return {
+          timestamp: ans.timestamp, startedAt: ans.startedAt, endedAt: ans.endedAt,
+          isCorrect: ans.isCorrect,
+          responseTime: ans.effectiveResponseTime, isTimeout: ans.isTimeout,
+          userAnswer: ans.userAnswer, attemptIndex: idx,
+        }
+      })
+  }
+
+  /** 聚合多个 Answer 的 score（等效 sumAnswerScores） */
+  static sumScores(answers) {
+    if (!answers?.length) return 0
+    return answers.reduce((s, a) => {
+      const inst = a instanceof Answer ? a : new Answer(a)
+      return s + inst.score
+    }, 0)
+  }
+
+  /** 获取某学生全部答题（含 session config 增强） */
+  static async getAllByStudent(studentId = 'default') {
+    const { DB: DB_ } = await import('@/services/database')
+    const sessions = await DB_.practiceSessions.where('studentId').equals(studentId).toArray()
+    const sessionIds = sessions.map(s => s.id)
+    if (!sessionIds.length) return []
+    const answers = await DB_.answers.where('sessionId').anyOf(sessionIds).toArray()
+    const sessionMap = {}
+    for (const s of sessions) sessionMap[s.id] = s
+    return answers.map(a => ({ ...a, config: sessionMap[a.sessionId]?.config || null }))
+  }
 }

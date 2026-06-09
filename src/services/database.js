@@ -23,9 +23,5 @@ export {
   getAggregatedStats,
   exportAllData,
   importAllData,
-  getAllAnswers,
   clearAllData,
-  saveQuestion,
-  getQuestion,
-  getQuestionByEquation,
 } from '@/utils/store/database'

@@ -187,7 +187,7 @@ describe('getWrongAnswerByEquation', () => {
     await db.practiceSessions.bulkAdd([mkSession({ id: 1, studentId: 'default' })])
     await db.answers.bulkAdd([
       mkAnswer({ sessionId: 1, equation: '23+47=__', isCorrect: false }),
-      mkAnswer({ sessionId: 1, equation: '15+8=__', isCorrect: true }),
+      mkAnswer({ sessionId: 1, equation: '15+8=__', isCorrect: true, userAnswer: 70, solution: 70 }),
     ])
   })
 
@@ -291,7 +291,7 @@ describe('clearWrongAnswers', () => {
     await db.answers.bulkAdd([
       // session 1
       mkAnswer({ sessionId: 1, questionIndex: 0, isCorrect: false, userAnswer: 60 }),
-      mkAnswer({ sessionId: 1, questionIndex: 1, isCorrect: true }),
+      mkAnswer({ sessionId: 1, questionIndex: 1, isCorrect: true, userAnswer: 70, solution: 70 }),
       // session 2
       mkAnswer({ sessionId: 2, questionIndex: 0, isCorrect: false, userAnswer: 8 }),
       // session 3 (other user) — 不应被删
