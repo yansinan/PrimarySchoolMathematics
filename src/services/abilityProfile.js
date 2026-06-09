@@ -1,4 +1,5 @@
 /**
+import { Answer } from '@/utils/algorithm/answer'
  * 用户能力画像 — 实时计算 + 持久化（service 层）
  *
  * 路径演进：
@@ -27,7 +28,6 @@
 import { saveAbilitySnapshot } from '@/utils/store/database'
 import { DIAG_LEVELS } from '@/utils/algorithm/diagnostic'
 import { DIFFICULTY_LEVELS } from '@/utils/algorithm/adaptiveEngine'
-import { sumAnswerScores } from '@/utils/score'
 
 /**
  * 单等级评估辅助函数
@@ -37,7 +37,7 @@ function evaluateLevel(levelId, answers) {
   if (!la.length) return { correct: 0, total: 0, accuracy: 0, hasData: false }
   const correct = la.filter((a) => a.isCorrect === true).length
   const total = la.length
-  return { correct, total, accuracy: sumAnswerScores(la) / total, hasData: true }
+  return { correct, total, accuracy: Answer.sumScores(la) / total, hasData: true }
 }
 
 /**
@@ -60,7 +60,7 @@ export async function computeAndSaveAbilityProfile({
   const all = [...diagAnswers, ...adaptiveAnswers]
 
   const totalQuestions = all.length
-  const correctCount = sumAnswerScores(all)
+  const correctCount = Answer.sumScores(all)
   const accuracy = totalQuestions > 0 ? correctCount / totalQuestions : 0
 
   const strong = []

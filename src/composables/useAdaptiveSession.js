@@ -1,4 +1,5 @@
 /**
+import { Answer } from '@/utils/algorithm/answer'
  * 自适应会话管理 composable
  *
  * 拆分自 Practice.vue 的自适应会话逻辑（Phase 4 渐进式）。
@@ -26,7 +27,7 @@ import { generateDiagnosticQuestions, analyzeAbility } from '@/utils/algorithm/d
 import { createAdaptiveEngine, getGroupSize, evaluateGroup, getDifficultyLabel, generateQuestionPlan, adjustNextQuestion } from '@/utils/algorithm/adaptiveEngine'
 import { generateAdaptiveBatch } from '@/utils/algorithm/adaptiveBatch'
 import { getGroupComment, getCommentByRate } from '@/constants/practice'
-import { sumAnswerScores, sumResponseTimes } from '@/utils/score'
+import { sumResponseTimes } from '@/utils/score'
 import { TARGET_LIMITS } from '@/utils/form/formDefaults'
 import { formatDuration } from '@/utils/time/timeFormat'
 import { getWrongAnswers } from '@/services/wrongAnswerService'
@@ -257,7 +258,7 @@ export function useAdaptiveSession(options = {}) {
     if (result.done || forceDone) {
       // ── 全部完成 → 弹汇总弹窗 ──
       const finalAnswers = practiceStore.adaptiveAnswers
-      const totalCorrect = Math.round(sumAnswerScores(finalAnswers))
+      const totalCorrect = Math.round(Answer.sumScores(finalAnswers))
       const totalTime = sumResponseTimes(finalAnswers)
       const totalRate = Math.round((totalCorrect / finalAnswers.length) * 100)
       const { emoji, comment, color: rateColor2 } = getCommentByRate(totalRate)

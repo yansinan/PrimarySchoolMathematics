@@ -11,7 +11,6 @@
  */
 
 import db from '@/utils/store/database'
-import { getAnswerScore, sumAnswerScores } from '@/utils/score'
 import { Question } from '@/utils/algorithm/question'
 import { Answer } from '@/utils/algorithm/answer'
 import { WrongAnswer } from '@/utils/algorithm/wrongAnswer'
@@ -121,8 +120,8 @@ export async function getMasteryByNumber(number, { days = 30 } = {}) {
 
   // 3. 统计
   const total = answers.length
-  const score = total > 0 ? sumAnswerScores(answers) / total : 0
-  const correct = answers.filter((a) => getAnswerScore(a) === 1).length
+  const score = total > 0 ? Answer.sumScores(answers) / total : 0
+  const correct = answers.filter((a) => Answer.sumScores([a]) === 1).length
   const accuracy = score
 
   return {
@@ -173,7 +172,7 @@ async function _getMasteryByNumberFromAnswers(answers, number) {
     //   - getAnswerScore 优先用 a.score 字段，回退到 a.isCorrect
     //   - 测试 fixture 经常用 isCorrect=false + userAnswer=60 这种组合
     //   - 这是“兼容历史数据”的妥协，正常答题流两个判断一致
-    const attemptScore = getAnswerScore(a)
+    const attemptScore = Answer.sumScores([a])
     score += attemptScore
     if (attemptScore === 1) correct += 1
     if (q) qIdsWithNumber.add(a.questionId)

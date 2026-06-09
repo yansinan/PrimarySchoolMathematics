@@ -15,7 +15,7 @@
 
 // P5 v2.3.0: generatePracticeConfig 不再被 adaptiveEngine 调用
 // import { generatePracticeConfig } from './diagnostic'
-import { getAnswerScore, sumResponseTimes } from '../score'
+import { sumResponseTimes } from '../score'
 import {
   ACCURACY_THRESHOLDS,
   SPEED_THRESHOLDS,

@@ -1,4 +1,5 @@
 /**
+import { Answer } from '@/utils/algorithm/answer'
  * Session 持久化 service（E1 抽层, 2026-06-08；E1 方案 B 加 persistSingleAnswer, 2026-06-08）
  *
  * 替代原 `stores/practice.js#saveSessionToDB`（业务混在 M 层违例）。
@@ -17,7 +18,7 @@
  *   await persistSingleAnswer(lastAnswer)
  */
 
-import { sumAnswerScores, sumResponseTimes } from '@/utils/score'
+import { sumResponseTimes } from '@/utils/score'
 import db, { saveSession } from '@/utils/store/database'
 import { Question } from '@/utils/algorithm/question'
 
@@ -48,7 +49,7 @@ export async function persistSession({
     return true
   })
 
-  const correctCount = sumAnswerScores(uniqueAnswers)
+  const correctCount = Answer.sumScores(uniqueAnswers)
   const totalDuration = sumResponseTimes(uniqueAnswers)
 
   const sessionData = {

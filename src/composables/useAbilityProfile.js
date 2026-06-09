@@ -1,9 +1,9 @@
 import { computed, unref } from 'vue'
+import { Answer } from '@/utils/algorithm/answer'
 import { storeToRefs } from 'pinia'
 import { usePracticeStore } from '@/stores/practice'
 import { useAbilityAnalysis } from '@/composables/useAbilityAnalysis'
 import { DIFFICULTY_LEVELS, matchLevel, groupAnswersByLevel } from '@/utils/algorithm/adaptiveEngine'
-import { getAnswerScore, sumAnswerScores } from '@/utils/score'
 import { STRONG_THRESHOLD, WEAK_THRESHOLD } from '@/constants/practice'
 
 function resolveSource(source, fallback) {
@@ -29,7 +29,7 @@ export function useAbilityProfile(options = {}) {
   const currentDifficultyIdx = resolveSource(options.currentDifficultyIdx, () => practiceStore.currentDifficultyIdx)
 
   const statsTotal = resolveSource(options.statsTotal, () => (answers.value || []).length)
-  const statsCorrect = resolveSource(options.statsCorrect, () => sumAnswerScores(answers.value || []))
+  const statsCorrect = resolveSource(options.statsCorrect, () => Answer.sumScores(answers.value || []))
   const statsLevel = resolveSource(options.statsLevel, () => Math.max(1, currentDifficultyIdx.value + 1))
   const statsLevelTotal = resolveSource(options.statsLevelTotal, () => DIFFICULTY_LEVELS.length)
   const statsLevelLabel = resolveSource(options.statsLevelLabel, () => {

@@ -16,6 +16,12 @@
  */
 
 import { Question } from './question'
+// DB 使用动态 import（回避 services/database → store/database 循环依赖）
+let _db
+async function _getDB() {
+  if (!_db) _db = (await import('@/services/database')).DB
+  return _db
+}
 
 export class Answer extends Question {
   /**
@@ -163,8 +169,7 @@ export class Answer extends Question {
   static async getLearningCurve(questionId, { days = 30 } = {}) {
     if (questionId == null) return []
     const cutoff = Date.now() - days * 86400e3
-    const { DB: DB_ } = await import('@/services/database')
-    const raw = await DB_.answers.where('questionId').equals(questionId).toArray()
+    const raw = await (await _getDB()).answers.where('questionId').equals(questionId).toArray()
     return raw
       .filter(a => a.startedAt > cutoff)
       .sort((a, b) => a.startedAt - b.startedAt)
@@ -190,11 +195,10 @@ export class Answer extends Question {
 
   /** 获取某学生全部答题（含 session config 增强） */
   static async getAllByStudent(studentId = 'default') {
-    const { DB: DB_ } = await import('@/services/database')
-    const sessions = await DB_.practiceSessions.where('studentId').equals(studentId).toArray()
+    const sessions = await (await _getDB()).practiceSessions.where('studentId').equals(studentId).toArray()
     const sessionIds = sessions.map(s => s.id)
     if (!sessionIds.length) return []
-    const answers = await DB_.answers.where('sessionId').anyOf(sessionIds).toArray()
+    const answers = await (await _getDB()).answers.where('sessionId').anyOf(sessionIds).toArray()
     const sessionMap = {}
     for (const s of sessions) sessionMap[s.id] = s
     return answers.map(a => ({ ...a, config: sessionMap[a.sessionId]?.config || null }))

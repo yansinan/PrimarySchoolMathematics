@@ -13,25 +13,22 @@
  * @see ../services/wrongAnswerService.js — DB CRUD，查询委托本类
  * @see answer.js — 父类
  */
-
-// 注：DB 使用动态 import（循环依赖：services/database → score.js → answer → question）
+// DB 使用动态 import（回避 services/database → store/database 循环依赖）
+let _db
+async function _getDB() {
+  if (!_db) _db = (await import('@/services/database')).DB
+  return _db
+}
 import { Answer, Question } from './'
-// DB 使用动态 import（同上）
-
 export class WrongAnswer extends Answer {
-
   // ── 构造 ──
-
   constructor(raw) {
     super(raw)
   }
-
   static fromJSON(plain) {
     return new WrongAnswer(plain)
   }
-
   // ── 查询（静态） ──
-
   /**
    * 纯函数过滤 + 排序错题数组。
    * 不做 DB 查询，只处理内存中的 Answer-like 对象。
@@ -51,7 +48,6 @@ export class WrongAnswer extends Answer {
     const cutoff = (days && days < Number.MAX_SAFE_INTEGER)
       ? Date.now() - days * 864e5
       : 0
-
     return (answers || [])
       .map(a => (a instanceof WrongAnswer) ? a : WrongAnswer.fromJSON(a))
       .filter(a => !Answer.isCorrect(a))  // 数学真理：userAnswer === solution
@@ -67,23 +63,18 @@ export class WrongAnswer extends Answer {
                     - (a.timestamp ?? a.startedAt ?? 0))
       .slice(0, limit || Infinity)
   }
-
   // ── 便捷查询（实例方法） ──
-
   /** 此错题是否在 N 天以内 */
   isRecent(days) {
     const cutoff = Date.now() - days * 864e5
     return (this.timestamp ?? this.startedAt ?? 0) >= cutoff
   }
-
   /** 此错题的 operand 范围是否与 [min, max] 重叠 */
   matchesOperand(min, max) {
     return (this.operandMax ?? 0) >= min
         && (this.operandMin ?? 0) <= max
   }
-
   // ── 继承自 Question 的查询方法，重载以限为错题 ──
-
   /**
    * 按算式查找错题（重载：自动限定为 isCorrect===false）
    * @param {Array} collection — Answer/WrongAnswer plain 或实例
@@ -98,7 +89,6 @@ export class WrongAnswer extends Answer {
       .filter(a => !a.isCorrect)
     return super.findByEquation(scoped, equation, opts)
   }
-
   /**
    * 按难度档位查找错题（重载：自动限定为 isCorrect===false）
    * @param {Array} collection
@@ -111,9 +101,7 @@ export class WrongAnswer extends Answer {
       .filter(a => !a.isCorrect)
     return super.filterByLevel(scoped, levelIdx)
   }
-
   // ── DB 查询 ──
-
   /**
    * 错题查询（DB → filterBy 合并）
    * @param {Object} [opts]
@@ -128,26 +116,22 @@ export class WrongAnswer extends Answer {
   static async getWrongAnswers(opts = {}) {
     const { operator, minOperand, maxOperand, days = 30, limit = 20, includeFixed = false } = opts
     const cutoff = Date.now() - days * 86400e3
-    const { DB: DB_ } = await import('@/services/database')
-
     let candidates
     if (operator) {
-      const qList = await DB_.questions.where('operator').equals(operator).toArray()
+      const qList = await (await _getDB()).questions.where('operator').equals(operator).toArray()
       const qIds = qList.map((q) => q.id)
       if (!qIds.length) return []
-      candidates = await DB_.answers
+      candidates = await (await _getDB()).answers
         .where('questionId').anyOf(qIds)
         .and((a) => a.timestamp > cutoff)
         .toArray()
     } else {
-      candidates = await DB_.answers
+      candidates = await (await _getDB()).answers
         .where('timestamp').above(cutoff)
         .and((a) => !Answer.isCorrect(a))
         .toArray()
     }
-
     if (!candidates.length) return []
-
     const filtered = WrongAnswer.filterBy(candidates, { minOperand, maxOperand, includeFixed, limit })
     // 批量 join questions（取出权威字段）
     const qIds = [...new Set(filtered.map(a => a.questionId).filter(Boolean))]

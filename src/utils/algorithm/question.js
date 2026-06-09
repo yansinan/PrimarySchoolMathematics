@@ -9,7 +9,12 @@
  */
 
 import { DIFFICULTY_LEVELS } from '@/constants/difficulty'
-// DB 使用动态 import（@/services/database → score.js → answer 循环依赖）
+// DB 使用动态 import（回避 services/database → store/database 循环依赖）
+let _db
+async function _getDB() {
+  if (!_db) _db = (await import('@/services/database')).DB
+  return _db
+}
 
 export class Question {
   /**
@@ -206,8 +211,7 @@ export class Question {
    */
   static async loadByIds(ids) {
     if (!ids?.length) return new Map()
-    const { DB: DB_ } = await import('@/services/database')
-    const qs = await DB_.questions.where('id').anyOf(ids).toArray()
+    const qs = await (await _getDB()).questions.where('id').anyOf(ids).toArray()
     return new Map(qs.map(q => [q.id, Question.fromJSON(q)]))
   }
 
@@ -241,8 +245,7 @@ export class Question {
    */
   static async findEquivalent(equation) {
     if (!equation) return []
-    const { DB: DB_ } = await import('@/services/database')
-    const all = await DB_.questions.toArray()
+    const all = await (await _getDB()).questions.toArray()
     return Question.findByEquation(all, equation, { exact: false })
   }
 
@@ -256,8 +259,7 @@ export class Question {
     const triple = Question._parseEquationTriple(equation)
     if (!triple) return []
     const { bodyA, bodyB, op } = triple
-    const { DB: DB_ } = await import('@/services/database')
-    const all = await DB_.questions.where('operator').equals(op).toArray()
+    const all = await (await _getDB()).questions.where('operator').equals(op).toArray()
     const leftMin = bodyA - range; const leftMax = bodyA + range
     const rightMin = bodyB - range; const rightMax = bodyB + range
     const candidates = []
@@ -279,43 +281,16 @@ export class Question {
   }
 
   /**
-   * 单题学习曲线（答题历史时间序列）
-   * @param {number} questionId
-   * @param {{days?:number}} [opts]
-   * @returns {Promise<Answer[]>} — Answer 实例数组（含有效 responseTime）
-   */
-  static async getLearningCurve(questionId, { days = 30 } = {}) {
-    if (questionId == null) return []
-    const cutoff = Date.now() - days * 86400e3
-    const { DB: DB_ } = await import('@/services/database')
-    const raw = await DB_.answers.where('questionId').equals(questionId).toArray()
-    const { Answer } = await import('./answer')
-    return raw
-      .filter(a => a.startedAt > cutoff)
-      .sort((a, b) => a.startedAt - b.startedAt)
-      .map((a, idx) => {
-        const ans = a instanceof Answer ? a : new Answer(a)
-        return {
-          timestamp: ans.timestamp, startedAt: ans.startedAt, endedAt: ans.endedAt,
-          isCorrect: ans.isCorrect,
-          responseTime: ans.effectiveResponseTime, isTimeout: ans.isTimeout,
-          userAnswer: ans.userAnswer, attemptIndex: idx,
-        }
-      })
-  }
-
-  /**
    * 保存/更新一道题（upsert by equation）
    * @param {Object} questionData — 须含 equation 字段
    */
   static async save(questionData) {
     if (!questionData?.equation) return
-    const { DB: DB_ } = await import('@/services/database')
-    const existing = await DB_.questions.where('equation').equals(questionData.equation).toArray()
+    const existing = await (await _getDB()).questions.where('equation').equals(questionData.equation).toArray()
     if (existing.length > 0) {
-      await DB_.questions.update(existing[0].id, questionData)
+      await (await _getDB()).questions.update(existing[0].id, questionData)
     } else {
-      await DB_.questions.add(questionData)
+      await (await _getDB()).questions.add(questionData)
     }
   }
 }

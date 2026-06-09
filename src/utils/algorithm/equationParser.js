@@ -1,5 +1,5 @@
 import { toEvalSymbols } from './equationCore'
-import { matchLevel } from './adaptiveEngine'
+import { matchLevel } from './question'
 
 const OPERATOR_SET = ['+', '-', '*', '/', '×', '÷', '＋', '－']
 

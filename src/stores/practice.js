@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia'
+import { Answer } from '@/utils/algorithm/answer'
 import { EMPTY_PARSED_EQUATION, getCarryType, parseEquation } from '@/utils/algorithm/equationParser'
 // E1: saveSession / sumResponseTimes 已迁 services/sessionPersistence.js
 import { LS_KEY_PSM_PROFILE } from '@/constants/storageKeys'
-import { sumAnswerScores } from '@/utils/score'
 
 const LS_KEY = LS_KEY_PSM_PROFILE
 
@@ -81,7 +81,7 @@ export const usePracticeStore = defineStore('practice', {
       return getCarryType(this.currentParsedEquation)
     },
     isLastQuestion: (state) => state.session.currentIndex >= state.listPractices.length - 1,
-    correctCount: (state) => sumAnswerScores(state.session.answers),
+    correctCount: (state) => Answer.sumScores(state.session.answers),
     /** 是否处于诊断模式 */
     isAssessment: (state) => state.phase === 'assessment',
     /** 是否处于正常练习模式 */

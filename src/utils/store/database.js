@@ -1,7 +1,7 @@
 import Dexie from 'dexie'
 import { parseEquation } from '@/utils/algorithm/equationParser'
-// computeScore 内联在 v4 upgrade hook，不再 import
-// sumAnswerScores 正逐步被 Answer.sumScores 替代（keep for getAggregatedStats）
+// computeScore 内联在 v4 upgrade hook
+// mapToClass 保留本地 schema 类（domain 类 import 导致循环依赖）
 
 /**
  * PracticeDB — IndexedDB persistence layer for practice sessions and answers.
@@ -466,7 +466,7 @@ export async function getAggregatedStats(studentId = 'default') {
         }
       }
       numberStats[key].count++
-      const answerScore = Answer.isCorrect(answer) ? 1 : 0
+      const answerScore = Answer.sumScores([answer])
       if (answerScore > 0) {
         numberStats[key].correct += answerScore
       } else {
@@ -590,6 +590,11 @@ export async function importAllData(data) {
  * @param {string} studentId
  * @returns {Promise<Array<object>>}
  */
+// ─── getAllAnswers / saveQuestion / getQuestion / getQuestionByEquation ───
+// 已迁至 Answer.getAllByStudent / Question.save / Question.loadByIds / Question.findByEquation
+// 保留定义但不再导出（无外部调用）
+// 未来 v4.0d 删
+
 export async function getAllAnswers(studentId = 'default') {
   const sessions = await db.practiceSessions
     .where('studentId').equals(studentId)
@@ -636,6 +641,7 @@ export async function clearAllData() {
  * @param {object} questionData
  * @returns {Promise<{id:number, isNew:boolean}>}
  */
+// 已迁至 Question.save，保留历史实现
 export async function saveQuestion(questionData) {
   const existing = await db.questions.where('equation').equals(questionData.equation).first()
   if (existing) return { id: existing.id, isNew: false }
@@ -665,6 +671,7 @@ export async function saveQuestion(questionData) {
  * @param {number} id
  * @returns {Promise<object|null>}
  */
+// 已迁至 Question.loadByIds / Answer.getAllByStudent，保留历史实现
 export async function getQuestion(id) {
   return db.questions.get(id) ?? null
 }
@@ -674,6 +681,7 @@ export async function getQuestion(id) {
  * @param {string} equation
  * @returns {Promise<object|null>}
  */
+// 已迁至 Question.findByEquation（memory 版），保留历史实现
 export async function getQuestionByEquation(equation) {
   return db.questions.where('equation').equals(equation).first() ?? null
 }
