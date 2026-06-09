@@ -10,16 +10,10 @@
 
 import { DIFFICULTY_LEVELS } from '@/constants/difficulty'
 import { matchLevel, groupAnswersByLevel } from './matchLevel'
-// DB 使用异步懒加载（services/database → equationParser → matchLevel 无循环，
-// 但 module 执行次序在部分 Vite/Node 场景仍须动态 import）
-let _db
-async function _getDB() {
-  if (!_db) _db = (await import('@/utils/store/database')).default
-  return _db
-}
+import { DB } from '@/services/databaseInit'
 
 export class Question {
-  static _getDB() { return _getDB() }
+  static _getDB() { return DB }
   /**
    * @param {Object} raw — db.questions 表的 plain object
    *   或 useSubmitHandler 构造的 currentQuestion
@@ -214,7 +208,7 @@ export class Question {
    */
   static async loadByIds(ids) {
     if (!ids?.length) return new Map()
-    const qs = await (await _getDB()).questions.where('id').anyOf(ids).toArray()
+    const qs = await DB.questions.where('id').anyOf(ids).toArray()
     return new Map(qs.map(q => [q.id, Question.fromJSON(q)]))
   }
 
@@ -248,7 +242,7 @@ export class Question {
    */
   static async findEquivalent(equation) {
     if (!equation) return []
-    const all = await (await _getDB()).questions.toArray()
+    const all = await DB.questions.toArray()
     return Question.findByEquation(all, equation, { exact: false })
   }
 
@@ -262,7 +256,7 @@ export class Question {
     const triple = Question._parseEquationTriple(equation)
     if (!triple) return []
     const { bodyA, bodyB, op } = triple
-    const all = await (await _getDB()).questions.where('operator').equals(op).toArray()
+    const all = await DB.questions.where('operator').equals(op).toArray()
     const leftMin = bodyA - range; const leftMax = bodyA + range
     const rightMin = bodyB - range; const rightMax = bodyB + range
     const candidates = []
@@ -289,11 +283,11 @@ export class Question {
    */
   static async save(questionData) {
     if (!questionData?.equation) return
-    const existing = await (await _getDB()).questions.where('equation').equals(questionData.equation).toArray()
+    const existing = await DB.questions.where('equation').equals(questionData.equation).toArray()
     if (existing.length > 0) {
-      (await _getDB()).questions.update(existing[0].id, questionData)
+      await DB.questions.update(existing[0].id, questionData)
     } else {
-      (await _getDB()).questions.add(questionData)
+      await DB.questions.add(questionData)
     }
   }
 }
