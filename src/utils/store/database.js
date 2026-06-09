@@ -1,6 +1,7 @@
 import Dexie from 'dexie'
-import { computeScore, getAnswerScore, sumAnswerScores } from '@/utils/score'
 import { parseEquation } from '@/utils/algorithm/equationParser'
+// computeScore 内联在 v4 upgrade hook，不再 import
+// sumAnswerScores 正逐步被 Answer.sumScores 替代（keep for getAggregatedStats）
 
 /**
  * PracticeDB — IndexedDB persistence layer for practice sessions and answers.
@@ -88,7 +89,7 @@ class PracticeDB extends Dexie {
     }).upgrade(async (tx) => {
       await tx.table('answers').toCollection().modify((a) => {
         if (a.attemptCount == null) a.attemptCount = 1
-        if (a.score == null) a.score = a.isCorrect ? computeScore(a.attemptCount) : 0
+        if (a.score == null) a.score = a.isCorrect ? Math.max(0, 1 - (a.attemptCount - 1) / 3) : 0
       })
       try {
         localStorage.setItem('psm_v3_to_v4_migration', new Date().toISOString())
@@ -320,6 +321,7 @@ export async function getLatestAbilitySnapshot(studentId = 'default') {
  * @returns {Promise<object>}
  */
 export async function getAggregatedStats(studentId = 'default') {
+  const { Answer } = await import('@/utils/algorithm/answer')
   const sessions = await db.practiceSessions
     .where('studentId').equals(studentId)
     .reverse()
@@ -348,7 +350,7 @@ export async function getAggregatedStats(studentId = 'default') {
     .toArray()
 
   const totalQuestions = allAnswers.length
-  const totalCorrect = sumAnswerScores(allAnswers)
+  const totalCorrect = Answer.sumScores(allAnswers)
   const overallAccuracy = totalQuestions > 0 ? totalCorrect / totalQuestions : 0
 
   // Operator stats
@@ -358,8 +360,8 @@ export async function getAggregatedStats(studentId = 'default') {
     if (byOp.length > 0) {
       operatorStats[op] = {
         count: byOp.length,
-        correct: sumAnswerScores(byOp),
-        accuracy: sumAnswerScores(byOp) / byOp.length
+        correct: Answer.sumScores(byOp),
+        accuracy: Answer.sumScores(byOp) / byOp.length
       }
     }
   }
@@ -370,13 +372,13 @@ export async function getAggregatedStats(studentId = 'default') {
   const carryStats = {
     withCarry: {
       count: withCarry.length,
-      correct: sumAnswerScores(withCarry),
-      accuracy: withCarry.length > 0 ? sumAnswerScores(withCarry) / withCarry.length : 0
+      correct: Answer.sumScores(withCarry),
+      accuracy: withCarry.length > 0 ? Answer.sumScores(withCarry) / withCarry.length : 0
     },
     withoutCarry: {
       count: withoutCarry.length,
-      correct: sumAnswerScores(withoutCarry),
-      accuracy: withoutCarry.length > 0 ? sumAnswerScores(withoutCarry) / withoutCarry.length : 0
+      correct: Answer.sumScores(withoutCarry),
+      accuracy: withoutCarry.length > 0 ? Answer.sumScores(withoutCarry) / withoutCarry.length : 0
     }
   }
 
@@ -386,13 +388,13 @@ export async function getAggregatedStats(studentId = 'default') {
   const borrowStats = {
     withBorrow: {
       count: withBorrow.length,
-      correct: sumAnswerScores(withBorrow),
-      accuracy: withBorrow.length > 0 ? sumAnswerScores(withBorrow) / withBorrow.length : 0
+      correct: Answer.sumScores(withBorrow),
+      accuracy: withBorrow.length > 0 ? Answer.sumScores(withBorrow) / withBorrow.length : 0
     },
     withoutBorrow: {
       count: withoutBorrow.length,
-      correct: sumAnswerScores(withoutBorrow),
-      accuracy: withoutBorrow.length > 0 ? sumAnswerScores(withoutBorrow) / withoutBorrow.length : 0
+      correct: Answer.sumScores(withoutBorrow),
+      accuracy: withoutBorrow.length > 0 ? Answer.sumScores(withoutBorrow) / withoutBorrow.length : 0
     }
   }
 
@@ -403,8 +405,8 @@ export async function getAggregatedStats(studentId = 'default') {
     const byStep = allAnswers.filter(a => a.stepCount === step)
     stepStats[step] = {
       count: byStep.length,
-      correct: sumAnswerScores(byStep),
-      accuracy: sumAnswerScores(byStep) / byStep.length
+      correct: Answer.sumScores(byStep),
+      accuracy: Answer.sumScores(byStep) / byStep.length
     }
   }
 
@@ -464,7 +466,7 @@ export async function getAggregatedStats(studentId = 'default') {
         }
       }
       numberStats[key].count++
-      const answerScore = getAnswerScore(answer)
+      const answerScore = Answer.isCorrect(answer) ? 1 : 0
       if (answerScore > 0) {
         numberStats[key].correct += answerScore
       } else {

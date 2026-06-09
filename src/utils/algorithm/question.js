@@ -284,12 +284,6 @@ export class Question {
    * @param {{days?:number}} [opts]
    * @returns {Promise<Answer[]>} — Answer 实例数组（含有效 responseTime）
    */
-  /**
-   * 单题学习曲线（答题历史时间序列）
-   * @param {number} questionId
-   * @param {{days?:number}} [opts]
-   * @returns {Promise<Answer[]>} — Answer 实例数组（含有效 responseTime）
-   */
   static async getLearningCurve(questionId, { days = 30 } = {}) {
     if (questionId == null) return []
     const cutoff = Date.now() - days * 86400e3
