@@ -49,8 +49,9 @@ export function useSubmitHandler({ practiceStore, saver }) {
     )
 
     const newQuestionIndex = groupAnswerOffset + currentIndex
-    const existingIdx = session.answers.findIndex(a => a.questionIndex === newQuestionIndex)
-    const previousAttemptCount = existingIdx >= 0 ? (session.answers[existingIdx].attemptCount || 1) : 0
+    const targetAnswers = practiceStore.phase === 'assessment' ? session.diagnosticAnswers : session.answers
+    const existingIdx = targetAnswers.findIndex(a => a.questionIndex === newQuestionIndex)
+    const previousAttemptCount = existingIdx >= 0 ? (targetAnswers[existingIdx].attemptCount || 1) : 0
     // buildScore 内部从 userAnswer === solution 算 isCorrect
     const { attemptCount, score } = buildScore(previousAttemptCount, userAnswer, currentQuestion.solution)
 
@@ -75,10 +76,11 @@ export function useSubmitHandler({ practiceStore, saver }) {
       questionIndex: newQuestionIndex,
     }
 
+    // P2-2: 按 phase 分支 — assessment 写 diagnosticAnswers，practice 写 answers
     if (existingIdx >= 0) {
-      session.answers[existingIdx] = answerEntry
+      targetAnswers[existingIdx] = answerEntry
     } else {
-      session.answers.push(answerEntry)
+      targetAnswers.push(answerEntry)
     }
 
     // 每道题立即写入数据库（fire-and-forget，委托 saver）

@@ -25,7 +25,6 @@ import {
   CONSECUTIVE_GOOD_TO_ADVANCE,
   MIN_GROUPS_PER_DIMENSION,
   PROFILE_RATIOS,
-  RESERVE_POOL_SIZE,
   STRONG_THRESHOLD,
   WEAK_THRESHOLD,
   EVAL_WEAK_THRESHOLD,
@@ -33,6 +32,7 @@ import {
 import { DIFFICULTY_LEVELS } from '@/constants/difficulty'
 import { Question } from '@/utils/algorithm/question'
 import { Answer, WrongAnswer } from '@/utils/algorithm'
+import { generateOneQuestion } from '@/utils/algorithm/adaptiveBatch'
 
 // 小组题量阶梯（每个速度级别对应一个基数）
 const GROUP_SIZES = [6, 10, 14, 18, 22]
@@ -159,7 +159,6 @@ export class Engine {
     this.consecutiveBad = 0
     this.targetMin = targetMin
     this.targetMax = targetMax
-    this.reservePool = []
     this.masteryCheck = { active: false, horizontalGood: 0, consecutiveVerticalGood: 0 }
     this.lastGroupResult = null
     this.lastEvaluation = null
@@ -343,7 +342,7 @@ export class Engine {
         }
       }
     }
-    if (!isReview && nextIdx >= 0 && nextIdx < listPractices.length && this.reservePool?.length) {
+    if (!isReview && nextIdx >= 0 && nextIdx < listPractices.length) {
       const nextQ = listPractices[nextIdx]
       const nextQInst = nextQ instanceof Question ? nextQ : new Question(nextQ)
       const nextMatch = nextQInst.levelMatch
@@ -353,8 +352,14 @@ export class Engine {
       const isChallenge = nextLevelIdx === this.difficultyIdx + 1
       const isCurrent = nextLevelIdx === this.difficultyIdx
       if (!inStrong && !inWeak && !isChallenge && !isCurrent) {
-        const poolQ = this.reservePool.pop()
-        if (poolQ) listPractices[nextIdx] = poolQ
+        // P2-1: 即时生成新题替换（不再从 reserve pool 预生成池中取）
+        // 用当前 listPractices 已用的 equation 作 seen 去重
+        const seen = new Set(listPractices.map(q => (q.equation || '').replace(/=$/, '')))
+        const fresh = generateOneQuestion(this.difficultyIdx, this, seen, 'swap')
+        if (fresh) {
+          const diversified = this.diversifyBatch([fresh])
+          if (diversified[0]) listPractices[nextIdx] = diversified[0]
+        }
       }
     }
     if (!isReview && this.assistLevel <= 1 && roundAnswers?.length >= 2) {
@@ -376,9 +381,14 @@ export class Engine {
       }
       if (wrongStreak >= 2 && this.difficultyIdx > 0) {
         this.difficultyIdx = Math.max(0, this.difficultyIdx - 1)
-        if (nextIdx >= 0 && nextIdx < listPractices.length && this.reservePool?.length) {
-          const poolQ = this.reservePool.pop()
-          if (poolQ) listPractices[nextIdx] = poolQ
+        // P2-1: 连续答错换更简单的题——即时生成（不再从 reserve pool 取）
+        if (nextIdx >= 0 && nextIdx < listPractices.length) {
+          const seen = new Set(listPractices.map(q => (q.equation || '').replace(/=$/, '')))
+          const fresh = generateOneQuestion(this.difficultyIdx, this, seen, 'downshift')
+          if (fresh) {
+            const diversified = this.diversifyBatch([fresh])
+            if (diversified[0]) listPractices[nextIdx] = diversified[0]
+          }
         }
       }
     }
@@ -413,8 +423,7 @@ export class Engine {
   pickWeakLevel() {
     const indices = this.weakLevelIndices
     if (!indices.length) return null
-    const n = indices.length
-    const weights = Array.from({ length: n }, (_, i) => Math.pow(1.5, n - 1 - i))
-    return weightedRandom(indices, weights)
+    // 从最低难度弱项开始练（indices 天然升序）
+    return indices[0]
   }
 }

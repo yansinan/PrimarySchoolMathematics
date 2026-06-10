@@ -62,7 +62,9 @@ export function useAdaptiveSession(options = {}) {
   const groupAnswerOffset = ref(0)
   /** 当前组内正确题数（只算本组，走 getter：userAnswer===solution） */
   const groupCorrectCount = computed(() =>
-    Answer.sumScores(session.value.answers.slice(groupAnswerOffset.value))
+    isAssessment.value
+      ? Answer.sumScores(session.value.diagnosticAnswers)
+      : Answer.sumScores(session.value.answers.slice(groupAnswerOffset.value))
   )
   /** 防止 handleNext 重复调用（choice 模式 + setTimeout 同时触发） */
   const nextLocked = ref(false)
@@ -74,7 +76,8 @@ export function useAdaptiveSession(options = {}) {
    */
   const stageName = computed(() => {
     if (isAssessment.value) {
-      return `能力评估 ${session.value.answers.length}/${totalQuestions.value}`
+      // P2-2: 诊断答案已隔离到 diagnosticAnswers
+      return `能力评估 ${session.value.diagnosticAnswers.length}/${totalQuestions.value}`
     }
     if (adaptiveEngine.value) {
       const label = adaptiveEngine.value.getDifficultyLabel()
@@ -149,8 +152,7 @@ export function useAdaptiveSession(options = {}) {
     // P5: 生成排列方案 → 按方案出题
     // startNewAdaptiveSession 时 groupIndex=1（G1=confidence）
     const plan = engine.generateQuestionPlan(1, size, false)
-    const { questions, reservePool } = generateAdaptiveBatch(engine, size, plan)
-    adaptiveEngine.value.reservePool = reservePool
+    const questions = generateAdaptiveBatch(engine, size, plan)
     practiceStore.setListPractices(questions)
 
     ElMessage({
@@ -173,7 +175,8 @@ export function useAdaptiveSession(options = {}) {
    * @returns {Promise<void>}
    */
   async function completeAssessment() {
-    const snapshot = [...session.value.answers]  // 立即快照，防异步竞态导致漏存
+    // P2-2: 诊断答案已隔离到 diagnosticAnswers
+    const snapshot = [...session.value.diagnosticAnswers]
     const answeredCount = snapshot.length
     const profile = analyzeAbility(snapshot)
 
@@ -206,9 +209,7 @@ export function useAdaptiveSession(options = {}) {
     const size = engine.getGroupSize()
     // P5: 生成排列方案 → 按方案出题
     const plan = engine.generateQuestionPlan(1, size, false)
-    const { questions: firstQuestions, reservePool } = generateAdaptiveBatch(engine, size, plan)
-    adaptiveEngine.value.reservePool = reservePool
-
+    const firstQuestions = generateAdaptiveBatch(engine, size, plan)
     practiceStore.setListPractices(firstQuestions)
   }
 
@@ -334,9 +335,8 @@ export function useAdaptiveSession(options = {}) {
     const nextSize = result.nextGroupSize
     const isLast = nextEngine.totalAnswered + nextSize * 1.5 >= nextEngine.targetMax
     const nextPlan = nextEngine.generateQuestionPlan(adaptiveGroupIndex.value, nextSize, isLast)
-    const { questions: nextQuestions, reservePool: nextPool } = generateAdaptiveBatch(nextEngine, nextSize, nextPlan)
+    const nextQuestions = generateAdaptiveBatch(nextEngine, nextSize, nextPlan)
     nextEngine.lastGroupSize = nextQuestions.length  // 持久化实际生成题数，供下次 completeGroup 切片用
-    adaptiveEngine.value.reservePool = nextPool
     groupAnswerOffset.value = allAnswers.length
     session.value.answers = [...allAnswers]
     practiceStore.resetCurrentIndex()

@@ -51,6 +51,9 @@ export const usePracticeStore = defineStore('practice', {
     session: {
       currentIndex: 0,
       answers: [],
+      // P2-2: 诊断阶段答题 — 与练习阶段 session.answers 完全隔离
+      // 防止诊断 5 道题污染练习统计（避免原 125% bug）
+      diagnosticAnswers: [],
       currentAnswer: '',
       feedbackType: null,
       selectedOption: null,
@@ -81,7 +84,11 @@ export const usePracticeStore = defineStore('practice', {
       return getCarryType(this.currentParsedEquation)
     },
     isLastQuestion: (state) => state.session.currentIndex >= state.listPractices.length - 1,
-    correctCount: (state) => Answer.sumScores(state.session.answers),
+    // P2-2: 按 phase 分支读不同字段
+    // assessment 阶段读 diagnosticAnswers（诊断题），practice 阶段读 answers（练习题）
+    correctCount: (state) => state.phase === 'assessment'
+      ? Answer.sumScores(state.session.diagnosticAnswers)
+      : Answer.sumScores(state.session.answers),
     /** 是否处于诊断模式 */
     isAssessment: (state) => state.phase === 'assessment',
     /** 是否处于正常练习模式 */
@@ -91,7 +98,7 @@ export const usePracticeStore = defineStore('practice', {
     /** 诊断进度文字 */
     diagnosticProgress: (state) => {
       if (state.phase !== 'assessment') return ''
-      const done = state.session.answers.length
+      const done = state.session.diagnosticAnswers.length
       const total = state.listPractices.length
       return `能力评估 ${done}/${total}`
     }
@@ -131,13 +138,19 @@ export const usePracticeStore = defineStore('practice', {
     startAssessment(questions) {
       this.phase = 'assessment'
       this.listPractices = questions
+      // P2-2: 重置 diagnosticAnswers（新一组诊断题不混旧数据）
+      this.session.diagnosticAnswers = []
       this.resetPracticeSession()
     },
-    /** 完成诊断、记录能力画像
+    /**
+     * 完成诊断、记录能力画像
+     *
      * 数据流设计：
-     *  - session.answers 只装"当前/最近一组"题（弹窗用，避免 125% bug）
-     *  - session.adaptiveConfig 诊断完成时设置，自适应引擎专用，不受 Generate.vue 污染
-     *  - resetPracticeSession 时清空 session.answers 和 adaptiveConfig（新一轮开始）
+     *  - session.answers 只装"练习阶段"题（自适应各组）
+     *  - session.diagnosticAnswers 只装"诊断阶段"题（5 道诊断题）
+     *  - P2-2：两个字段完全隔离，无需在 completeAssessment 中清 session.answers
+     *    （诊断阶段本来就只写 diagnosticAnswers，没污染 answers）
+     *  - session.adaptiveConfig 诊断完成时设置，自适应引擎专用
      */
     completeAssessment(profile, diagAnswers, adaptiveOptions = {}) {
       const enrichedProfile = {
@@ -151,8 +164,9 @@ export const usePracticeStore = defineStore('practice', {
         targetMin: Math.max(1, adaptiveOptions.targetMin ?? 10),
         targetMax: Math.min(60, adaptiveOptions.targetMax ?? 30),
       }
-      // 清空 session.answers
-      this.session.answers = []
+      // P2-2: 不需要清 session.answers（它本来就没写诊断数据）
+      // 同样清掉 diagnosticAnswers，下一轮可能重新诊断
+      this.session.diagnosticAnswers = []
       this.session.currentIndex = 0
       savePersistedProfile(enrichedProfile, 'practice')
     },

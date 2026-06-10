@@ -631,9 +631,42 @@ D src/utils/store/database.js               — 死代理删除
 
 ---
 
-## 12. 元信息
+## 12. P2 修复组（2026-06-10） — v4.3后续
 
-- 编制时间：2026-06-08（v3 收尾 + ui 合并后）；§8 追加于 2026-06-10（v4.0c 重构 + bug 修复）；§9 追加于 2026-06-10（v4.1 画像源迁移）；§10 追加于 2026-06-10（v4.2 类型化 + 封装 + 清理）；§11 追加于 2026-06-10（v4.3 Profile 实例方法 + Snapshot 删除 + 阈值统一）
+**目标**：修复浏览器全量测试发现的 P2 级问题：reserve pool 删除、diagnosticAnswers 隔离、引擎 debug 字段、弱项顺序控制，以及连带发现的 4 个 bug。
+
+### 12.1 变更总览
+
+| 任务 | 文件 | 净行 | 说明 |
+|------|------|------|------|
+| P2-1 删 reserve pool | `adaptiveBatch.js`, `adaptiveEngine.js`, `useAdaptiveSession.js`, `constants/practice.js` | -20 | 删整条 reserve pool 状态线，改即时生成 |
+| P2-2 diagnosticAnswers 隔离 | `stores/practice.js`, `useSubmitHandler.js`, `useAdaptiveSession.js`, `Practice.vue` | +20 | 加 `diagnosticAnswers` 字段，隔离诊断/练习数据 |
+| P2-3 watch 抽纯函数 | `listPracticesGuard.js`（新建）, `Practice.vue` | +50 | `decideListPracticesTransition` + 11 个测试 |
+| P2-4 引擎扁平字段 | `Practice.vue` | +4 | `__psm_debug.state()` 加 4 个扁平字段 |
+| P2-5 pickWeakLevel 顺序 | `adaptiveEngine.js` | -5 | 改为始终返回最低弱项 |
+
+### 12.2 连带修复
+
+| Bug | 根因 | 文件 | 修复 |
+|-----|------|------|------|
+| `completeAssessment` 解构 | `{ questions: firstQuestions }` 数组解构 → 恒 `undefined` | `useAdaptiveSession.js` | `const firstQuestions = ...` |
+| stageName 读错源 | P2-2 后诊断答案已迁 `diagnosticAnswers` | `useAdaptiveSession.js` | 改读 `diagnosticAnswers.length` |
+| groupCorrectCount 读错源 | 同上 | `useAdaptiveSession.js` | 按 phase 分支 |
+| ProgressSteps 读错源 | 模板直接引 `session.answers` | `Practice.vue` | 加 `currentAnswers` computed，按 phase 分支 |
+
+### 12.3 验证结果
+
+| 测试 | 结果 |
+|------|------|
+| `npx vitest run` | 117/117 PASS ✅（原 106 + 新 11 个） |
+| `npx vite build` | 构建成功 ✅ |
+| git diff | 8 文件 ±102/–95 |
+
+---
+
+## 13. 元信息
+
+- 编制时间：2026-06-08（v3 收尾 + ui 合并后）；§8 追加于 2026-06-10（v4.0c 重构 + bug 修复）；§9 追加于 2026-06-10（v4.1 画像源迁移）；§10 追加于 2026-06-10（v4.2 类型化 + 封装 + 清理）；§11 追加于 2026-06-10（v4.3 Profile 实例方法 + Snapshot 删除 + 阈值统一）；§12 追加于 2026-06-10（P2 修复组）
 - 关联：[ARCHITECTURE.md](./ARCHITECTURE.md) — "现在是什么"
 - 关联：[README.md](./README.md) — 文档索引
 - 完整日志（archived）：[_ARCHIEVED_02-PROGRESS.md](./_ARCHIEVED_02-PROGRESS.md)

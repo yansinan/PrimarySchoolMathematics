@@ -1,4 +1,4 @@
-# P0-2 诊断等级体系说明 + P2 计划（2026-06-10）
+# P0-2 诊断等级体系说明 + P2 完成记录（2026-06-10）
 
 > 来源：浏览器测试报告（2026-06-10 subagent 全量实测）
 
@@ -38,67 +38,110 @@
 
 ---
 
-## 二、P2 实施计划
+## 二、P2 修复完成记录
 
-### P2-1 — reserve pool 按 weakSeverity 加权
+### P2-1 — reserve pool 删 ← 超过原计划
 
-**当前问题**：
-`adaptiveBatch.js:67` 用 `['strong', 'weak', 'challenge'][i % 3]` 简单均分，与 `engine.profile.weakSeverity` 无关。
+**原计划**：reserve pool 按 weakSeverity 加权。
+**实际实施**：用户指出"预生成备用题池"走偏，应改为按 slot 类型即时生成单道题。
 
-**修复方向**：
-1. 引入 `RESERVE_POOL_RATIOS` 常量（类似 `PROFILE_RATIOS`）
-2. `RESERVE_POOL_SIZE = 3` 时按 `[strong, weak, challenge] = [1, 1, 1]` 均分作为基础
-3. 若 `weakSeverity > 0.5` → 调整为 `[0, 2, 1]`（双 weak）
-4. 若无 weak 等级 → 调整为 `[2, 0, 1]`（双 strong）
+**改动**：
+- `utils/algorithm/adaptiveBatch.js` — 删 reserve pool 生成，export `generateOneQuestion`，返回仅 questions
+- `services/adaptiveEngine.js` — 删 `reservePool` 成员，import `generateOneQuestion`，`adjustNextQuestion` 两步调即时生成
+- `composables/useAdaptiveSession.js` — 删 3 处 reservePool 解构/赋值
+- `constants/practice.js` — 删 `RESERVE_POOL_SIZE` 常量
 
-**影响**：P2-2 难度自适应时响应弱项更敏锐。
-
----
-
-### P2-2 — `completeAssessment` 清空 session.answers 数据流
-
-**当前问题**：
-`stores/practice.js#completeAssessment` 把 `session.answers = []`，注释提到 "125% bug" 是历史设计反复出问题的征兆。statsDrawer 在自适应完成后读 `session.answers`，会拿到空。
-
-**修复方向**：
-1. 审计 `session.answers` 的生命周期
-2. 改为：诊断阶段答完保留到 snapshot，再清
-3. 或：snapshot 存的是 questionId 列表，session 只存"当前题"
-4. 写 unit test 覆盖"诊断完→adaptive 起手"的过渡态
-
-**影响**：statsDrawer 在自适应做完展示的题数与实际答题数一致。
+**影响**：消除了整个 reserve pool 状态线，减少 state 维护负担。
 
 ---
 
-### P2-3 — `watch(listPractices)` 防御性修复 + unit test
+### P2-2 — diagnosticAnswers 字段隔离
 
-**当前问题**：
-`components/Practice.vue:479-491` 的 watch 分支没有 unit test 覆盖。
+**原计划**：审计 `session.answers` 生命周期，改为诊断完保留到 snapshot 再清。
+**实际实施**：用户建议"5 道诊断题不入库"→ 加独立字段 `session.diagnosticAnswers` 从源头隔离。
 
-**修复方向**：
-1. 把 watch 内部逻辑抽成 `composables/useListPracticesGuard.js` 纯函数
-2. 加 unit test 覆盖：
-   - `setListPractices` 时机
-   - `setListPractices([])` 时的兜底
-   - `setListPractices([q1, q2])` 时只复制末尾 N 道
-3. 抽取后 Practice.vue 模板保持简洁
+**改动**：
+- `stores/practice.js` — 加 `diagnosticAnswers: []` state 字段
+- `stores/practice.js` — `correctCount` getter 按 phase 分支读不同字段
+- `composables/useSubmitHandler.js` — `processAnswer` 按 `practiceStore.phase` 选 `diagnosticAnswers`/`answers` push
+- `composables/useAdaptiveSession.js` — `completeAssessment` 改读 `diagnosticAnswers`
+- `composables/useAdaptiveSession.js` — `stageName` computed 改读 `diagnosticAnswers.length`
+- `composables/useAdaptiveSession.js` — `groupCorrectCount` computed 按 phase 分支
+- `components/Practice.vue` — ProgressSteps `:answers="currentAnswers"`（按 phase 选）
 
-**影响**：防御性代码可测、可维护。
+**连带修复的 bug**：
+
+| Bug | 根因 | 修复 |
+|-----|------|------|
+| `completeAssessment` 解构 bug | `const { questions: firstQuestions } = generateAdaptiveBatch(...)` 数组解构 → `firstQuestions` 恒为 `undefined` | 改为 `const firstQuestions = ...` |
+| `stageName` 读错源 | P2-2 后诊断答案已迁 `diagnosticAnswers`，但 stageName 仍读 `session.answers.length` | 改读 `diagnosticAnswers.length` |
+| `groupCorrectCount` 读错源 | 同上 | 按 phase 分支 |
+| ProgressSteps 始终读 `answers` | 模板 `:answers="session.answers.slice(groupAnswerOffset)"` | 加 `currentAnswers` computed |
+
+**影响**：根除 125% bug 数据流污染，诊断/练习数据完全隔离。
 
 ---
 
-## 三、执行顺序
+### P2-3 — watch(listPractices) 抽纯函数 + unit test
 
-| 优先级 | 任务 | 工作量 | 风险 |
-|--------|------|--------|------|
-| 1 | P0-2 文档（README/ARCHITECTURE 加段落） | 10 分钟 | 无 |
-| 2 | P2-3 watch 抽函数 + unit test | 1 小时 | 低（只移动代码） |
-| 3 | P2-1 reserve pool 加权 | 30 分钟 | 低（数学公式） |
-| 4 | P2-2 session.answers 生命周期审计 | 2 小时 | 中（涉及多个 store/composable） |
+**实施**：
+- 新建 `src/utils/listPracticesGuard.js` — `decideListPracticesTransition` 纯函数，抽离 watch 决策逻辑
+- PATCH `Practice.vue` — watch 回调改委托给纯函数
+- TEST：`test/utils/listPracticesGuard.spec.js` — 11 个测试覆盖 3 决策分支
+
+**影响**：防御性代码可测、可维护。✅
+
+---
+
+### P2-4 — `__psm_debug.state()` 加 engine 扁平字段
+
+**实施**：
+- PATCH `Practice.vue` — `__psm_debug.state()` 加 4 个扁平字段：`engineReady`, `engineDifficultyIdx`, `engineStrongCount`, `engineWeakCount`
+
+**影响**：agent 自动化测试不再需要 `.value?.profile?.` 链式试探。
+
+---
+
+### P2-5 — `pickWeakLevel` 顺序控制
+
+**问题**：用户 level 4（索引 3）连对 3 题后，弱项 slot 选中 level 9（大数减法，索引 8）→ 出 888-97 横式，难度跳了 5 级。
+
+**根因**：`pickWeakLevel()` 无上限，直接随机从所有弱项中选。
+
+**修复**：`services/adaptiveEngine.js` — `pickWeakLevel()` 改为**始终返回最低难度弱项**（`weakLevelIndices[0]`，数组天然升序）。
+
+**升级链路验证**：
+
+| 环节 | 状态 | 说明 |
+|------|------|------|
+| 答弱项题 | ✅ | `useSubmitHandler.js` 写 `session` + `savePerQuestion()` 持久化 DB |
+| 组完成后 | ✅ | `completeGroup()` → `evaluateGroup()` → `Profile.load()` |
+| Profile.load() | ✅ | 读 DB 全表 → 按 level 分组算正确率 → ≥ 95% 移出 weakLevelIndices |
+| 下一组 | ✅ | `generateQuestionPlan` → `pickWeakLevel()` → 自然选下一个最低弱项 |
+
+**影响**：弱项从最低难度开始练，逐个攻克，逐步升级。
+
+---
+
+## 三、执行总结
+
+| 优先级 | 任务 | 状态 | 实际工作 |
+|--------|------|------|----------|
+| 1 | P0-2 文档 | ✅ 已记录 | 设计说明 |
+| 2 | P2-3 watch 抽函数 + unit test | ✅ 已修 | +11 测试 |
+| 3 | P2-1 reserve pool 加权 | ✅ 超过原计划 | 删整个 reserve pool，改即时生成 |
+| 4 | P2-2 session.answers 生命周期审计 | ✅ 超过原计划 | diagnosticAnswers 完全隔离 + 修 4 个连带 bug |
+| 5 | P2-4 engine 扁平字段 | ✅ 已修 | 4 个 debug 扁平字段 |
+| 6 | P2-5 pickWeakLevel 顺序 | ✅ 已修 | 从最低弱项开始练 |
+| 7 | P2-6 completeAssessment 解构 bug | ✅ 连带修 | `firstQuestions` 改正确 |
+| 8 | P2-7 诊断答案引用错源 | ✅ 连带修 | stageName/groupCorrectCount/模板全部修正 |
 
 ## 四、相关文件
 
-- `src/components/Practice.vue:479-491` — P2-3 watch 位置
-- `src/utils/algorithm/adaptiveBatch.js:67` — P2-1 reserve pool
-- `src/stores/practice.js#completeAssessment` — P2-2 会话状态
-- `src/composables/usePracticeSaver.js` — P2-2 调用方
+- `src/services/adaptiveEngine.js` — pickWeakLevel 顺序控制
+- `src/stores/practice.js` — diagnosticAnswers 字段
+- `src/composables/useSubmitHandler.js` — 按 phase 分支 push
+- `src/composables/useAdaptiveSession.js` — completeAssessment/stageName/groupCorrectCount 修正
+- `src/components/Practice.vue` — currentAnswers computed + ProgressSteps 模板
+- `src/utils/algorithm/adaptiveBatch.js` — 删 reserve pool
+- `src/utils/listPracticesGuard.js` — 新建纯函数

@@ -14,7 +14,7 @@
         <ProgressSteps
           :total="totalQuestions"
           :current="currentIndex + 1"
-          :answers="session.answers.slice(groupAnswerOffset)"
+          :answers="currentAnswers"
           :correct-count="groupCorrectCount"
         />
 
@@ -194,6 +194,11 @@ const inputComponents = {
 
 const currentLayout = computed(() => layoutComponents[session.value.displayMode.layout])
 const currentInput = computed(() => inputComponents[session.value.displayMode.input])
+
+// P2-2: 按 phase 选 answers/diagnosticAnswers（ProgressSteps 展示用）
+const currentAnswers = computed(() =>
+  isAssessment.value ? session.value.diagnosticAnswers : session.value.answers
+)
 
 const inputProps = computed(() => {
   if (!currentQuestion.value) return { disabled: true }
