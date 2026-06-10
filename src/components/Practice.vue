@@ -711,15 +711,8 @@ if (typeof window !== 'undefined') {
 
 /** 首次进入自动触发能力诊断 */
 onMounted(() => {
-  // 情况 1: 首次进入 → 自动诊断
   if (isIdle.value && listPractices.value.length === 0) {
     startNewDiagnosticSession()
-    return
-  }
-
-  // 情况 2: 已有能力画像但题目已清空（刷新后）→ 恢复练习
-  if (isPractice.value && assessmentCompleted.value && listPractices.value.length === 0) {
-    startNewAdaptiveSession()
   }
 })
 </script>

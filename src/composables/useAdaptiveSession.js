@@ -45,7 +45,7 @@ import { Answer } from '@/utils/algorithm/answer'
  */
 export function useAdaptiveSession(options = {}) {
   const practiceStore = usePracticeStore()
-  const { session, correctCount, isAssessment, totalQuestions, assessmentCompleted } = storeToRefs(practiceStore)
+  const { session, correctCount, isAssessment, totalQuestions } = storeToRefs(practiceStore)
 
   // 外部依赖（注入模式，默认从 useXxx() 取）
   const router = options.router || useRouter()
@@ -83,9 +83,6 @@ export function useAdaptiveSession(options = {}) {
       const label = adaptiveEngine.value.getDifficultyLabel()
       const groupIdx = adaptiveGroupIndex.value
       return `${label} · 第${groupIdx}组`
-    }
-    if (assessmentCompleted.value && !adaptiveEngine.value) {
-      return '智能练习'
     }
     return '一年级'
   })
