@@ -196,8 +196,9 @@ const currentLayout = computed(() => layoutComponents[session.value.displayMode.
 const currentInput = computed(() => inputComponents[session.value.displayMode.input])
 
 // P2-2: 按 phase 选 answers/diagnosticAnswers（ProgressSteps 展示用）
+// practice 阶段只展示当前组（按 groupAnswerOffset 切片）
 const currentAnswers = computed(() =>
-  isAssessment.value ? session.value.diagnosticAnswers : session.value.answers
+  isAssessment.value ? session.value.diagnosticAnswers : session.value.answers.slice(groupAnswerOffset.value)
 )
 
 const inputProps = computed(() => {
