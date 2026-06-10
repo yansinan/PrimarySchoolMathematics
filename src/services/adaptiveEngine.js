@@ -31,9 +31,8 @@ import {
 } from '@/constants/practice'
 import { DIFFICULTY_LEVELS } from '@/constants/difficulty'
 import { Question } from '@/utils/algorithm/question'
-import { Answer } from '@/utils/algorithm'
+import { Answer, WrongAnswer } from '@/utils/algorithm'
 import { generateOneQuestion } from '@/utils/algorithm/adaptiveBatch'
-import { generateDistractors } from '@/utils/algorithm/distractors'
 
 // 小组题量阶梯（每个速度级别对应一个基数）
 const GROUP_SIZES = [6, 10, 14, 18, 22]
@@ -49,6 +48,38 @@ function weightedRandom(items, weights) {
     if (r <= 0) return items[i]
   }
   return items[items.length - 1]
+}
+
+function generateDistractors(correct, count, wrongPool = [], equation = '') {
+  const distractors = new Set()
+  if (correct == null || isNaN(correct) || correct <= 0) return []
+  // 优先错题库：取同一算式（含交换律/事实家族）的历史错误答案
+  if (wrongPool.length && equation) {
+    const matches = WrongAnswer.findByEquation(wrongPool, equation, { exact: false })
+    for (const w of matches) {
+      const v = Number(w.userAnswer)
+      if (v !== correct && v > 0 && !distractors.has(v)) distractors.add(v)
+      if (distractors.size >= count) return Array.from(distractors).slice(0, count)
+    }
+  }
+  // 算法填充
+  const candidates = [
+    correct + 1, correct - 1,
+    correct + 2, correct - 2,
+    correct + 5, correct - 5,
+    correct + 10, correct - 10,
+    Math.abs(correct - 1),
+    correct + (correct > 5 ? -3 : 3),
+  ]
+  for (const c of candidates) {
+    if (c !== correct && c > 0 && !distractors.has(c)) distractors.add(c)
+    if (distractors.size >= count) break
+  }
+  while (distractors.size < count) {
+    const r = Math.max(1, correct + Math.floor(Math.random() * 10) - 5)
+    if (r !== correct && !distractors.has(r)) distractors.add(r)
+  }
+  return Array.from(distractors).slice(0, count)
 }
 
 function buildReviewQuestion(wa) {

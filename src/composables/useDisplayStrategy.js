@@ -21,7 +21,6 @@ import {
   updateDisplayStats,
 } from '@/utils/algorithm/displayStrategy'
 import { ASSIST_LEVELS } from '@/constants/practice'
-import { generateDistractors } from '@/utils/algorithm/distractors'
 
 /**
  * @param {object} sessionRef - 响应式 session 引用 (Practice.vue 的 session storeToRefs)
@@ -81,13 +80,12 @@ export function useDisplayStrategy(sessionRef, currentQuestionRef) {
   }
 
   /**
-   * 生成 4 个选项 (1 正确 + 3 干扰)
-   * - 使用共享的 generateDistractors 纯函数（含错题优先策略）
-   * - 打乱顺序返回
+   * 生成 4 个选项，直接取引擎已生成的 q.options
    */
   function generateOptions(correct) {
-    const options = [correct, ...generateDistractors(correct, 3)]
-    sessionRef.value.currentOptions = options.sort(() => Math.random() - 0.5)
+    sessionRef.value.currentOptions = currentQuestionRef.value?.options
+      ? [...currentQuestionRef.value.options].sort(() => Math.random() - 0.5)
+      : []
   }
 
   /**
