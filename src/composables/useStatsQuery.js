@@ -41,13 +41,10 @@ export function useStatsQuery() {
    * @param {number} limit
    */
   async function loadSessions(studentId = 'default', limit = 50) {
-    store.loading = true
     try {
       store.sessions = await getSessions(studentId, limit)
     } catch (err) {
       console.error('[useStatsQuery] Failed to load sessions:', err)
-    } finally {
-      store.loading = false
     }
   }
 
@@ -56,13 +53,10 @@ export function useStatsQuery() {
    * @param {number} sessionId
    */
   async function loadSessionDetail(sessionId) {
-    store.loading = true
     try {
       store.selectedSession = await getSessionDetail(sessionId)
     } catch (err) {
       console.error('[useStatsQuery] Failed to load session detail:', err)
-    } finally {
-      store.loading = false
     }
   }
 
@@ -71,13 +65,10 @@ export function useStatsQuery() {
    * @param {string} studentId
    */
   async function loadAggregatedStats(studentId = 'default') {
-    store.loading = true
     try {
       store.aggregatedStats = await getAggregatedStats(studentId)
     } catch (err) {
       console.error('[useStatsQuery] Failed to load aggregated stats:', err)
-    } finally {
-      store.loading = false
     }
   }
 
@@ -86,26 +77,31 @@ export function useStatsQuery() {
    * @param {string} studentId
    */
   async function loadAllAnswers(studentId = 'default') {
-    store.loading = true
     try {
       store.allAnswers = await Answer.getAllByStudent(studentId)
     } catch (err) {
       console.error('[useStatsQuery] Failed to load all answers:', err)
       // 失败保持上次缓存, 不清空 (与原 store 行为一致)
-    } finally {
-      store.loading = false
     }
   }
 
   /**
    * 并行加载 sessions + aggregatedStats
+   * loading 统一在此管理，防止子函数独立管 loading 产生竞态
    * @param {string} studentId
    */
   async function refreshAll(studentId = 'default') {
-    await Promise.all([
-      loadSessions(studentId),
-      loadAggregatedStats(studentId),
-    ])
+    store.loading = true
+    try {
+      await Promise.all([
+        loadSessions(studentId),
+        loadAggregatedStats(studentId),
+      ])
+    } catch (err) {
+      console.error('[useStatsQuery] refreshAll failed:', err)
+    } finally {
+      store.loading = false
+    }
   }
 
   // ── Phase 2: write / IO ──
