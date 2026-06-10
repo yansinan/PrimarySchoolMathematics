@@ -105,6 +105,7 @@ import { useSubmitHandler } from '@/composables/useSubmitHandler'
 import { useAdaptiveSession } from '@/composables/useAdaptiveSession'
 import { usePracticeDialogs } from '@/composables/usePracticeDialogs'
 import { usePracticeSaver } from '@/composables/usePracticeSaver'
+import { decideListPracticesTransition } from '@/composables/useListPracticesGuard'
 import { useDisplayStrategy } from '@/composables/useDisplayStrategy'  // 🆕 PR-4.2 抽离 displayStats + applyDisplayModeForCurrentQuestion + generateOptions
 import { FEEDBACK_DELAYS, ASSESSMENT_ABORT_WRONG_STREAK, getCommentByRate, ASSIST_LEVELS, MAX_ATTEMPT_PER_QUESTION } from '@/constants/practice'
 
@@ -453,21 +454,29 @@ const handlePracticeComplete = async () => {
 }
 
 watch(listPractices, (newPracticeList) => {
-  if (newPracticeList.length > 0) {
-    const isAdaptiveTransition = adaptiveEngine.value && adaptiveGroupIndex.value > 1
-    // 保存当前 answers 用于组间切换时恢复（避免 initPractice 的 reset 清空）
-    const saved = isAdaptiveTransition ? [...session.value.answers] : []
+  // P2-3 抽函数: 决策逻辑委托给纯函数 decideListPracticesTransition（可测）
+  const decision = decideListPracticesTransition({
+    newList: newPracticeList,
+    savedAnswers: session.value.answers,
+    isAdaptiveTransition: !!adaptiveEngine.value && adaptiveGroupIndex.value > 1,
+    hasAdaptiveEngine: !!adaptiveEngine.value,
+    hasProfile: !!abilityProfile.value,
+    phase: phase.value,
+  })
+
+  if (decision.type === 'GROUP_START') {
+    const { savedAnswers, offset, shouldRestoreAnswers } = decision.action
+    // 每组开始时清空上一组答案（之前组答题已通过 adaptiveAnswers 累积）
+    resetGroupAnswers()
     // 关键：groupAnswerOffset 必须指向本组开始位置
     // - 组间切换（adaptive 第 2+ 组）：保留之前组的所有答案，offset = saved 长度
     // - 第一组（从诊断/普通练习切到自适应）：offset = 当前 answers 长度（含诊断 5 道）
-    // 每组开始时清空上一组答案（之前组答题已通过 adaptiveAnswers 累积）
-    resetGroupAnswers()
-    groupAnswerOffset.value = saved.length
+    groupAnswerOffset.value = offset
     practiceStore.resetCurrentIndex()
     digitFocusIdx.value = -1  // 新题重置焦点
     initPractice()
-    if (isAdaptiveTransition) {
-      session.value.answers = saved
+    if (shouldRestoreAnswers) {
+      session.value.answers = savedAnswers
     }
     return
   }
@@ -480,12 +489,13 @@ watch(listPractices, (newPracticeList) => {
   //     abilityProfile=null，但 phase=practice（Generate.vue 调用 setAbilityProfile(null)）
   //     没有 profile 也不能用 startNewAdaptiveSession → 重新进入 idle + 触发诊断
   // 这样无论用户从哪种模式完成练习，都不会卡在 loading 状态
-  if (abilityProfile.value && !adaptiveEngine.value) {
-    startNewAdaptiveSession()
-  } else if (phase.value === 'practice' && !abilityProfile.value) {
-    // 普通练习模式完成：重新进入诊断模式
-    practiceStore.setPhase('idle')
-    startNewDiagnosticSession()
+  if (decision.type === 'COMPLETION') {
+    if (decision.action.kind === 'START_ADAPTIVE') {
+      startNewAdaptiveSession()
+    } else if (decision.action.kind === 'RESTART_DIAGNOSTIC') {
+      practiceStore.setPhase('idle')
+      startNewDiagnosticSession()
+    }
   }
 })
 
