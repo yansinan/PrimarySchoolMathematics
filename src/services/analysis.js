@@ -10,7 +10,7 @@
  * - § 3.1 题目聚合（findEquivalent / findRelated / getMasteryByNumber）
  */
 
-import db from '@/utils/store/database'
+import { DB } from '@/services/databaseInit'
 import { Question } from '@/utils/algorithm/question'
 import { Answer } from '@/utils/algorithm/answer'
 import { WrongAnswer } from '@/utils/algorithm/wrongAnswer'
@@ -95,7 +95,7 @@ export async function findRelated(equation, { range = 3, limit = 10 } = {}) {
 export async function getMasteryByNumber(number, { days = 30 } = {}) {
   // P2 阶段 13：不依赖 questions.operands 字段（migration 不一致），
   // 改从 operandMin + operandMax 反推数位（“3”' ’、‘8' 也击 number=3、8）
-  const allQuestions = await db.questions.toArray()
+  const allQuestions = await DB.questions.toArray()
   const questions = allQuestions.filter((q) => Question.extractOperandDigits(q).includes(number))
   const questionIds = questions.map((q) => q.id)
 
@@ -112,7 +112,7 @@ export async function getMasteryByNumber(number, { days = 30 } = {}) {
 
   // 2. 查这些题目的答题记录（questionId 索引 + 时间窗口内存过滤）
   const cutoff = Date.now() - days * 86400e3
-  const answers = await db.answers
+  const answers = await DB.answers
     .where('questionId')
     .anyOf(questionIds)
     .and((a) => a.timestamp > cutoff)
@@ -136,9 +136,9 @@ export async function getMasteryByNumber(number, { days = 30 } = {}) {
 }
 
 /**
- * P2 阶段 11：从传入的 answers 算 masteryByNumber（不查 db.answers）
+ * P2 阶段 11：从传入的 answers 算 masteryByNumber（不查 DB.answers）
  * - 用于“本轮”/“本组”等上下文相关数据源（不同统计范围）
- * - 仍查 db.questions 拿 operands 字段（反查哪些题涉及该数字）
+ * - 仍查 DB.questions 拿 operands 字段（反查哪些题涉及该数字）
  *
  * @param {Array} answers - caller 传入的 answer 数组（任意范围）
  * @param {number} number - 目标数字
@@ -206,7 +206,7 @@ async function _getMasteryByNumberFromAnswers(answers, number) {
 /**
  * P2 阶段 11：批量查 0-9 数字 mastery（从 caller 传入的 answers 算）
  * - 三个调用方不同数据范围：
- *   - StatsDrawer：传 db.answers 全量（历史所有）
+ *   - StatsDrawer：传 DB.answers 全量（历史所有）
  *   - PracticeSummaryDialog：传 adaptiveAnswers（本轮）
  *   - SelfEvaluationDialog：传 session.answers（本组）
  *
@@ -309,7 +309,7 @@ export async function evaluateCorrectionEffect(questionId, { days = 30 } = {}) {
   const cutoff = Date.now() - days * 86400e3
   // 按 startedAt 升序（v3 字段，迁移时从 timestamp-responseTime 回填）
   // 用 Answer.fromJSON 包装：isCorrect 走 getter 统一字段 vs 字段混用
-  const raw = await db.answers
+  const raw = await DB.answers
     .where('questionId')
     .equals(questionId)
     .toArray()
@@ -398,7 +398,7 @@ export async function evaluateCorrectionEffect(questionId, { days = 30 } = {}) {
 export async function prioritizeWrongAnswers({ limit = 20 } = {}) {
   // 1. 取所有错题（用 Answer.isCorrect 静态方法——数学真理：userAnswer === solution）
   //    Answer.isCorrect 是 getter 优先的静态方法，兼容 Answer 实例和 plain object
-  const allAnswers = await db.answers.toArray()
+  const allAnswers = await DB.answers.toArray()
   const wrongAnswers = allAnswers.filter((a) => !Answer.isCorrect(a))
   if (wrongAnswers.length === 0) return []
 
@@ -424,7 +424,7 @@ export async function prioritizeWrongAnswers({ limit = 20 } = {}) {
 
   // 4. 一次 anyOf 取这些题目的所有记录，内存里求 totalAttempts + lastCorrectAt
   //    用 stored isCorrect 字段（不用 Answer getter，见函数头部注释）
-  const allForQ = await db.answers
+  const allForQ = await DB.answers
     .where('questionId')
     .anyOf(uniqueQIds)
     .toArray()
@@ -529,7 +529,7 @@ export async function getNumberCurve(number, { days = 30 } = {}) {
   if (number == null) return []
 
   // 1. 查所有 operands 包含 number 的题目（multiEntry 索引）
-  const questions = await db.questions.where('operands').equals(number).toArray()
+  const questions = await DB.questions.where('operands').equals(number).toArray()
   if (questions.length === 0) return []
 
   const qIds = questions.map((q) => q.id)
@@ -537,7 +537,7 @@ export async function getNumberCurve(number, { days = 30 } = {}) {
   // 2. 查这些题目的答题记录（questionId 索引 + 时间窗口内存过滤）
   //    用 timestamp 而非 startedAt：与 getMasteryByNumber 保持一致（同属"数字聚合"语义）
   const cutoff = Date.now() - days * 86400e3
-  const raw = await db.answers
+  const raw = await DB.answers
     .where('questionId')
     .anyOf(qIds)
     .toArray()
@@ -594,7 +594,7 @@ export async function getNumberCurve(number, { days = 30 } = {}) {
  */
 async function _aggregateQuestions({ minSample = 3 } = {}) {
   // 1. 全量查 answers（v3 schema 无更强索引）
-  const rawAnswers = await db.answers.toArray()
+  const rawAnswers = await DB.answers.toArray()
 
   // 2. 按 questionId 分组 reduce（用 Answer 实例的 getter 读字段）
   const map = new Map()

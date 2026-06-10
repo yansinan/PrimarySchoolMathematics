@@ -1,8 +1,14 @@
 /**
  * WrongAnswer 类（U 层）— 错题领域模型
  *
+ * 继承链：DBQuestion (databaseInit) → Question → Answer → WrongAnswer
+ *          └─ schema 骨架    └─ 题元数据+查询   └─答题数据+getter  └─错题专用
+ *
  * extends Answer — 继承题目元数据 + 答题元数据 + 派生 getter。
  * 增加错题专用的过滤/查询方法，将服务层的过滤逻辑内聚到类中。
+ *
+ * 本类职责：错题过滤、错题查询（DB → 静态 filterBy）。
+ * 无需额外存储字段，Answer 的所有 getter（isWrong / isFixed / level / score）全部继承可用。
  *
  * 用法：
  *   WrongAnswer.fromJSON(plain)          // DB 行 → 实例

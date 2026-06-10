@@ -1,5 +1,5 @@
 import { toEvalSymbols } from './equationCore'
-import { matchLevel } from './matchLevel'
+import { Question } from './question'
 
 const OPERATOR_SET = ['+', '-', '*', '/', '×', '÷', '＋', '－']
 
@@ -187,7 +187,7 @@ export function enrichQuestion(q) {
   const parsed = parseEquation(eq)
   const meta = extractQuestionMetadata(eq, q)
   const dm = _DISP_MODE[q.inputMode] || {}
-  const matched = matchLevel(q)
+  const matched = Question.matchLevel(q)
 
   return {
     ...q,

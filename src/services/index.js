@@ -12,8 +12,10 @@
 export * from './analysis'
 // 统一 operator 映射 (ARCHITECTURE.md §2.1 目标树)
 export * from './operatorMap'
-// 能力画像计算 (2026-06-07 升层自 utils/abilityProfile.js)
+// 能力画像加载 + 查询 (2026-06-10 类化: Profile class)
 export * from './abilityProfile'
+// 自适应引擎 (2026-06-10 升层自 utils/algorithm)
+export * from './adaptiveEngine'
 // Session 持久化 (2026-06-08 E1 抽层自 stores/practice.js#saveSessionToDB)
 export * from './sessionPersistence'
 // 注意: wrongAnswerService 不走桶 — 与 analysis.js#getWrongAnswers 同名冲突

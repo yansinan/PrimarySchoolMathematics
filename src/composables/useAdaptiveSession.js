@@ -1,5 +1,4 @@
 /**
-import { Answer } from '@/utils/algorithm/answer'
  * 自适应会话管理 composable
  *
  * 拆分自 Practice.vue 的自适应会话逻辑（Phase 4 渐进式）。
@@ -24,13 +23,15 @@ import { useStatsStore } from '@/stores/stats'
 import { usePracticeDialogs } from '@/composables/usePracticeDialogs'
 import { usePracticeSaver } from '@/composables/usePracticeSaver'
 import { generateDiagnosticQuestions, analyzeAbility } from '@/utils/algorithm/diagnostic'
-import { createAdaptiveEngine, getGroupSize, evaluateGroup, getDifficultyLabel, generateQuestionPlan, adjustNextQuestion } from '@/utils/algorithm/adaptiveEngine'
+import { Engine } from '@/services/adaptiveEngine'
 import { generateAdaptiveBatch } from '@/utils/algorithm/adaptiveBatch'
+import { Profile } from '@/services/abilityProfile'
 import { getGroupComment, getCommentByRate } from '@/constants/practice'
 import { sumResponseTimes } from '@/utils/score'
 import { TARGET_LIMITS } from '@/utils/form/formDefaults'
 import { formatDuration } from '@/utils/time/timeFormat'
 import { getWrongAnswers } from '@/services/wrongAnswerService'
+import { Answer } from '@/utils/algorithm/answer'
 
 /**
  * 自适应会话 composable 工厂
@@ -59,9 +60,9 @@ export function useAdaptiveSession(options = {}) {
   const adaptiveGroupIndex = ref(0)
   /** 当前组之前累积的答案数，用于 ProgressSteps 截取本组 */
   const groupAnswerOffset = ref(0)
-  /** 当前组内正确题数（只算本组） */
+  /** 当前组内正确题数（只算本组，走 getter：userAnswer===solution） */
   const groupCorrectCount = computed(() =>
-    session.value.answers.slice(groupAnswerOffset.value).filter(a => a.isCorrect).length
+    Answer.sumScores(session.value.answers.slice(groupAnswerOffset.value))
   )
   /** 防止 handleNext 重复调用（choice 模式 + setTimeout 同时触发） */
   const nextLocked = ref(false)
@@ -76,7 +77,7 @@ export function useAdaptiveSession(options = {}) {
       return `能力评估 ${session.value.answers.length}/${totalQuestions.value}`
     }
     if (adaptiveEngine.value) {
-      const label = getDifficultyLabel(adaptiveEngine.value)
+      const label = adaptiveEngine.value.getDifficultyLabel()
       const groupIdx = adaptiveGroupIndex.value
       return `${label} · 第${groupIdx}组`
     }
@@ -123,21 +124,31 @@ export function useAdaptiveSession(options = {}) {
     const fallbackConfig = practiceStore.session.configSnapshot || {}
     const targetMin = adaptiveConfig.targetMin ?? fallbackConfig.targetMin ?? 10
     const targetMax = adaptiveConfig.targetMax ?? fallbackConfig.targetMax ?? 30
-    const engine = createAdaptiveEngine(profile, targetMin, targetMax)
+
+    // 从 DB 加载画像作为唯一事实源
+    const dbProfile = await Profile.load()
+    const engine = new Engine({
+      difficultyIdx: dbProfile.difficultyIdx,
+      strongLevelIndices: dbProfile.strongLevelIndices,
+      weakLevelIndices: dbProfile.weakLevelIndices,
+      targetMin,
+      targetMax,
+    })
     engine.wrongAnswerPool = await getWrongAnswers({ days: 90, limit: 100 })
     adaptiveEngine.value = engine
     adaptiveGroupIndex.value = 1
-    // 同步到 store（供 AbilityCard 等其他组件读取）
-    practiceStore.setCurrentDifficulty(engine.difficultyIdx, 1)
+    // 同步到 store
+    practiceStore.currentGroupIndex = 1
+    practiceStore.currentDifficultyIdx = dbProfile.difficultyIdx
 
     practiceStore.resetPracticeSession()
     practiceStore.session.sessionStartTime = Date.now()
     practiceStore.setPhase('practice')
 
-    const size = getGroupSize(engine)
+    const size = engine.getGroupSize()
     // P5: 生成排列方案 → 按方案出题
     // startNewAdaptiveSession 时 groupIndex=1（G1=confidence）
-    const plan = generateQuestionPlan(1, size, engine, profile, false)
+    const plan = engine.generateQuestionPlan(1, size, false)
     const { questions, reservePool } = generateAdaptiveBatch(engine, size, plan)
     adaptiveEngine.value.reservePool = reservePool
     practiceStore.setListPractices(questions)
@@ -173,25 +184,31 @@ export function useAdaptiveSession(options = {}) {
       customClass: 'feedback-message'
     })
 
-    // 重要: 先存 store（completeAssessment 会把 diagAnswers 填充到 store.abilityProfile），
-    // 再创建自适应引擎（createAdaptiveEngine 依赖 profile.diagAnswers 计算 strong/weak 索引）。
+    // 先存 store（completeAssessment 保存 profile、写诊断答案到 DB）
     const targetMin = 10
     const targetMax = 30
     practiceStore.completeAssessment(profile, snapshot, { targetMin, targetMax })
 
-    const engine = createAdaptiveEngine(practiceStore.abilityProfile, targetMin, targetMax)
+    // 从 DB 加载画像创建引擎（诊断答案已由 persistSingleAnswer 写入 DB）
+    const dbProfile = await Profile.load()
+    const engine = new Engine({
+      difficultyIdx: dbProfile.difficultyIdx,
+      strongLevelIndices: dbProfile.strongLevelIndices,
+      weakLevelIndices: dbProfile.weakLevelIndices,
+      targetMin,
+      targetMax,
+    })
     engine.wrongAnswerPool = await getWrongAnswers({ days: 90, limit: 100 })
     adaptiveEngine.value = engine
     adaptiveGroupIndex.value = 1
+    practiceStore.currentDifficultyIdx = dbProfile.difficultyIdx
 
-    const size = getGroupSize(engine)
+    const size = engine.getGroupSize()
     // P5: 生成排列方案 → 按方案出题
-    const plan = generateQuestionPlan(1, size, engine, profile, false)
+    const plan = engine.generateQuestionPlan(1, size, false)
     const { questions: firstQuestions, reservePool } = generateAdaptiveBatch(engine, size, plan)
     adaptiveEngine.value.reservePool = reservePool
 
-    // P5 fix: 同步 currentDifficultyIdx 到引擎实际值
-    practiceStore.setCurrentDifficulty(engine.difficultyIdx, 1)
     practiceStore.setListPractices(firstQuestions)
   }
 
@@ -217,14 +234,14 @@ export function useAdaptiveSession(options = {}) {
     const allAnswers = [...session.value.answers]
     const engine = adaptiveEngine.value
     // 用持久化的 lastGroupSize，不重新调 getGroupSize（防随机抖动导致切片错位）
-    const size = engine.lastGroupSize || getGroupSize(engine)
+    const size = engine.lastGroupSize || engine.getGroupSize()
     const groupAnswers = allAnswers.slice(-size)
-    const groupCorrect = groupAnswers.filter(a => a.isCorrect).length
+    const groupCorrect = groupAnswers.filter(a => Answer.isCorrect(a)).length
     const groupTime = sumResponseTimes(groupAnswers)
 
     // ── 小组反馈 ──
     const groupIdx = adaptiveGroupIndex.value
-    const label = getDifficultyLabel(engine)
+    const label = engine.getDifficultyLabel()
     const correctRate = Math.round((groupCorrect / groupAnswers.length) * 100)
     const groupComment = getGroupComment(correctRate, groupTime, groupAnswers.length)
 
@@ -243,21 +260,26 @@ export function useAdaptiveSession(options = {}) {
     adaptiveEngine.value.lastEvaluation = evaluationScore
 
     // 评估并决定下一步
-    const result = evaluateGroup(engine, groupAnswers)
+    const result = engine.evaluateGroup(groupAnswers)
     adaptiveEngine.value = result.engine
     adaptiveGroupIndex.value++
-    practiceStore.setCurrentDifficulty(result.engine.difficultyIdx, adaptiveGroupIndex.value)
+    practiceStore.currentGroupIndex = adaptiveGroupIndex.value
 
-    // ── 实时保存检查点 ──
-    practiceStore.adaptiveAnswers = [...practiceStore.adaptiveAnswers, ...allAnswers]
+    // ── 实时保存检查点（写 DB） ──
+    // 先读画像（一次 DB 查询），整体替换 engine.profile + 重置降级
+    const dbProfile = await Profile.load()
+    adaptiveEngine.value.profile = dbProfile
+    adaptiveEngine.value.difficultyIdx = dbProfile.difficultyIdx
+    practiceStore.currentDifficultyIdx = dbProfile.difficultyIdx
+
     await saver.saveGroupCheckpoint(result.engine.history)
 
     // ── 强制兜底: 累积答题超过硬上限 → 直接结束 ──
-    const forceDone = practiceStore.adaptiveAnswers.length >= TARGET_LIMITS.absoluteMax
+    const forceDone = allAnswers.length >= TARGET_LIMITS.absoluteMax
 
     if (result.done || forceDone) {
       // ── 全部完成 → 弹汇总弹窗 ──
-      const finalAnswers = practiceStore.adaptiveAnswers
+      const finalAnswers = allAnswers
       const totalCorrect = Math.round(Answer.sumScores(finalAnswers))
       const totalTime = sumResponseTimes(finalAnswers)
       const totalRate = Math.round((totalCorrect / finalAnswers.length) * 100)
@@ -311,7 +333,7 @@ export function useAdaptiveSession(options = {}) {
     const nextEngine = result.engine
     const nextSize = result.nextGroupSize
     const isLast = nextEngine.totalAnswered + nextSize * 1.5 >= nextEngine.targetMax
-    const nextPlan = generateQuestionPlan(adaptiveGroupIndex.value, nextSize, nextEngine, practiceStore.abilityProfile, isLast)
+    const nextPlan = nextEngine.generateQuestionPlan(adaptiveGroupIndex.value, nextSize, isLast)
     const { questions: nextQuestions, reservePool: nextPool } = generateAdaptiveBatch(nextEngine, nextSize, nextPlan)
     nextEngine.lastGroupSize = nextQuestions.length  // 持久化实际生成题数，供下次 completeGroup 切片用
     adaptiveEngine.value.reservePool = nextPool
@@ -327,19 +349,17 @@ export function useAdaptiveSession(options = {}) {
    * 由 Practice.vue handleNext 中调用
    */
   async function afterAnswer() {
-    if (!adaptiveEngine.value || !practiceStore.abilityProfile) return
+    if (!adaptiveEngine.value) return
     const eng = adaptiveEngine.value
     // 每次都刷新错题池（答对也刷，确保 P1.8 错题复盘能用最新池）
     eng.wrongAnswerPool = await getWrongAnswers({ days: 90, limit: 100 })
     // DEBUG BUG-1: 验证画像等级索引实际值
     // console.log('[DEBUG] strong:', eng.strongLevelIndices, 'weak:', eng.weakLevelIndices, 'difficulty:', eng.difficultyIdx)
-    const roundAnswers = [...(practiceStore.adaptiveAnswers || []), ...session.value.answers]
-    adjustNextQuestion(
-      adaptiveEngine.value,
+    const roundAnswers = [...session.value.answers]
+    adaptiveEngine.value.adjustNextQuestion(
       roundAnswers,
       practiceStore.session.currentIndex,
-      practiceStore.listPractices,
-      practiceStore.abilityProfile
+      practiceStore.listPractices
     )
   }
 

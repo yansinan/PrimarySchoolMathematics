@@ -1,7 +1,7 @@
 # v4 业务阶段：错误注入专项 + 难度等级扩展
 
 > **性质**：业务规划 (Business Plan) — v3 架构调优后的业务功能新增
-> **状态**：✅ v4.0b 完成 | ✅ P1.6 完成 | ✅ P1.8 完成 | ❌ v4.2 未开始
+> **状态**：✅ v4.0a 完成 | ✅ v4.0b 完成 | ✅ v4.0c 完成 | ✅ P1.6 完成 | ✅ P1.8 完成 | ❌ v4.2 未开始
 > **核心设计原则**：增强学生信心是本系统的最优先考虑。在此基础上，练习掌握以往错题是系统第二目标。
 > **配套**：
 > - [ARCHITECTURE.md](../ARCHITECTURE.md) — 架构宪法（实施时遵守）
@@ -17,12 +17,13 @@
 
 v3 架构调优落地后，3 项未完成业务功能重组到本计划：
 
-| Phase | 内容 | 净行 | 风险 | 起点 |
-|-------|------|------|------|------|
-| **v4.0a 前置** | S 层数据库代理 `services/database.js`（薄封装 re-export）| +18 | 🟢 独立 | **立即** |
-|| **v4.0b 前置** | S 层错题模块 `services/wrongAnswerService.js`（基于 v4.0a）| +80 | 🟢 独立 | v4.0a 完成后 |
-|| **v4.1** | P1.6 ✅ + P1.8 ✅ 错题注入（基于 v4.0b）| +56 | 🟡 | v4.0b 已完成 |
-| **v4.2** | P3 L2.5 难度等级 | +57 | 🟡 | v4.1 之后 |
+|| Phase | 内容 | 净行 | 风险 | 状态 |
+||-------|------|------|------|------|
+|| **v4.0a** | S 层数据库代理 `services/database.js`（薄封装 re-export）| +18 | 🟢 独立 | ✅ 完成 |
+|| **v4.0b** | S 层错题模块 `services/wrongAnswerService.js` | +80 | 🟢 独立 | ✅ 完成 |
+|| **v4.0c** | 循环解耦 + Getter-First 重构（databaseInit 叶子模块、Answer/Question 域类、删除死代理）| -168 | 🟡 | ✅ 完成 |
+|| **v4.1** | P1.6 ✅ + P1.8 ✅ 错题注入（基于 v4.0b）| +56 | 🟡 | ✅ 完成 |
+|| **v4.2** | P3 L2.5 难度等级 | +57 | 🟡 | ❌ 未开始 |
 
 **预计总时间**：2-3 周（含 S 层前置 2-3 天）
 
@@ -33,29 +34,29 @@ v3 架构调优落地后，3 项未完成业务功能重组到本计划：
 v4 分 4 个 phase，每个都**渐进可达**：
 
 ```
-v4.0a: S 层数据库代理 services/database.js（10 分钟 ⚡）
-  └── 薄封装 re-export @/utils/store/database，零逻辑
-       │
-       ↓ (v4.0a 为下层提供 S 层 DB 入口)
+v4.0a: S 层数据库代理 services/database.js（10 分钟 ⚡ 已删 — 直接 databaseInit）
+  │
+  ↓
 v4.0b: S 层错题模块 services/wrongAnswerService.js
-  └── 引 services/database（不直接引 utils/），有错题可逐步迁移其他 @/utils/store/database 调用者
+  └── 引 services/databaseInit（不引 U 层）
+  │
+  ↓
+v4.0c: 循环解耦 + Getter-First 重构（2026-06-10 完成）
+  └── databaseInit 纯叶子模块、Answer/Question 域类继承骨架
+  └── getter 即真理（stored isCorrect/score 不再写入）
+  └── 删 utils/store/database.js + services/database.js 死代理
        │
-       ↓ (v4.0b 为引擎提供错题数据源)
-v4.1 错题注入
-  ├── P1.6 干扰项错题库（调 v4.0b.getWrongAnswers）
-  └── P1.8 20% 错题注入（调 v4.0b.getWrongAnswers）
-       │
-       ↓ (v4.1 后 engine 稳定)
-v4.2 P3 L2.5 难度等级
-
-平行推进（不阻塞）:
-  v4.0c: 逐步改 9 处 @/utils/store/database 引用 → @/services/database
-  v4.0d: 全部迁移完成后，services/database.js 从 re-export 改为原生实现，删 utils/store/database.js
+       ↓
+v4.1 错题注入（完成）
+  ├── P1.6 干扰项错题库（取错题答案当干扰项）
+  └── P1.8 3连对触发复习题（方案 B 代替 20%）
 ```
 
 ---
 
-## 2. v4.0a 前置：S 层数据库代理（✅ 已建）
+## 2. v4.0a 前置：S 层数据库代理（✅ 已建 → 🗑 已删）
+
+> **历史备注**：v4.0a 的 `services/database.js` 薄封装 re-export 在 v4.0c 循环解耦阶段被直接删除。所有调用方改引 `@/services/databaseInit`，不再需要代理层。
 
 ### 2.1 目标
 

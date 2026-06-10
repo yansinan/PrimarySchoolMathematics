@@ -489,6 +489,12 @@ watch(listPractices, (newPracticeList) => {
   }
 })
 
+// P6: currentQuestion 变化时（正常跳题 OR adjustNextQuestion 异步替换题目）
+// 同步 displayMode，防止 currentOptions 与题目不匹配
+watch(currentQuestion, (q) => {
+  if (q) applyDisplayModeForCurrentQuestion()
+})
+
 // ─────────────────────────────────────────────────────────────
 // 调试接口（window.__psm_debug）
 // ─────────────────────────────────────────────────────────────
@@ -664,7 +670,16 @@ if (typeof window !== 'undefined') {
       correctCount: correctCount.value,
       totalQuestions: totalQuestions.value,
       hasProfile: !!abilityProfile.value
-    })
+    }),
+
+    /**
+     * 访问自适应引擎（ref），可用 .value 读最新值
+     * - 引擎 profile 强/弱项/难度
+     * - 引擎方法（如 getGroupSize()、evaluateGroup()）
+     * 例: __psm_debug.engine.value?.profile
+     * @returns {Ref<Engine|null>}
+     */
+    engine: adaptiveEngine,
   }
 }
 

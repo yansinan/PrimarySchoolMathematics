@@ -1,10 +1,9 @@
 /**
-import { Answer } from '@/utils/algorithm/answer'
  * Session 持久化 service（E1 抽层, 2026-06-08；E1 方案 B 加 persistSingleAnswer, 2026-06-08）
  *
  * 替代原 `stores/practice.js#saveSessionToDB`（业务混在 M 层违例）。
  * 接收 composable 拼好的 payload（不依赖 store），按 ARCHITECTURE.md §1.2
- * 纯函数式 S 层：只引 U 层（`@/utils/score` + `@/utils/store/database`）。
+ * 纯函数式 S 层：只引 U 层（`@/utils/score`）。
  *
  * 业务变更影响面：未来如果 save 逻辑变复杂（多步事务、错误重试、上传云端），
  * 只需改本文件。
@@ -19,7 +18,9 @@ import { Answer } from '@/utils/algorithm/answer'
  */
 
 import { sumResponseTimes } from '@/utils/score'
-import db, { saveSession } from '@/utils/store/database'
+import { Answer } from '@/utils/algorithm/answer'
+import { DB } from '@/services/databaseInit'
+import { saveSession } from '@/services/PracticeSession'
 import { Question } from '@/utils/algorithm/question'
 
 /**
@@ -91,6 +92,10 @@ export async function persistSession({
   }
 }
 
+// 串行化锁：确保 persistSingleAnswer 即使并发调用也能顺序执行
+// 防止两次快速答题对同一 equation 的并行写入冲突
+let _saveQueue = Promise.resolve()
+
 /**
  * 持久化 1 条答题（fire-and-forget，每题答完调用）。
  *
@@ -102,15 +107,27 @@ export async function persistSession({
  */
 export async function persistSingleAnswer(answer) {
   if (!answer) return
-  try {
-    // 写 answers 表（不关联 sessionId，group checkpoint / final 时 persistSession 会再写带 sessionId 的完整 record）
-    await db.answers.put(answer)
-    // ✨ B-2 修复：同步写入 questions 表（equation 唯一键去重，首次创建后续复用 id）
-    await Question.save({
-      ...answer,
-      operands: [answer.operandMin, answer.operandMax].filter(x => x > 0),
-    })
-  } catch (err) {
-    console.error('[SessionPersistence] Failed to persist single answer:', err)
-  }
+  // 串行化：通过链式 Promise 排队，消除并发 race
+  await _saveQueue
+  // eslint-disable-next-line no-async-promise-executor
+  const next = new Promise(async (resolve) => {
+    // 将当前执行赋给 _saveQueue，后续调用必须等本批完成
+    try {
+      // 深拷贝去除 Pinia reactive proxy（DataCloneError 防护）
+      const plain = JSON.parse(JSON.stringify(answer))
+      // 写 answers 表（不关联 sessionId，group checkpoint / final 时 persistSession 会再写带 sessionId 的完整 record）
+      await DB.answers.put(plain)
+      // ✨ B-2 修复：同步写入 questions 表（equation 唯一键去重，首次创建后续复用 id）
+      await Question.save({
+        ...plain,
+        operands: [plain.operandMin, plain.operandMax].filter(x => x > 0),
+      })
+    } catch (err) {
+      console.error('[SessionPersistence] Failed to persist single answer:', err.message || err)
+      if (err.failures) console.error('  failures:', err.failures.map(f => f.message || f))
+    } finally {
+      resolve()
+    }
+  })
+  _saveQueue = next
 }

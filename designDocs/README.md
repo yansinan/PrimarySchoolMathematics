@@ -4,15 +4,22 @@
 
 ---
 
-## 当前状态（2026-06-08）
+## 当前状态（2026-06-10）
 
-**v3 架构调优已全部完成**（A/B/C/D/E/F/G/H 8 大组 + 收尾审计 + ui 分支合并）。详见 [IMPLEMENTATION_HISTORY.md](./IMPLEMENTATION_HISTORY.md)。
+**v3 架构调优** ✅ — A/B/C/D/E/F/G/H 8 大组完成，已合 ui。
 
-**已完成**：v4.0a 数据库代理 + v4.0b 错题模块 + **P1.6 干扰项错题库 + P1.8 错题复盘**（3 连对触发复习题）。详见 [v4-PLAN-error-injection.md](./v4-PLAN-error-injection.md)。
+**v4 业务阶段** ✅ v4.0a/b/c + P1.6 + P1.8 完成：
+- v4.0a 数据库代理（已删，直引 databaseInit）
+- v4.0b 错题模块 `wrongAnswerService.js`
+- v4.0c 循环解耦 + Getter-First 重构（databaseInit 叶子模块、Answer/Question 域类、死代理清理、串行化锁）
+- P1.6 干扰项错题库（选择题优先用错题答案）
+- P1.8 3 连对触发复习题（方案 B）
+
+详见 [IMPLEMENTATION_HISTORY.md](./IMPLEMENTATION_HISTORY.md) §8 和 [v4-PLAN-error-injection.md](./v4-PLAN-error-injection.md)。
 
 **下一目标**：
 - **v4.2** P3 L2.5 难度等级
-- **v3.1** G3 端到端集成测试（顺手收尾）
+- **v3.1** G3 端到端集成测试
 - **v2.4.1-3** D3 useChart / C6 出题聚合 / Practice.vue 拆分
 
 ---

@@ -1,24 +1,144 @@
 /**
  * Question 类（U 层）— 单道题的领域模型
  *
+ * 继承链：DBQuestion (databaseInit) → Question → Answer → WrongAnswer
+ *          └─ schema 骨架    └─ 题元数据+查询   └─答题数据+getter  └─错题专用
+ *
  * 包装 db.questions 表的元数据 + 派生属性。
  * Answer extends Question，继承所有题目元数据 + 答题元数据。
  *
- * @see utils/algorithm/answer.js
- * @see ARCHITECTURE.md § 1.1 U 层 = 无状态算法 / IO 适配
+ * 本类职责：题目查询、难度映射、算式查找。
+ * 不涉及答题状态（那是 Answer 的范畴）。
+ *
+ * @see utils/algorithm/answer.js — Answer（子类）
+ * @see utils/algorithm/wrongAnswer.js — WrongAnswer（孙类）
+ * @see constants/difficulty.js — DIFFICULTY_LEVELS 等级定义
  */
 
 import { DIFFICULTY_LEVELS } from '@/constants/difficulty'
-import { matchLevel, groupAnswersByLevel } from './matchLevel'
 import { DB, Question as DBQuestion } from '@/services/databaseInit'
+
+// ═══════════════════════════════════════════════════════════════
+// 难度映射（纯函数，内联自 matchLevel.js）
+// ═══════════════════════════════════════════════════════════════
+
+const _OP_TO_NUM = { '+': 1, '-': 2, '*': 3, '/': 4, '×': 3, '÷': 4, '＋': 1, '－': 2 }
+
+function _parseOperands(equation, operator) {
+  if (!equation || !operator) return [null, null]
+  const eq = equation.replace(/=.*$/, '').trim()
+  const idx = eq.indexOf(operator)
+  if (idx === -1) return [null, null]
+  const left = parseInt(eq.substring(0, idx).trim())
+  const right = parseInt(eq.substring(idx + 1).trim())
+  if (isNaN(left) || isNaN(right)) return [null, null]
+  return [left, right]
+}
+
+function _isCarry(a, b) { return (a % 10) + (b % 10) >= 10 }
+function _isBorrow(a, b, opNum) { return opNum === 2 && (a % 10) < (b % 10) }
+
+/**
+ * 将一道题匹配到 DIFFICULTY_LEVELS 档位
+ * @param {object} answer
+ * @returns {{ levelIdx: number, label: string } | null}
+ */
+function _matchLevel(answer) {
+  if (!answer || !answer.equation) return null
+  const opChar = answer.operator || answer.equation.replace(/=.*$/, '').trim().match(/[+\-*/×÷＋－]/)?.[0] || ''
+  const opNum = _OP_TO_NUM[opChar]
+  if (opNum == null) return null
+  const [a, b] = (answer.operandMin != null && answer.operandMax != null)
+    ? [answer.operandMin, answer.operandMax]
+    : _parseOperands(answer.equation, opChar)
+  if (a == null || b == null) return null
+  const operandMin = Math.min(a, b)
+  const operandMax = Math.max(a, b)
+  const hasCarry = answer.isCarry ?? _isCarry(a, b)
+  const hasBorrow = answer.isBorrow ?? _isBorrow(a, b, opNum)
+  for (let i = 0; i < DIFFICULTY_LEVELS.length; i++) {
+    const level = DIFFICULTY_LEVELS[i]
+    if (opNum === 1) {
+      if (level.carry === '2' && !hasCarry) continue
+      if (level.carry === '3' && hasCarry) continue
+    }
+    if (opNum === 2) {
+      if (level.abdication === '2' && !hasBorrow) continue
+      if (level.abdication === '3' && hasBorrow) continue
+    }
+    const rangeMatch = (() => {
+      const specific = level.formulaList.find(f => {
+        if (operandMax > f.max) return false
+        if (!(operandMin >= f.min || operandMax >= f.min)) return false
+        return f.operators != null && f.operators.includes(opNum)
+      })
+      if (specific) return true
+      const hasExplicitOp = level.formulaList.some(f => f.operators != null)
+      if (hasExplicitOp) return false
+      return level.formulaList.some(f => {
+        if (operandMax > f.max) return false
+        if (!(operandMin >= f.min || operandMax >= f.min)) return false
+        return f.operators == null
+      })
+    })()
+    if (!rangeMatch) continue
+    return { levelIdx: i, label: level.label }
+  }
+  return null
+}
+
+/**
+ * 将答题记录按 matchLevel 分组
+ * @param {Array} answers
+ * @returns {Array<{levelIdx:number, label:string, total:number, correct:number, accuracy:number}>}
+ */
+function _groupAnswersByLevel(answers) {
+  const map = {}
+  for (const a of (answers || [])) {
+    const match = _matchLevel(a)
+    if (!match) continue
+    const key = match.levelIdx
+    if (!map[key]) {
+      map[key] = { levelIdx: key, label: match.label, total: 0, correct: 0 }
+    }
+    map[key].total++
+    if (a.isCorrect) map[key].correct++
+  }
+  return Object.values(map).map((g) => ({
+    ...g,
+    accuracy: g.total > 0 ? g.correct / g.total : 0,
+  }))
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Question 类
+// ═══════════════════════════════════════════════════════════════
 
 export class Question extends DBQuestion {
   static _getDB() { return DB }
+
+  /**
+   * 按方程操作数/运算符/进位退位匹配 DIFFICULTY_LEVELS
+   * @param {object} eqLike - 含 equation 和可选 solution 的对象
+   * @returns {{ levelIdx: number, label: string } | null}
+   */
+  static matchLevel(eqLike) {
+    return _matchLevel(eqLike)
+  }
+
+  /**
+   * 将答题记录按 matchLevel 分组
+   * @param {Array} answers
+   * @returns {Array<{levelIdx:number, label:string, total:number, correct:number, accuracy:number}>}
+   */
+  static groupAnswersByLevel(answers) {
+    return _groupAnswersByLevel(answers)
+  }
+
   /** @param {Object} [raw] — db.questions 行或 useSubmitHandler 构造的 currentQuestion */
   constructor(raw) {
-    super()  // DB schema 默认值（equation='', solution=0, …）
-    if (!raw) return  // 保留 DB 默认值（mapToClass 空行用）
-    // 只复制非 getter 字段（避免 Answer 的只读 getter 被 Object.assign 覆盖）
+    super()
+    if (!raw) return
     const { isCorrect, attemptCount, score, ...rest } = raw
     Object.assign(this, rest)
   }
@@ -26,109 +146,51 @@ export class Question extends DBQuestion {
   // ── 派生属性 ──
 
   /** 数值范围元组 [min, max] */
-  get operandRange() {
-    return [this.operandMin, this.operandMax]
-  }
-
-  /** 这道题是否需要进位 */
-  get needsCarry() {
-    return this.isCarry || (this.difficulty ?? 0) >= 7
-  }
-
-  /** 这道题是否需要借位 */
-  get needsBorrow() {
-    return this.isBorrow || (this.difficulty ?? 0) >= 8
-  }
+  get operandRange() { return [this.operandMin, this.operandMax] }
+  get needsCarry() { return this.isCarry || (this.difficulty ?? 0) >= 7 }
+  get needsBorrow() { return this.isBorrow || (this.difficulty ?? 0) >= 8 }
 
   // ── 持久化 ──
 
-  /** 转为 plain object 存 db */
   toJSON() {
     return {
-      id: this.id,
-      equation: this.equation,
-      solution: this.solution,
-      operator: this.operator,
-      operandMin: this.operandMin,
-      operandMax: this.operandMax,
-      operands: this.operands,
-      isCarry: this.isCarry,
-      isBorrow: this.isBorrow,
-      stepCount: this.stepCount,
-      difficulty: this.difficulty,
-      inputMode: this.inputMode,
-      layout: this.layout,
-      assistLevel: this.assistLevel,
-      blankMode: this.blankMode,
-      createdAt: this.createdAt,
-      synced: this.synced,
+      id: this.id, equation: this.equation, solution: this.solution,
+      operator: this.operator, operandMin: this.operandMin, operandMax: this.operandMax,
+      operands: this.operands, isCarry: this.isCarry, isBorrow: this.isBorrow,
+      stepCount: this.stepCount, difficulty: this.difficulty, inputMode: this.inputMode,
+      layout: this.layout, assistLevel: this.assistLevel, blankMode: this.blankMode,
+      createdAt: this.createdAt, synced: this.synced,
     }
   }
 
-  static fromJSON(plain) {
-    return new this(plain)
-  }
+  static fromJSON(plain) { return new this(plain) }
 
   // ── 难度映射 ──
 
-  /**
-   * 映射到 DIFFICULTY_LEVELS 档位
-   * 复用 adaptiveEngine.matchLevel 按方程操作数/运算符/进位退位匹配
-   * @returns {{ levelIdx: number, label: string } | null}
-   */
-  get levelMatch() {
-    return matchLevel(this)
-  }
+  get levelMatch() { return Question.matchLevel(this) }
 
-  /**
-   * 对应 DIFFICULTY_LEVELS 的完整配置对象
-   * @returns {object|null} { formulaList, carry, abdication, resultMax, ... }
-   */
   get difficultyLevel() {
     const m = this.levelMatch
-    if (!m) return null
-    return DIFFICULTY_LEVELS[m.levelIdx]
+    return m ? DIFFICULTY_LEVELS[m.levelIdx] : null
   }
 
-  /**
-   * 按难度档位过滤题列表
-   * @param {Array<Question|Answer>} questions — 题或答题列表
-   * @param {number} levelIdx — DIFFICULTY_LEVELS 索引
-   * @returns {Array} 匹配的题
-   */
+  /** 所属难度档位索引（getter：通过 matchLevel 实时计算，无需存储） */
+  get level() { return this.levelMatch?.levelIdx ?? null }
+
   static filterByLevel(questions, levelIdx) {
     return (questions || []).filter(q => {
-      const m = matchLevel(q)
+      const m = Question.matchLevel(q)
       return m && m.levelIdx === levelIdx
     })
   }
 
   // ── 算式查找 ──
 
-  /**
-   * 按算式查找题目
-   * @param {Array} collection — Question/Answer/WrongAnswer 实例或 plain object
-   * @param {string} equation — 如 '5+3=8' 或 '5+3=__'
-   * @param {Object} [opts]
-   * @param {boolean} [opts.exact=true] — true=精确字符串匹配，false=等价匹配
-   * @returns {Array}
-   *
-   * 等价规则：
-   *   - 同一运算符族（+↔- 为 additive，×↔÷ 为 multiplicative）
-   *   - 全部已知数字（操作数+结果）排序后集合相同 → 如 '5+3=8' ≡ '8-5=3' ≡ '3+5=8'
-   *   - 若有未知结果（=__）→ 仅比较操作数排序集 → 如 '5+3=__' ≡ '3+5=__' ≡ 与 '5+3=8' 等价
-   */
   static findByEquation(collection, equation, { exact = true } = {}) {
     if (!collection || !equation) return []
-
-    if (exact) {
-      return collection.filter(q => q.equation === equation)
-    }
-
-    // 等价模式
+    if (exact) return collection.filter(q => q.equation === equation)
     const target = this._parseEquationTriple(equation)
     if (!target) return []
-
     return collection.filter(q => {
       const qTriple = this._parseEquationTriple(q.equation || '')
       if (!qTriple) return false
@@ -136,16 +198,11 @@ export class Question extends DBQuestion {
     })
   }
 
-  /**
-   * 解析算式为 { bodyA, bodyB, result, op, opFamily }
-   * @private
-   */
   static _parseEquationTriple(equation) {
     if (!equation) return null
     const resultMatch = equation.match(/=(\d+)/)
     const result = resultMatch ? parseInt(resultMatch[1], 10) : null
     const body = equation.replace(/=.*$/, '').trim()
-
     const match = body.match(/[+\-*/×÷＋－]/)
     if (!match) return null
     const op = match[0]
@@ -154,80 +211,46 @@ export class Question extends DBQuestion {
     const bodyA = parseInt(parts[0].trim(), 10)
     const bodyB = parseInt(parts[1].trim(), 10)
     if (isNaN(bodyA) || isNaN(bodyB)) return null
-
     const opFamily = ['+', '-', '＋', '－'].includes(op) ? 'additive' : 'multiplicative'
     return { bodyA, bodyB, result, op, opFamily }
   }
 
-  /**
-   * 判断两个算式三要素是否等价
-   * @private
-   */
   static _isEquivalentTriple(t1, t2) {
     if (t1.opFamily !== t2.opFamily) return false
-
     const sorted = (...nums) => nums.filter(v => v != null).sort((a, b) => a - b).join(',')
-
-    // 双方 result 都已知 → 比较三数集
-    if (t1.result != null && t2.result != null) {
+    if (t1.result != null && t2.result != null)
       return sorted(t1.bodyA, t1.bodyB, t1.result) === sorted(t2.bodyA, t2.bodyB, t2.result)
-    }
-    // 至少一方 result 未知 → 仅比较操作数
     return sorted(t1.bodyA, t1.bodyB) === sorted(t2.bodyA, t2.bodyB)
   }
-  // ── 静态助手（从 analysis.js 迁入） ──
 
-  /**
-   * 批量加载 questions，返回 Map<id, Question>
-   * @param {number[]} ids
-   * @returns {Promise<Map<number, Question>>}
-   */
+  // ── 静态助手 ──
+
   static async loadByIds(ids) {
     if (!ids?.length) return new Map()
     const qs = await DB.questions.where('id').anyOf(ids).toArray()
     return new Map(qs.map(q => [q.id, Question.fromJSON(q)]))
   }
 
-  /**
-   * 从 operandMin/Max 反推涉及的数字（0-9）
-   * @param {{operandMin?:number, operandMax?:number}} q
-   * @returns {number[]}
-   */
   static extractOperandDigits(q) {
     if (!q) return []
-    const min = q.operandMin
-    const max = q.operandMax
+    const min = q.operandMin; const max = q.operandMax
     if (min == null && max == null) return []
     const digits = new Set()
     for (const n of [min, max]) {
       if (n == null) continue
-      for (const ch of String(n)) {
-        const d = Number(ch)
-        if (!isNaN(d) && d >= 0) digits.add(d)
-      }
+      for (const ch of String(n)) { const d = Number(ch); if (!isNaN(d) && d >= 0) digits.add(d) }
     }
     return [...digits]
   }
 
-  // ── DB 查询（直接读 services/database，U 层领域查询） ──
+  // ── DB 查询 ──
 
-  /**
-   * 查找等价题（交换律 + 事实家族 + =__ 兼容）
-   * @param {string} equation
-   * @returns {Promise<Question[]>}
-   */
   static async findEquivalent(equation) {
     if (!equation) return []
     const all = await DB.questions.toArray()
     return Question.findByEquation(all, equation, { exact: false })
   }
 
-  /**
-   * 查找相关题（同 operator + 数字在 ±range 内，按欧氏距离升序）
-   * @param {string} equation
-   * @param {{range?:number, limit?:number}} [opts]
-   * @returns {Promise<Question[]>}
-   */
   static async findRelated(equation, { range = 3, limit = 10 } = {}) {
     const triple = Question._parseEquationTriple(equation)
     if (!triple) return []
@@ -253,26 +276,23 @@ export class Question extends DBQuestion {
     return decorated.map(d => d.q).slice(0, limit)
   }
 
-  /**
-   * 保存/更新一道题（upsert by equation）
-   * @param {Object} questionData — 须含 equation 字段
-   */
   static async save(questionData) {
     if (!questionData?.equation) return
-    const existing = await DB.questions.where('equation').equals(questionData.equation).toArray()
-    if (existing.length > 0) {
-      await DB.questions.update(existing[0].id, questionData)
-    } else {
-      await DB.questions.add(questionData)
-    }
+    const { id: _ignored, ...clean } = questionData
+    return DB.transaction('rw', DB.questions, async () => {
+      const existing = await DB.questions.where('equation').equals(clean.equation).first()
+      if (existing) {
+        console.debug('[Question.save] upsert existing:', clean.equation, 'id:', existing.id)
+        await DB.questions.update(existing.id, clean)
+      } else {
+        console.debug('[Question.save] add new:', clean.equation)
+        await DB.questions.add(clean)
+      }
+    }).catch((txErr) => {
+      console.warn('[Question.save] tx retries exhausted, fallback update:', txErr?.name)
+      return DB.questions.where('equation').equals(clean.equation).first().then((existing) => {
+        if (existing) return DB.questions.update(existing.id, clean)
+      })
+    })
   }
 }
-
-// ═══════════════════════════════════════════════════════════
-// 难度映射函数（纯函数，无状态）
-// 原定义在 adaptiveEngine.js，迁入 Question 的同级模块
-// ═══════════════════════════════════════════════════════════
-
-/** 运算符字符 → DIFFICULTY_LEVELS 数字编码 */
-// ── matchLevel + groupAnswersByLevel 已迁至 ./matchLevel ──────
-// =========================================================================

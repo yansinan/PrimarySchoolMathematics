@@ -5,6 +5,7 @@
 -->
 <template>
   <el-dialog
+    :key="groupIndex"
     :model-value="visible"
     title="💬 给这组题点个评"
     width="400px"

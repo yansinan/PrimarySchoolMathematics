@@ -6,7 +6,7 @@
  *
  * @see v4-PLAN-error-injection.md § v4.0b
  */
-import { DB } from '@/services/database'
+import { DB } from '@/services/databaseInit'
 import { Answer } from '@/utils/algorithm/answer'
 
 /**

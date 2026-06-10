@@ -61,6 +61,16 @@ export class EquationSolver {
 
         const [leftExpr, rightExpr] = expr.split('=');
 
+        // P0: 右边是未知数 x → 结果在左边（基础算式如 7+6=__ → x=__ 被替换）
+        if (rightExpr.trim() === 'x') {
+            try {
+                return eval(leftExpr);
+            } catch (e) {
+                console.error('左侧算式计算错误:', e);
+                return null;
+            }
+        }
+
         // 计算右边的值
         let rightValue;
         try {
@@ -346,6 +356,10 @@ export class EquationSolver {
 
             try {
                 const leftVal = eval(leftExpr);
+                // P0: __ 在等号右边时，rightPattern 是未知数，直接比较结果
+                if (rightPattern.trim() === '__') {
+                    return Math.abs(leftVal - parseFloat(result)) < 0.0001;
+                }
                 const rightVal = eval(rightPattern);
                 return Math.abs(leftVal - rightVal) < 0.0001;
             } catch (e) {

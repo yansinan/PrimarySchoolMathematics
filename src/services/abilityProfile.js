@@ -1,96 +1,108 @@
 /**
-import { Answer } from '@/utils/algorithm/answer'
- * 用户能力画像 — 实时计算 + 持久化（service 层）
- *
- * 路径演进：
- *  - 2026-06-07: 升层自 `utils/abilityProfile.js`（U 层），为落实 ARCH § 1.2 "M 只放字段"
- *    与 § 2.1 目标树 `services/abilityProfile.js`
- *  - 原 U 层文件 2026-06-07 删除
+ * 用户能力画像 — 加载 + 查询（service 层）
  *
  * 职责：
- *  - 纯函数 + 单一副作用（写 abilitySnapshots 表）
- *  - caller 传 store 数据进来，service 不引 M 层
+ *  - Profile 类：用户统计数据（难度 + 强弱项索引），不可变，组边界整体替换
+ *  - Engine 通过 this.profile 持有实例，强弱项走 getter 委派
  *
- * 用法：
- *   // caller（composable）从 store 拿数据后传进来
- *   computeAndSaveAbilityProfile({
- *     diagAnswers: store.abilityProfile?.diagAnswers,
- *     adaptiveAnswers: store.adaptiveAnswers,
- *     currentDifficultyIdx: store.currentDifficultyIdx,
- *   })
+ * 调用方：
+ *  - useAdaptiveSession.js → Profile.load() 加载画像
+ *  - Engine → this.profile 引用 Profile 实例
  *
- * 输出到 abilitySnapshots：
- *  - totalQuestions / correctCount / accuracy（用 score 字段算）
- *  - strong / weak（DIAG_LEVELS 等级评估）
- *  - currentLevel / totalLevels / currentLevelLabel
+ * 相关模块：
+ *  - services/adaptiveEngine.js — Engine 类
  */
 
-import { saveAbilitySnapshot } from '@/utils/store/database'
-import { DIAG_LEVELS } from '@/utils/algorithm/diagnostic'
-import { DIFFICULTY_LEVELS } from '@/utils/algorithm/adaptiveEngine'
+import { Answer } from '@/utils/algorithm/answer'
+import { Question } from '@/utils/algorithm/question'
+import { DIFFICULTY_LEVELS } from '@/constants/difficulty'
+import { STRONG_THRESHOLD, WEAK_THRESHOLD } from '@/constants/practice'
 
 /**
- * 单等级评估辅助函数
- */
-function evaluateLevel(levelId, answers) {
-  const la = answers.filter((a) => a.level === levelId)
-  if (!la.length) return { correct: 0, total: 0, accuracy: 0, hasData: false }
-  const correct = la.filter((a) => a.isCorrect === true).length
-  const total = la.length
-  return { correct, total, accuracy: Answer.sumScores(la) / total, hasData: true }
-}
-
-/**
- * 计算当前用户画像并持久化到 DB
- * 纯函数：caller 传 store 数据，service 层不引 M 层
+ * 用户能力画像（不可变数据类）
  *
- * @param {object} opts
- * @param {Array} [opts.diagAnswers=[]]
- * @param {Array} [opts.adaptiveAnswers=[]]
- * @param {number} [opts.currentDifficultyIdx=-1]
- * @param {string} [opts.studentId='default']
- * @returns {Promise<void>}
+ * 唯一事实源：Profile.load() 从 DB 计算后创建。
+ * Engine 通过 this.profile 持有实例，强弱项走 getter 委派消除双源。
+ *
+ * 与 Engine 的分工：
+ *   Profile = 用户统计数据（难度 + 强弱项索引），组边界整体替换
+ *   Engine  = 会话运行时状态，通过 this.profile 引用 Profile 实例
+ *
+ * @see services/adaptiveEngine.js — Engine 类（持 Profile 实例）
+ * @see utils/algorithm/adaptiveEngine.js — computeDifficultyIdx（原 U 层函数已 inline）
  */
-export async function computeAndSaveAbilityProfile({
-  diagAnswers = [],
-  adaptiveAnswers = [],
-  currentDifficultyIdx = -1,
-  studentId = 'default',
-} = {}) {
-  const all = [...diagAnswers, ...adaptiveAnswers]
-
-  const totalQuestions = all.length
-  const correctCount = Answer.sumScores(all)
-  const accuracy = totalQuestions > 0 ? correctCount / totalQuestions : 0
-
-  const strong = []
-  const weak = []
-  for (const level of DIAG_LEVELS) {
-    const s = evaluateLevel(level.id, diagAnswers)
-    if (!s.hasData) continue
-    if (s.accuracy >= 0.8) strong.push(level.label)
-    else if (s.accuracy < 0.5) weak.push(level.label)
+export class Profile {
+  /** @param {{ difficultyIdx: number, strongLevelIndices: number[], weakLevelIndices: number[], _rawAnswers?: Array }} data */
+  constructor(data = {}) {
+    this.difficultyIdx = data.difficultyIdx ?? 0
+    this.strongLevelIndices = data.strongLevelIndices ?? []
+    this.weakLevelIndices = data.weakLevelIndices ?? []
+    /** @private 原始 DB 行，供调用方复用避免重复查询 */
+    this._rawAnswers = data._rawAnswers ?? null
   }
 
-  const currentLevel = Math.max(1, currentDifficultyIdx + 1)
-  const totalLevels = DIFFICULTY_LEVELS.length
-  const currentLevelLabel = DIFFICULTY_LEVELS[Math.max(0, currentDifficultyIdx)]?.label || '—'
-
-  const snapshot = {
-    studentId,
-    totalQuestions,
-    correctCount,
-    accuracy: Math.round(accuracy * 10000) / 10000,
-    strong,
-    weak,
-    currentLevel,
-    totalLevels,
-    currentLevelLabel,
+  /** 当前难度等级的文字标签 */
+  get difficultyLabel() {
+    return DIFFICULTY_LEVELS[Math.max(0, this.difficultyIdx)]?.label || '—'
   }
 
-  try {
-    await saveAbilitySnapshot(snapshot)
-  } catch (err) {
-    console.warn('[AbilityProfile] Save snapshot failed:', err)
+  /** 弱项占已知总档位的比例（0-1），越大越严重 */
+  get weakSeverity() {
+    const total = this.strongLevelIndices.length + this.weakLevelIndices.length
+    return total > 0 ? this.weakLevelIndices.length / total : 0
+  }
+
+  /** 指定等级是否为强项 */
+  isStrong(levelIdx) { return this.strongLevelIndices.includes(levelIdx) }
+
+  /** 指定等级是否为弱项 */
+  isWeak(levelIdx) { return this.weakLevelIndices.includes(levelIdx) }
+
+  /**
+   * 从 DB 加载用户画像
+   * 唯一事实源：Answer.getAllByStudent 读 db.answers 全表。
+   * 调用方：useAdaptiveSession.js（组边界刷新时 3 处调用）
+   *
+   * @param {string} [studentId='default']
+   * @returns {Promise<Profile>}
+   */
+  static async load(studentId = 'default') {
+    const rows = await Answer.getAllByStudent(studentId)
+    const answers = rows.map(r => Answer.fromJSON(r))
+    const groups = Question.groupAnswersByLevel(answers)
+    return new Profile({
+      difficultyIdx: Profile.computeDifficultyIdx(answers),
+      strongLevelIndices: groups.filter(g => g.accuracy >= STRONG_THRESHOLD).map(g => g.levelIdx),
+      weakLevelIndices: groups.filter(g => g.accuracy < WEAK_THRESHOLD).map(g => g.levelIdx),
+      _rawAnswers: rows,
+    })
+  }
+
+  /**
+   * 从答题历史计算用户当前最适合的难度等级
+   *
+   * 原则：基于已有强弱项，不强推未探索的难度
+   * - 从高到低取 accuracy ≥ STRONG_THRESHOLD（强项）的最高档作为 difficultyIdx
+   * - 全部强项 → 最高有过数据的档位
+   * - 无强项 → 最低有过数据的档位
+   * - 无数据 → 0（起步）
+   *
+   * @param {Array} answers - Answer 实例或 plain object
+   * @returns {number} DIFFICULTY_LEVELS 索引
+   */
+  static computeDifficultyIdx(answers) {
+    if (!answers?.length) return 0
+    const wrapped = answers.map(a => (a instanceof Answer ? a : new Answer(a)))
+    const groups = Question.groupAnswersByLevel(wrapped)
+    if (!groups.length) return 0
+    groups.sort((a, b) => a.levelIdx - b.levelIdx)
+    if (groups.every(g => g.accuracy >= STRONG_THRESHOLD)) {
+      const highest = groups[groups.length - 1]
+      return Math.min(DIFFICULTY_LEVELS.length - 1, highest.levelIdx + 1)
+    }
+    for (let i = groups.length - 1; i >= 0; i--) {
+      if (groups[i].accuracy >= STRONG_THRESHOLD) return groups[i].levelIdx
+    }
+    return groups[0].levelIdx
   }
 }

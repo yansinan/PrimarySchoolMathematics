@@ -29,7 +29,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElCard, ElCheckbox, ElButton, ElResult, ElIcon } from 'element-plus'
 import { Delete } from '@element-plus/icons-vue'
-import { clearAllData } from '@/services/database'
+import { clearAllData } from '@/services/databaseInit'
 
 const router = useRouter()
 const confirmed = ref(false)

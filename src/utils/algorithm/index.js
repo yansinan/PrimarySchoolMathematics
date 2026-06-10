@@ -1,6 +1,5 @@
 export * from './EquationSolver'
 export * from './adaptiveBatch'
-export * from './adaptiveEngine'
 export * from './diagnostic'
 export * from './equationParser'
 export * from './equationCore'

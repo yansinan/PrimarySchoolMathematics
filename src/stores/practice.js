@@ -42,12 +42,12 @@ export const usePracticeStore = defineStore('practice', {
      *   adaptiveHistory?: Array
      * }} */
     abilityProfile: saved?.profile || null,
-    /** 当前自适应难度索引（-1 表示无自适应进行中）。由 useAdaptiveSession 同步。*/
-    currentDifficultyIdx: -1,
     /** 当前自适应组序号（0 表示无） */
     currentGroupIndex: 0,
     /** 自适应阶段累计答题（按题号追加，跨组不去重） */
     adaptiveAnswers: [],
+    /** 当前难度索引（由 loadProfile 从 DB 计算，-1 表示未加载） */
+    currentDifficultyIdx: -1,
     session: {
       currentIndex: 0,
       answers: [],
@@ -136,39 +136,30 @@ export const usePracticeStore = defineStore('practice', {
     /** 完成诊断、记录能力画像
      * 数据流设计：
      *  - session.answers 只装"当前/最近一组"题（弹窗用，避免 125% bug）
-     *  - abilityProfile.diagAnswers 保留诊断阶段所有题（AbilityCard 强项/薄弱用）
-     *  - adaptiveAnswers 跨组累加（AbilityCard 整体准确率用）
      *  - session.adaptiveConfig 诊断完成时设置，自适应引擎专用，不受 Generate.vue 污染
-     *  - resetPracticeSession 时清空 adaptiveAnswers 和 adaptiveConfig（新一轮开始）
+     *  - resetPracticeSession 时清空 session.answers 和 adaptiveConfig（新一轮开始）
      */
     completeAssessment(profile, diagAnswers, adaptiveOptions = {}) {
-      // 把诊断答题（含 level 字段）保存到 abilityProfile.diagAnswers
-      // diagAnswers 是调用方传来（防异步竞态），不用 this.session.answers
       const enrichedProfile = {
         ...profile,
-        diagAnswers: [...(diagAnswers || this.session.answers)],
       }
       this.abilityProfile = enrichedProfile
       this.phase = 'practice'
-      this.currentDifficultyIdx = 0
       this.currentGroupIndex = 1
       // 设置自适应专用配置（不受 configSnapshot 污染）
       this.session.adaptiveConfig = {
         targetMin: Math.max(1, adaptiveOptions.targetMin ?? 10),
         targetMax: Math.min(60, adaptiveOptions.targetMax ?? 30),
       }
-      // 清空 session.answers 和 adaptiveAnswers
+      // 清空 session.answers
       this.session.answers = []
-      this.adaptiveAnswers = []
       this.session.currentIndex = 0
       savePersistedProfile(enrichedProfile, 'practice')
     },
     setCurrentDifficulty(idx, groupIdx) {
-      this.currentDifficultyIdx = idx
       this.currentGroupIndex = groupIdx
     },
     clearAdaptiveEngine() {
-      this.currentDifficultyIdx = -1
       this.currentGroupIndex = 0
     },
 

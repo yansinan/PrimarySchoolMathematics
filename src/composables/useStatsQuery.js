@@ -27,13 +27,9 @@
  * - C → S → D: 此 composable 直接调 database (M 层可引 D 层)
  */
 import { useStatsStore } from '@/stores/stats'
-import {
-  getSessions,
-  getSessionDetail,
-  getAggregatedStats,
-  deleteSession as dbDeleteSession,
-} from '@/utils/store/database'
-import { exportAllData, importAllData } from '@/services/database'
+import { getSessions, getSessionDetail, deleteSession as dbDeleteSession } from '@/services/PracticeSession'
+import { getAggregatedStats } from '@/services/statsAggregator'
+import { exportAllData, importAllData } from '@/services/databaseInit'
 import { Answer } from '@/utils/algorithm/answer'
 
 export function useStatsQuery() {

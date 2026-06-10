@@ -1,17 +1,21 @@
 /**
  * Answer 类（U 层）— 单次答题的领域模型
  *
+ * 继承链：DBQuestion (databaseInit) → Question → Answer → WrongAnswer
+ *          └─ schema 骨架    └─ 题元数据+查询   └─答题数据+getter  └─错题专用
+ *
  * extends Question — 继承题目元数据 + 添加答题元数据。
  * 区分：
  * - 存储字段：question 数据 + 答题数据 + 时间戳
- * - 派生字段（getter）：isCorrect / isWrong / isFixed / attemptCount / score
+ * - 派生字段（getter）：isCorrect / level / attemptCount / score / isWrong / isFixed
  *
  * 存储：
  *   旧 plain object（isCorrect/attemptCount/score 直接存）→ 新 Answer 实例
  *   调用 toJSON() 转为 plain object 存 db
  *   读取时 Answer.fromJSON(plain) 包成实例
  *
- * @see utils/algorithm/question.js
+ * @see utils/algorithm/question.js — 父类
+ * @see utils/algorithm/wrongAnswer.js — 子类（错题）
  * @see ARCHITECTURE.md § 1.1 U 层
  */
 
@@ -178,14 +182,24 @@ export class Answer extends Question {
     }, 0)
   }
 
-  /** 获取某学生全部答题（含 session config 增强） */
+  /**
+   * 获取某学生的全部答题记录（跨所有 session，含 persistSingleAnswer 的无 session 记录）
+   * 获取某学生的全部答题记录（跨所有 session，含 persistSingleAnswer 的无 session 记录）
+   * 作为唯一事实源：每道答完的题都在 db.answers 中。
+   * 返回 plain object 数组（兼容已有调用方的 .map(Answer.fromJSON) 模式）
+   * @param {string} [studentId='default']
+   * @returns {Promise<Object[]>} — 每项含 answer 字段 + config（有 session 时）
+   */
   static async getAllByStudent(studentId = 'default') {
-    const sessions = await DB.practiceSessions.where('studentId').equals(studentId).toArray()
-    const sessionIds = sessions.map(s => s.id)
-    if (!sessionIds.length) return []
-    const answers = await await DB.answers.where('sessionId').anyOf(sessionIds).toArray()
+    const [sessions, allRows] = await Promise.all([
+      DB.practiceSessions.where('studentId').equals(studentId).toArray(),
+      DB.answers.toArray(),
+    ])
     const sessionMap = {}
     for (const s of sessions) sessionMap[s.id] = s
-    return answers.map(a => ({ ...a, config: sessionMap[a.sessionId]?.config || null }))
+    return allRows.map(a => ({
+      ...a,
+      config: a.sessionId ? (sessionMap[a.sessionId]?.config || null) : null,
+    }))
   }
 }

@@ -18,13 +18,8 @@
 
 import { createFormulasGenerator } from '../paperGenerator'
 import { EquationSolver } from './EquationSolver'
-import {
-  diversifyBatch,
-  DIFFICULTY_LEVELS,
-  matchLevel,
-  pickStrongLevel,
-  pickWeakLevel,
-} from './adaptiveEngine'
+import { DIFFICULTY_LEVELS } from '../../constants/difficulty'
+import { Question } from './question'
 import { RESERVE_POOL_SIZE } from '../../constants/practice'
 
 /**
@@ -46,10 +41,10 @@ export function generateAdaptiveBatch(engine, count, plan) {
     let levelIdx
 
     if (slotType === 'strong') {
-      levelIdx = pickStrongLevel(engine.strongLevelIndices, engine.difficultyIdx)
+      levelIdx = engine.pickStrongLevel()
       if (levelIdx == null) levelIdx = engine.difficultyIdx  // 兜底：用当前难度
     } else if (slotType === 'weak') {
-      levelIdx = pickWeakLevel(engine.weakLevelIndices, engine.difficultyIdx)
+      levelIdx = engine.pickWeakLevel()
       if (levelIdx == null) levelIdx = engine.difficultyIdx  // 兜底
     } else {
       // challenge: 当前难度 + 1
@@ -68,10 +63,10 @@ export function generateAdaptiveBatch(engine, count, plan) {
     const type = ['strong', 'weak', 'challenge'][i % 3]
     let levelIdx
     if (type === 'strong') {
-      levelIdx = pickStrongLevel(engine.strongLevelIndices, engine.difficultyIdx)
+      levelIdx = engine.pickStrongLevel()
       if (levelIdx == null) levelIdx = engine.difficultyIdx
     } else if (type === 'weak') {
-      levelIdx = pickWeakLevel(engine.weakLevelIndices, engine.difficultyIdx)
+      levelIdx = engine.pickWeakLevel()
       if (levelIdx == null) levelIdx = engine.difficultyIdx
     } else {
       levelIdx = Math.min(engine.difficultyIdx + 1, DIFFICULTY_LEVELS.length - 1)
@@ -81,9 +76,9 @@ export function generateAdaptiveBatch(engine, count, plan) {
   }
 
   // 装配输入模式（diversifyBatch 需要 engine 实例）
-  const diversified = diversifyBatch(questions, engine)
+  const diversified = engine.diversifyBatch(questions)
   // 备用池同样经过 diversifyBatch 处理，确保含 inputMode/options
-  const diversifiedPool = diversifyBatch(reservePool, engine)
+  const diversifiedPool = engine.diversifyBatch(reservePool)
 
   return { questions: diversified, reservePool: diversifiedPool }
 }
@@ -135,12 +130,10 @@ function generateOneQuestion(levelIdx, engine, seen, type) {
     const result = { equation: formula, solution }
     if (type) result.type = type
     // B12: 验证 matchLevel 反推是否匹配预期 levelIdx
-    // paperGenerator 可能不严格遵循 carry/abdication 约束
-    // 导致 L5(禁进位) 出进位题被 matchLevel 反推到 L7
-    // 容差从 ±1 放宽到 ±2，配合 numberOfFormulas 3→8 降拒绝率
-    const matched = matchLevel(result)
-    if (matched && Math.abs(matched.levelIdx - levelIdx) > 2) {
-      continue  // 不匹配 → 跳过，继续试下一道
+    // 1 级漂移内为同档级范围（如 L5-L6 同属"个位数巩固"），超出则拒绝
+    const matched = Question.matchLevel(result)
+    if (!matched || Math.abs(matched.levelIdx - levelIdx) > 1) {
+      continue  // 不匹配或跨档级 → 跳过，继续试下一道
     }
     return result
   }

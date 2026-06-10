@@ -58,12 +58,12 @@ export function useSubmitHandler({ practiceStore, saver }) {
     // - isCorrect: 存进去的 stored 字段不可靠；getter 实时算
     // - score: 同上；getter 实时算
     // 旧数据兼容：读取时 getAnswerScore 会用 getter 优先，stored 字段仅 fallback
+    // 只取需要字段，不 spread currentQuestion（避免 id/options 等字段污染 answers 表）
     const answerEntry = {
-      ...currentQuestion,
+      equation: currentQuestion.equation,
+      solution: currentQuestion.solution,
       userAnswer,
-      // isCorrect  ← 移除
       attemptCount,
-      // score     ← 移除
       timestamp: Date.now(),
       responseTime,
       operator,

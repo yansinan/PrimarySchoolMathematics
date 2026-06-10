@@ -9,8 +9,8 @@
         class="dot"
         :class="{
           'dot-active': i <= current,
-          'dot-correct': answers[i-1]?.isCorrect === true,
-          'dot-wrong': answers[i-1]?.isCorrect === false
+          'dot-correct': answers[i-1] && isCorrect(answers[i-1]),
+          'dot-wrong': answers[i-1] && !isCorrect(answers[i-1])
         }"
       ></span>
     </div>
@@ -47,6 +47,9 @@ const props = defineProps({
   correctCount: Number
 })
 
+/** 用 getter（userAnswer===solution）判断对错，不依赖 stored isCorrect 字段 */
+const isCorrect = (a) => a ? Number(a.userAnswer) === Number(a.solution) : false
+
 // 简单移动端检测
 const isMobile = computed(() => {
     return true;
@@ -55,7 +58,7 @@ const isMobile = computed(() => {
 
 const getStepStatus = (index) => {
   if (index < props.current) {
-    return props.answers[index-1]?.isCorrect ? 'success' : 'error'
+    return props.answers[index-1] && isCorrect(props.answers[index-1]) ? 'success' : 'error'
   }
   if (index === props.current) return 'process'
   return 'wait'

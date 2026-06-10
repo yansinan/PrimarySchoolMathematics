@@ -7,6 +7,9 @@
  */
 
 import { EquationSolver } from './EquationSolver'
+import { Answer } from '@/utils/algorithm/answer'
+import { Question } from '@/utils/algorithm/question'
+import { EVAL_WEAK_THRESHOLD } from '@/constants/practice'
 
 // ─── 难度等级定义 ───
 export const DIAG_LEVELS = [
@@ -152,116 +155,30 @@ export function generateDiagnosticQuestions() {
 
 /**
  * 分析诊断答题结果
- * @param {Array<{level: string, isCorrect: boolean}>} answers
- * @returns {{ levelScores: Object, weakLevels: string[] }}
+ * 使用 Answer.level getter + groupAnswersByLevel 按 DIFFICULTY_LEVELS 实时匹配，
+ * 无需存储 level 字段。
+ *
+ * @param {Array} answers — 答题记录（plain object 或 Answer 实例均可）
+ * @returns {{ levelScores: Object, weakLevels: string[], allCorrect: boolean }}
+ *   levelScores:  { [levelIdx: number]: { total, correct, accuracy } }
+ *   weakLevels:   低于阈值的等级 label 数组（如 ['两位数进位', '个位数退位']）
+ *   allCorrect:   所有有数据的等级是否均≥阈值
  */
 export function analyzeAbility(answers) {
-  const byLevel = {}
-  for (const a of answers) {
-    if (!byLevel[a.level]) byLevel[a.level] = { correct: 0, total: 0 }
-    byLevel[a.level].total++
-    if (a.isCorrect) byLevel[a.level].correct++
-  }
+  const wrapped = (answers || []).map(a => (a instanceof Answer ? a : new Answer(a)))
+  const groups = Question.groupAnswersByLevel(wrapped)
 
-  // 每等级仅 2 题，错 2 题（全错）即标记为弱项；错 1 题视为正常波动
-  const WEAK_THRESHOLD = 0.5
-
+  const WEAK_THRESHOLD = EVAL_WEAK_THRESHOLD
   const levelScores = {}
   const weakLevels = []
-  for (const level of DIAG_LEVELS) {
-    const data = byLevel[level.id] || { correct: 0, total: 0 }
-    const acc = data.total > 0 ? data.correct / data.total : 0
-    levelScores[level.id] = { ...data, accuracy: acc }
-    if (data.total > 0 && acc < WEAK_THRESHOLD) weakLevels.push(level.id)
+
+  for (const g of groups) {
+    levelScores[g.levelIdx] = { total: g.total, correct: g.correct, accuracy: g.accuracy }
+    if (g.total > 0 && g.accuracy < WEAK_THRESHOLD) weakLevels.push(g.label)
   }
 
-  // 无一等级低于阈值即为全部达标
-  const allCorrect = Object.values(levelScores).every(s => s.total > 0 && s.accuracy >= WEAK_THRESHOLD)
+  const allCorrect = Object.keys(levelScores).length > 0
+    && Object.values(levelScores).every(s => s.accuracy >= WEAK_THRESHOLD)
 
   return { levelScores, weakLevels, allCorrect }
 }
-
-/**
- * @deprecated P5 v2.3.0: 已由 generateQuestionPlan + generateAdaptiveBatch 替代。
- * 出题不再依赖此函数，保留代码仅作参考。
- */
-/* === START DEPRECATED (P5 v2.3.0) ===
-export function generatePracticeConfig(profile) {
-  const { weakLevels, allCorrect } = profile
-  const hasAddSub = true
-
-  // 基础配置
-  const config = {
-    step: '1',
-    numberOfFormulas: 30,
-    whereIsResult: '0',
-    enableBrackets: false,
-    carry: '1',
-    abdication: '1',
-    remainder: '3',
-    solution: '0',
-    numberOfPapers: 1,
-    numberOfPagerColumns: 3,
-    paperTitle: '智能练习',
-    paperSubTitle: '',
-    formulaList: [
-      { min: 1, max: 9, operators: null },
-      { min: 1, max: 9, operators: [1, 2] },
-    ],
-    resultMinValue: 1,
-    resultMaxValue: 18,
-    fileNameGeneratedRule: 'baseOnTitleAndIndex',
-  }
-
-  // ── 各弱项对应的配置覆盖 ──
-  if (weakLevels.includes('L1')) {
-    config.carry = '3'
-    config.abdication = '3'
-    config.formulaList[0] = { min: 1, max: 5, operators: null }
-    config.formulaList[1] = { min: 1, max: 5, operators: [1, 2] }
-    config.resultMaxValue = 10
-  }
-
-  if (weakLevels.includes('L2')) {
-    config.carry = '1'
-    config.abdication = '1'
-    config.formulaList[0] = { min: 2, max: 9, operators: null }
-    config.formulaList[1] = { min: 2, max: 9, operators: [1, 2] }
-    config.resultMaxValue = 18
-  }
-
-  if (weakLevels.includes('L3') || weakLevels.includes('L4')) {
-    config.formulaList[0] = { min: 10, max: 99, operators: null }
-    config.formulaList[1] = { min: 10, max: 99, operators: [1, 2] }
-    config.resultMaxValue = 198
-
-    if (weakLevels.includes('L3')) {
-      config.carry = '3'
-      config.abdication = '3'
-    }
-    if (weakLevels.includes('L4') && !weakLevels.includes('L3')) {
-      config.carry = '1'
-      config.abdication = '1'
-    }
-  }
-
-  if (weakLevels.includes('L5')) {
-    config.formulaList[0] = { min: 1, max: 99, operators: null }
-    config.formulaList[1] = { min: 1, max: 99, operators: [1, 2] }
-    config.carry = '2'
-    config.abdication = '2'
-    config.resultMaxValue = 198
-  }
-
-  if (allCorrect) {
-    config.formulaList[0] = { min: 10, max: 99, operators: null }
-    config.formulaList[1] = { min: 10, max: 99, operators: [1, 2] }
-    config.carry = '2'
-    config.abdication = '2'
-    config.resultMaxValue = 198
-    config.numberOfFormulas = 20
-  }
-
-  return config
-}
-=== END DEPRECATED (P5 v2.3.0) */

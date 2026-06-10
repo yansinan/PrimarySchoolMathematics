@@ -1,9 +1,10 @@
 import { computed, unref } from 'vue'
-import { Answer } from '@/utils/algorithm/answer'
 import { storeToRefs } from 'pinia'
 import { usePracticeStore } from '@/stores/practice'
 import { useAbilityAnalysis } from '@/composables/useAbilityAnalysis'
-import { DIFFICULTY_LEVELS, matchLevel, groupAnswersByLevel } from '@/utils/algorithm/adaptiveEngine'
+import { DIFFICULTY_LEVELS } from '@/constants/difficulty'
+import { Question } from '@/utils/algorithm/question'
+import { Answer } from '@/utils/algorithm/answer'
 import { STRONG_THRESHOLD, WEAK_THRESHOLD } from '@/constants/practice'
 
 function resolveSource(source, fallback) {
@@ -78,7 +79,7 @@ export function useAbilityProfile(options = {}) {
    * 答完一题即更新（响应式依赖 answers.value）
    */
   const strongLevels = computed(() => {
-    const groups = groupAnswersByLevel(answers.value)
+    const groups = Question.groupAnswersByLevel(answers.value)
     return groups
       .filter((g) => g.accuracy >= STRONG_THRESHOLD)
       .map((g) => g.label)
@@ -88,7 +89,7 @@ export function useAbilityProfile(options = {}) {
    * 弱项等级：该档位正确率 < WEAK_THRESHOLD → 弱项
    */
   const weakLevels = computed(() => {
-    const groups = groupAnswersByLevel(answers.value)
+    const groups = Question.groupAnswersByLevel(answers.value)
     return groups
       .filter((g) => g.accuracy < WEAK_THRESHOLD)
       .map((g) => g.label)
@@ -132,7 +133,7 @@ export function useAbilityProfile(options = {}) {
   })
 
   const fullCorrectCount = computed(() => {
-    return (answers.value || []).filter((answer) => getAnswerScore(answer) === 1).length
+    return (answers.value || []).filter((answer) => Answer.isCorrect(answer)).length
   })
 
   // 顶层包 weaknessV2 / strengthV2, V 模板不用写 .value

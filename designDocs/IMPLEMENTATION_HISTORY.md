@@ -379,11 +379,261 @@ diversifyBatch → generateDistractors(solution, count, engine.wrongAnswerPool, 
 - ⚠️ 复习题被显示为 choice 模式（不是 keypad）— `applyDisplayModeForCurrentQuestion` 在组 init 时设定 displayMode，每题不重算。后续可优化：替换题后重设 displayMode
 
 |--
+|--|
+
+## 8. v4.0c 循环解耦 + Getter-First 重构（2026-06-09 → 2026-06-10）
+
+**目标**：消除遗留循环依赖、推行 "getter 即真理"、删除死代理层。
+
+### 8.1 循环依赖根治 — databaseInit 叶子模块
+
+| Change | 描述 | 净行 | commit |
+|--------|------|------|--------|
+| `services/databaseInit.js` 纯叶子 | 不再引任何业务层（删 `parseEquation`、`upgrade` hooks），只持 Dexie 实例 + schema 骨架类 | -20 | `40cda42` |
+| `_getDB()`/`getDB()` 三合一 | Question/Answer 类静态方法 + services 全部直用 `import { DB } from '@/services/databaseInit'`，删 3 个 lazy pattern 函数 | -40 | `e179323` |
+| barrel 解环 | `utils/store/database` 改为桶（re-export databaseInit 的 export）终止循环依赖 | 0 | `993200b` |
+| 死代理删除 | `utils/store/database.js` 和 `services/database.js` 同时删除，所有调用方改引 `@/services/databaseInit` | -168 | 未 commit |
+
+### 8.2 Getter-First 重构（Answer/Question 域类）
+
+**原则**：`Answer.isCorrect(a)` / `Answer.sumScores(a)` 为唯一真理源，stored `isCorrect`/`score` 字段不再写入，仅作旧数据 fallback。
+
+| Change | 描述 | 涉及文件 | commit |
+|--------|------|----------|--------|
+| Answer/Question 类（方案 A） | domain 类继承 databaseInit 骨架，加静态工厂、getter、查询方法 | `utils/algorithm/answer.js`, `utils/algorithm/question.js` | `5e62a43` |
+| isCorrect/score/attemptCount getter | `Answer.isCorrect(a)` 纯函数 `Number(userAnswer)===Number(solution)`，`sumScores(a)` 替代 `.reduce` | `utils/algorithm/answer.js` | `9a971ce` |
+| analysis 全量迁移 | 剩余 2 处 stored isCorrect → Answer.isCorrect | `services/analysis.js` | `c019bc2` |
+| abilityProfile 迁移 | stored isCorrect → Answer.isCorrect, 清 JSDoc 伪 import | `services/abilityProfile.js` | 同 `e487d58` |
+| ProgressSteps.vue 迁移 | `a.isCorrect` → `Answer.isCorrect(a)` | `components/layout/ProgressSteps.vue` | 同 `e487d58` |
+| useAdaptiveSession 迁移 | `groupCorrect`/`groupCorrectCount` 改用 getter | `composables/useAdaptiveSession.js` | 同 `e487d58` |
+| exportAllData/importAllData/clearAllData 迁移 | 业务 CRUD 从 store → `databaseInit.js`（纯 DB 范畴） | `services/databaseInit.js` | `82b2045` |
+
+### 8.3 新建 S 层域类
+
+| 文件 | 行 | 职责 |
+|------|---:|------|
+| `services/PracticeSession.js` | 105 | 扩展 SchemaSession，add()/save()/getAnswers() CRUD |
+| `services/AbilitySnapshot.js` | 66 | 扩展 SchemaSnapshot，computeFrom()/load()/save() |
+| `services/statsAggregator.js` | 173 | 聚合统计：全量/每日/按 operator/按 level 多维度（替代原 useStatsQuery 内联） |
+
+### 8.4 P0 Bug 修复（实测发现）
+
+#### 8.4.1 `diversifyBatch` 计算错误（`[P0:diversifyBatch]` warning + NaN）
+
+**根因**：`EquationSolver.solveByEval` 对 `7+6=__`（未知数在等号右侧）处理缺失 → `eval('x')` → ReferenceError → `parseFloat('x')` → NaN。
+
+**修复**（`EquationSolver.js`，+14 行）：
+- `solveByEval`: 先检查 `rightExpr === 'x'` → 直接 `eval(leftExpr)`
+- `checkResult`: 先检查 `rightPattern === '__'` → 比较绝对值差
+
+**验证**：`solve('7+6=__')` → 13 ✅（原来是 NaN）
+
+#### 8.4.2 选择题选项不含正确答案
+
+**根因**：`generateDistractors` 错题池为空时回退算法生成的 distractor 可能覆盖正确答案。
+
+**修复**：`diversifyBatch` 加一致性校验，确保 options 始终含 solution；不满足时重建选项列表。
+
+#### 8.4.3 `SessionPersistence` ConstraintError（组完成点评 0/4 关联）
+
+**症状**：`[SessionPersistence] Failed to persist single answer: ConstraintError: Unable to add key to index 'equation'`
+- 快速答题（如 `__psm_debug.answerN(4, true)`）或手动快速重试时触发
+- 层叠影响：SelfEvaluationDialog 显示 `0/4 正确`（groupCorrect 用 Answer.isCorrect 后已修复，但 persistSingleAnswer 错误仍在）
+
+**根因**：两次并发 `persistSingleAnswer` 对同一 equation 的 `Question.save` 同时执行 `find`（都为空）→ 同时 `add` → 第二个 `add` 违反 `&equation` 唯一约束。
+
+**修复**（2 层防护，未 commit）：
+1. **串行化锁** `sessionPersistence.js`: `let _saveQueue` 链式 Promise 排队，确保 `persistSingleAnswer` 调用依次执行
+2. **事务 + id 剥离** `question.js`: 显式 `DB.transaction('rw', ...)` 序列化 questions 访问；`answers.put` 回写的 auto-id 通过 `const { id: _ignored, ...clean }` 剥离，不污染 questions 表主键
+
+### 8.5 桶冲突修复
+
+**症状**：`services/index.js` 桶中 `analysis.js` 和 `wrongAnswerService.js` 都 `export function getWrongAnswers` → 同名冲突 → `#app` 空渲染 `<!---->`。
+
+**修复**：桶不导 `wrongAnswerService`，调用方（`useAdaptiveSession`）直引 `@/services/wrongAnswerService`。
+
+**教训**：往桶加新 export 前，先 grep 确认无同名函数冲突。
+
+### 8.6 当前工作区（未 commit）
+
+```
+M src/components/Practice.vue               — watch(currentQuestion) 同步 displayMode
+M src/components/layout/ProgressSteps.vue   — isCorrect getter
+M src/composables/useAdaptiveSession.js     — getter + barrel 修正
+M src/composables/useSubmitHandler.js       — answerEntry 字段白名单
+M src/composables/useStatsQuery.js          — 改用 statsAggregator
+M src/services/abilityProfile.js            — getter + pseudo-import
+M src/services/analysis.js                  — getter 迁移
+M src/services/databaseInit.js              — 叶子模块重构
+M src/services/sessionPersistence.js        — 串行化锁（未 push）
+M src/services/wrongAnswerService.js        — 轻微修正
+M src/utils/algorithm/EquationSolver.js     — __ 右侧修复
+M src/utils/algorithm/question.js           — Question.save 事务 + id 剥离
+M src/views/ResetData.vue                   — import 路径修正
+D src/services/database.js                  — 死代理删除
+D src/utils/store/database.js               — 死代理删除
+?? src/services/AbilitySnapshot.js          — 新建域类
+?? src/services/PracticeSession.js           — 新建域类
+?? src/services/statsAggregator.js           — 新建域类
+```
+
+| 测试 | 结果 |
+|------|------|
+| `npx vitest run` | 106/106 PASS ✅ |
+| `npx vite build` | (未测，但 lint 无错误) |
+
 |---
 
-## 8. 元信息
+## 9. v4.1 用户画像源迁移 + Getter 统一（2026-06-10）
 
-- 编制时间：2026-06-08（v3 收尾 + ui 合并后）
+**目标**：用户画像从内存拼接（diagAnswers + adaptiveAnswers）改为 DB 全表读取（loadProfile），消除画像数据的多源不一致；level 改为纯 getter 消除存储字段。
+
+### 9.1 用户画像从 DB 读
+
+| Change | 描述 | 文件 | commit |
+|--------|------|------|--------|
+| `loadProfile(studentId)` 新建 | 调用 `Answer.getAllByStudent` 读 db.answers 全表 → `Answer.fromJSON` → `groupAnswersByLevel` → 返回 `{difficultyIdx, strongLevelIndices, weakLevelIndices}` | `services/abilityProfile.js` | 未 commit |
+| `createAdaptiveEngine` 改签名 | 改为收 destructured 对象 `{difficultyIdx, strongLevelIndices, weakLevelIndices, targetMin, targetMax}`，不再自己算 | `utils/algorithm/adaptiveEngine.js` | 未 commit |
+| `useAdaptiveSession` 3 处改 loadProfile | `startNewAdaptiveSession` / `completeAssessment` / `completeGroup` 从 DB 读画像替代内存拼装 | `composables/useAdaptiveSession.js` | 未 commit |
+| `computeAndSaveAbilityProfile` 改读 DB | 优先 `Answer.getAllByStudent` 读 DB 全量，不再依赖传入的 `diagAnswers` + `adaptiveAnswers` | `services/abilityProfile.js` | 未 commit |
+| store 删 diagAnswers/adaptiveAnswers 写 | `completeAssessment` 不再存 `diagAnswers` 到 profile；删 `this.adaptiveAnswers = []` 清零行 | `stores/practice.js` | 未 commit |
+
+### 9.2 Level 纯 Getter
+
+| Change | 描述 | 文件 |
+|--------|------|------|
+| `Question.level` getter | `levelMatch?.levelIdx ?? null` — 由 matchLevel 实时计算，无存储字段 | `utils/algorithm/question.js` |
+| 继承链统一注释 | `DBQuestion → Question → Answer → WrongAnswer` 四层职责明确 | 3 个 domain 类 |
+| 删 Answer 重复 level getter | level 从 Question 继承，删 Answer 中冗余定义 | `utils/algorithm/answer.js` |
+
+### 9.3 analyzeAbility / abilityProfile 重构
+
+| Change | 描述 | 文件 |
+|--------|------|------|
+| `analyzeAbility` 重写 | 删 `a.level` 手写分组 → 改用 `groupAnswersByLevel` | `utils/algorithm/diagnostic.js` |
+| `evaluateLevel` 删除 | 循环改 `groupAnswersByLevel` + `STRONG_THRESHOLD`/`WEAK_THRESHOLD` | `services/abilityProfile.js` |
+
+### 9.4 验证结果
+
+| 测试 | 结果 |
+|------|------|
+| `npx vitest run` | 106/106 PASS ✅ |
+| `npx vite build` | 构建成功 ✅ |
+| 浏览器实测（诊断→第1组自适应→组完成弹窗） | 控制台 0 错误 ✅ |
+
+|---
+
+## 10. v4.2 Profile + Engine 类型化 + 方法封装 + 文件清理（2026-06-10）
+
+**目标**：Profile/Engine 类化、方法封装、matchLevel 迁入 Question、消除 utils/algorithm/adaptiveEngine.js。
+
+### 10.1 Profile 类 + Engine 类
+
+| Change | 描述 | 文件 |
+|--------|------|------|
+| `Profile` 类新建 | 含 `constructor` + `static computeDifficultyIdx`（从 U 层 inline） | `services/abilityProfile.js` |
+| `loadProfile` 返回 `new Profile` | 返回类型化的 Profile 实例 | `services/abilityProfile.js` |
+| `Engine` 类新建 | 替代 `createAdaptiveEngine` 工厂，getter 委派 `this.profile` 消除双源 | `services/adaptiveEngine.js` |
+| `createAdaptiveEngine` 删除 | 所有调用方改 `new Engine(opts)` | 全局 |
+
+### 10.2 双源消除（R1+R2+R3）
+
+| Change | 描述 | 文件 |
+|--------|------|------|
+| `engine.profile` 整体替换 | `completeGroup` 改为 `engine.profile = dbProfile`，消除 3 行独立赋值 | `useAdaptiveSession.js` |
+| `generateQuestionPlan` 删 `profile` 参数 | 改从 `engine.weakLevelIndices.length` 取 weakSeverity | `adaptiveEngine.js` |
+| `adjustNextQuestion` 删 `profile` 参数 | 步 D 改从 `engine.weakLevelIndices` → `DIFFICULTY_LEVELS[idx].label` | `adaptiveEngine.js` |
+
+### 10.3 方法封装（7 个 standalone 函数 → Engine 实例方法）
+
+| 函数 | 旧调用 | 新调用 |
+|------|--------|--------|
+| `getDifficultyLabel` | `getDifficultyLabel(engine)` | `engine.getDifficultyLabel()` |
+| `getDifficultyConfig` | `getDifficultyConfig(engine)` | `engine.getDifficultyConfig()` |
+| `getGroupSize` | `getGroupSize(engine)` | `engine.getGroupSize()` |
+| `diversifyBatch` | `diversifyBatch(eqs, engine)` | `engine.diversifyBatch(eqs)` |
+| `evaluateGroup` | `evaluateGroup(engine, ans)` | `engine.evaluateGroup(ans)` |
+| `generateQuestionPlan` | `generateQuestionPlan(... engine, ...)` | `engine.generateQuestionPlan(...)` |
+| `adjustNextQuestion` | `adjustNextQuestion(engine, ...)` | `engine.adjustNextQuestion(...)` |
+| `pickStrongLevel` | `pickStrongLevel(inds, diff)` | `engine.pickStrongLevel()` |
+| `pickWeakLevel` | `pickWeakLevel(inds, diff)` | `engine.pickWeakLevel()` |
+
+### 10.4 matchLevel 迁入 Question
+
+| Change | 细节 |
+|--------|------|
+| `Question.matchLevel()` static | 替代 standalone `matchLevel()`，内部 `_matchLevel()` 保留 |
+| `Question.groupAnswersByLevel()` static | 替代 `groupAnswersByLevel()` 独立函数 |
+| `filterByLevel` 改用 `Question.matchLevel` | 不再 import 独立函数 |
+| `matchLevel.js` 删除 | 全部功能迁入 `question.js` |
+
+### 10.5 Engine 升层 + 文件清理
+
+| 文件 | 变更 |
+|------|------|
+| `services/adaptiveEngine.js` | **新建**：Engine 类 + 内部辅助函数 |
+| `utils/algorithm/adaptiveEngine.js` | **删除**：`computeDifficultyIdx` 迁入 Profile |
+| `utils/algorithm/matchLevel.js` | **删除**：全部迁入 `question.js` |
+| `utils/algorithm/index.js` barrel | 删除 `export * from './adaptiveEngine'` |
+
+### 10.6 测试验证
+
+| 测试 | 结果 |
+|------|------|
+| `npx vitest run` | 106/106 PASS ✅ |
+| `npx vite build` | 构建成功 ✅ |
+
+|---
+
+## 11. v4.3 Profile 实例方法 + Snapshot 删除 + 阈值统一 + 死代码清理（2026-06-10）
+
+**目标**：Profile 类加实例方法，删除无用的 AbilitySnapshot 表，统一硬编码阈值，清理遗留死代码。
+
+### 11.1 Profile 实例方法
+
+| 方法 | 说明 |
+|------|------|
+| `profile.difficultyLabel` | getter，当前难度文字标签 |
+| `profile.weakSeverity` | getter，弱项占比 |
+| `profile.isStrong(levelIdx)` / `profile.isWeak(levelIdx)` | 检查强弱项 |
+| `Profile.load(studentId)` | 静态工厂，替代 `loadProfile()` 独立函数 |
+
+### 11.2 AbilitySnapshot 删除
+
+| 文件 | 操作 |
+|------|------|
+| `services/AbilitySnapshot.js` | 整文件删除（无读取方） |
+| `services/databaseInit.js` | 删 `AbilitySnapshot` schema 类 + 表定义（v2-v4 schema）+ exportAllData |
+| `composables/usePracticeSaver.js` | 删 `computeAndSave` 调用 + `buildProfileContext()` |
+| `composables/useAdaptiveSession.js` | 删 `_rawAnswers` 传参 |
+
+### 11.3 阈值统一
+
+| 常量 | 值 | 使用方 |
+|------|-----|--------|
+| `EVAL_WEAK_THRESHOLD` | 0.5 | diagnostic.js, services/adaptiveEngine.js |
+| `NUM_WEAK_THRESHOLD` | 0.5 | useAbilityAnalysis.js |
+| `NUM_STRONG_THRESHOLD` | 0.95 | useAbilityAnalysis.js |
+| `NUM_STRONG_MIN_TOTAL` | 3 | useAbilityAnalysis.js |
+
+### 11.4 死代码清理 + 桶更新
+
+| 文件 | 操作 |
+|------|------|
+| `utils/algorithm/diagnostic.js` | 删 ~80 行 `generatePracticeConfig` 注释代码 |
+| `services/index.js` | 加 `export * from './adaptiveEngine'` |
+
+### 11.5 测试验证
+
+| 测试 | 结果 |
+|------|------|
+| `npx vitest run` | 106/106 PASS ✅ |
+
+---
+
+## 12. 元信息
+
+- 编制时间：2026-06-08（v3 收尾 + ui 合并后）；§8 追加于 2026-06-10（v4.0c 重构 + bug 修复）；§9 追加于 2026-06-10（v4.1 画像源迁移）；§10 追加于 2026-06-10（v4.2 类型化 + 封装 + 清理）；§11 追加于 2026-06-10（v4.3 Profile 实例方法 + Snapshot 删除 + 阈值统一）
 - 关联：[ARCHITECTURE.md](./ARCHITECTURE.md) — "现在是什么"
 - 关联：[README.md](./README.md) — 文档索引
 - 完整日志（archived）：[_ARCHIEVED_02-PROGRESS.md](./_ARCHIEVED_02-PROGRESS.md)

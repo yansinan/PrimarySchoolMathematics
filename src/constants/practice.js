@@ -146,6 +146,16 @@ export const STRONG_THRESHOLD = 0.95
 /** 弱项正确率上限：<此值算弱项 */
 export const WEAK_THRESHOLD = 0.95
 
+/** 评估/诊断弱项阈值：正确率<此值算弱项（比练习阈值宽松，0.5=一半以下算弱） */
+export const EVAL_WEAK_THRESHOLD = 0.5
+
+/** 数字维度分析 — 弱项阈值 */
+export const NUM_WEAK_THRESHOLD = 0.5
+/** 数字维度分析 — 强项正确率下限 */
+export const NUM_STRONG_THRESHOLD = 0.95
+/** 数字维度分析 — 强项最少答题数 */
+export const NUM_STRONG_MIN_TOTAL = 3
+
 /* ============================================================
    输入辅助模式 — 降低认知负荷，帮学生建立信心
 //

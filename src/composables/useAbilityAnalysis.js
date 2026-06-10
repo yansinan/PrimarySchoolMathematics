@@ -17,6 +17,7 @@
 
 import { ref } from 'vue'
 import * as analysis from '@/services'
+import { NUM_WEAK_THRESHOLD, NUM_STRONG_THRESHOLD, NUM_STRONG_MIN_TOTAL } from '@/constants/practice'
 
 // ─── 设计常量 ────────────────────────────────────────────────
 /** 时间窗口：所有"近期"聚合查询的默认天数（与 services/analysis.js 默认值对齐） */
@@ -220,15 +221,15 @@ export function useAbilityAnalysis() {
     // P5 v2.3.0 修复：用 accuracy（正确率）代替 score（含 retry 衰减）做分类
     // score 在用户答对但非首答时会 < 1，导致 strength 永远空
     weaknessByNumber.value = entries
-      .filter(([, r]) => r.total > 0 && r.accuracy < 0.5)
+      .filter(([, r]) => r.total > 0 && r.accuracy < NUM_WEAK_THRESHOLD)
       .map(([n, r]) => ({ number: Number(n), ...r }))
       .sort((a, b) => a.accuracy - b.accuracy)
     midByNumber.value = entries
-      .filter(([, r]) => r.total >= 3 && r.accuracy >= 0.5 && r.accuracy < 0.95)
+      .filter(([, r]) => r.total >= NUM_STRONG_MIN_TOTAL && r.accuracy >= NUM_WEAK_THRESHOLD && r.accuracy < NUM_STRONG_THRESHOLD)
       .map(([n, r]) => ({ number: Number(n), ...r }))
       .sort((a, b) => b.accuracy - a.accuracy)
     strengthByNumber.value = entries
-      .filter(([, r]) => r.total >= 3 && r.accuracy >= 0.95)
+      .filter(([, r]) => r.total >= NUM_STRONG_MIN_TOTAL && r.accuracy >= NUM_STRONG_THRESHOLD)
       .map(([n, r]) => ({ number: Number(n), ...r }))
       .sort((a, b) => b.accuracy - a.accuracy)
   }

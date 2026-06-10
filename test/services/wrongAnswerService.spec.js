@@ -5,7 +5,7 @@
  * @see test/services/analysis.spec.js（同模式：fake-indexeddb + 真实 Dexie）
  */
 import { describe, it, expect, beforeEach } from 'vitest'
-import db from '@/utils/store/database'
+import { DB } from '@/services/databaseInit'
 import {
   getWrongAnswers,
   countWrongAnswers,
@@ -58,9 +58,9 @@ function mkAnswer(overrides = {}) {
 }
 
 async function clearDB() {
-  await db.answers.clear()
-  await db.practiceSessions.clear()
-  await db.questions.clear()
+  await DB.answers.clear()
+  await DB.practiceSessions.clear()
+  await DB.questions.clear()
 }
 
 // ── getWrongAnswers ───────────────────────────────────────────────
@@ -68,11 +68,11 @@ async function clearDB() {
 describe('getWrongAnswers', () => {
   beforeEach(async () => {
     await clearDB()
-    await db.practiceSessions.bulkAdd([
+    await DB.practiceSessions.bulkAdd([
       mkSession({ id: 1, studentId: 'default' }),
     ])
     const now = Date.now()
-    await db.answers.bulkAdd([
+    await DB.answers.bulkAdd([
       // 1 加法错题
       mkAnswer({ sessionId: 1, equation: '23+47=__', solution: 70, userAnswer: 60, isCorrect: false, operator: '+', operandMin: 23, operandMax: 47, questionIndex: 0, timestamp: now - 3000 }),
       // 2 加法对题（不应返回）
@@ -138,7 +138,7 @@ describe('getWrongAnswers', () => {
 
   it('returns empty when no wrong answers exist', async () => {
     await clearDB()
-    await db.practiceSessions.bulkAdd([mkSession({ id: 1 })])
+    await DB.practiceSessions.bulkAdd([mkSession({ id: 1 })])
     const wrong = await getWrongAnswers({ days: 30 })
     expect(wrong).toEqual([])
   })
@@ -149,10 +149,10 @@ describe('getWrongAnswers', () => {
 describe('countWrongAnswers', () => {
   beforeEach(async () => {
     await clearDB()
-    await db.practiceSessions.bulkAdd([mkSession({ id: 1, studentId: 'default' })])
+    await DB.practiceSessions.bulkAdd([mkSession({ id: 1, studentId: 'default' })])
     const now = Date.now()
     // 2 wrong (加法 60, 减法 8) + 1 correct (加法 70)
-    await db.answers.bulkAdd([
+    await DB.answers.bulkAdd([
       mkAnswer({ sessionId: 1, questionIndex: 0, isCorrect: false, userAnswer: 60, operator: '+', timestamp: now - 1000 }),
       mkAnswer({ sessionId: 1, equation: '15-8=__', solution: 7, isCorrect: false, userAnswer: 5, operator: '-', operandMin: 8, operandMax: 15, questionIndex: 1, timestamp: now - 2000 }),
       mkAnswer({ sessionId: 1, questionIndex: 2, isCorrect: true, userAnswer: 70, solution: 70, timestamp: now - 3000 }),
@@ -184,8 +184,8 @@ describe('countWrongAnswers', () => {
 describe('getWrongAnswerByEquation', () => {
   beforeEach(async () => {
     await clearDB()
-    await db.practiceSessions.bulkAdd([mkSession({ id: 1, studentId: 'default' })])
-    await db.answers.bulkAdd([
+    await DB.practiceSessions.bulkAdd([mkSession({ id: 1, studentId: 'default' })])
+    await DB.answers.bulkAdd([
       mkAnswer({ sessionId: 1, equation: '23+47=__', isCorrect: false }),
       mkAnswer({ sessionId: 1, equation: '15+8=__', isCorrect: true, userAnswer: 70, solution: 70 }),
     ])
@@ -215,19 +215,19 @@ describe('markWrongAnswerCorrected', () => {
 
   beforeEach(async () => {
     await clearDB()
-    await db.practiceSessions.bulkAdd([mkSession({ id: 1, studentId: 'default' })])
-    await db.answers.bulkAdd([
+    await DB.practiceSessions.bulkAdd([mkSession({ id: 1, studentId: 'default' })])
+    await DB.answers.bulkAdd([
       mkAnswer({ sessionId: 1, questionIndex: 0, isCorrect: false, userAnswer: 60 }),
     ])
     // 拿到实际 id（++id 自动递增，不一定是 1）
-    const all = await db.answers.toArray()
+    const all = await DB.answers.toArray()
     targetId = all[0].id
   })
 
   it('sets correctedAt timestamp', async () => {
     const ok = await markWrongAnswerCorrected(1, 0, true)
     expect(ok).toBe(true)
-    const a = await db.answers.get(targetId)
+    const a = await DB.answers.get(targetId)
     expect(a.correctedAt).toBeTruthy()
     expect(new Date(a.correctedAt).getTime()).toBeGreaterThan(Date.now() - 5000)
   })
@@ -235,7 +235,7 @@ describe('markWrongAnswerCorrected', () => {
   it('removes correctedAt when un-correcting', async () => {
     await markWrongAnswerCorrected(1, 0, true)
     await markWrongAnswerCorrected(1, 0, false)
-    const a = await db.answers.get(targetId)
+    const a = await DB.answers.get(targetId)
     expect(a.correctedAt).toBeNull()
   })
 
@@ -250,8 +250,8 @@ describe('markWrongAnswerCorrected', () => {
 describe('removeWrongAnswer', () => {
   beforeEach(async () => {
     await clearDB()
-    await db.practiceSessions.bulkAdd([mkSession({ id: 1, studentId: 'default' })])
-    await db.answers.bulkAdd([
+    await DB.practiceSessions.bulkAdd([mkSession({ id: 1, studentId: 'default' })])
+    await DB.answers.bulkAdd([
       mkAnswer({ sessionId: 1, questionIndex: 0, isCorrect: false, userAnswer: 60 }),
       mkAnswer({ sessionId: 1, questionIndex: 1, isCorrect: false, userAnswer: 8 }),
     ])
@@ -260,7 +260,7 @@ describe('removeWrongAnswer', () => {
   it('deletes the answer record', async () => {
     const ok = await removeWrongAnswer(1, 0)
     expect(ok).toBe(true)
-    const remaining = await db.answers.toArray()
+    const remaining = await DB.answers.toArray()
     expect(remaining).toHaveLength(1)
     expect(remaining[0].questionIndex).toBe(1)
   })
@@ -272,7 +272,7 @@ describe('removeWrongAnswer', () => {
 
   it('only deletes the specified (sessionId, questionIndex), not others', async () => {
     await removeWrongAnswer(1, 0)
-    const remaining = await db.answers.toArray()
+    const remaining = await DB.answers.toArray()
     expect(remaining.map(a => a.questionIndex)).toEqual([1])
   })
 })
@@ -283,12 +283,12 @@ describe('clearWrongAnswers', () => {
   beforeEach(async () => {
     await clearDB()
     // 2 sessions for 'default' user
-    await db.practiceSessions.bulkAdd([
+    await DB.practiceSessions.bulkAdd([
       mkSession({ id: 1, studentId: 'default' }),
       mkSession({ id: 2, studentId: 'default' }),
       mkSession({ id: 3, studentId: 'other-user' }),
     ])
-    await db.answers.bulkAdd([
+    await DB.answers.bulkAdd([
       // session 1
       mkAnswer({ sessionId: 1, questionIndex: 0, isCorrect: false, userAnswer: 60 }),
       mkAnswer({ sessionId: 1, questionIndex: 1, isCorrect: true, userAnswer: 70, solution: 70 }),
@@ -302,7 +302,7 @@ describe('clearWrongAnswers', () => {
   it('deletes all wrong answers for the given student', async () => {
     const removed = await clearWrongAnswers('default')
     expect(removed).toBe(2)
-    const remaining = await db.answers.toArray()
+    const remaining = await DB.answers.toArray()
     // 剩余: session 1 correct + session 3 wrong (other user) = 2
     expect(remaining).toHaveLength(2)
     expect(remaining.find(a => a.sessionId === 3)).toBeTruthy()  // other-user 错题保留
@@ -310,7 +310,7 @@ describe('clearWrongAnswers', () => {
 
   it('preserves correct answers for the same student', async () => {
     await clearWrongAnswers('default')
-    const remaining = await db.answers.toArray()
+    const remaining = await DB.answers.toArray()
     // session 1 第 2 题 isCorrect=true 应保留
     const session1Correct = remaining.find(a => a.sessionId === 1 && a.questionIndex === 1)
     expect(session1Correct).toBeTruthy()

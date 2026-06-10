@@ -20,7 +20,6 @@
 
 import { usePracticeStore } from '@/stores/practice'
 import { useStatsQuery } from '@/composables'
-import { computeAndSaveAbilityProfile } from '@/services/abilityProfile'
 // E1: persistSession 从 S 层调, 不再绕 store action (2026-06-08)
 // E1-B: persistSingleAnswer 同样从 S 层调, 替代原内联 db.answers.put + saveQuestion (2026-06-08)
 import { persistSession, persistSingleAnswer } from '@/services/sessionPersistence'
@@ -42,28 +41,13 @@ export function usePracticeSaver() {
   const { refreshAll } = useStatsQuery()
 
   /**
-   * 拿 store 画像数据，传入 abilityProfile 纯函数
-   * 避免 U 层 abilityProfile.js 反向依赖 M 层 store（ARCHITECTURE § 1.2）
-   */
-  function buildProfileContext() {
-    return {
-      diagAnswers: practiceStore.abilityProfile?.diagAnswers || [],
-      adaptiveAnswers: practiceStore.adaptiveAnswers || [],
-      currentDifficultyIdx: practiceStore.currentDifficultyIdx ?? -1,
-    }
-  }
-
-  /**
    * 1) 每题答完：fire-and-forget
    * 修复 Bug 3:
    *   - 不再调 practiceStore.persistSession()，避免每答 1 题都创建 1 个 session 记录
    *   - 改为只把"最近一条 answer"写到 db.answers 表（不写 session 表）
    *   - 这样"最近练习"列表只显示 group checkpoint 和最终 session，不再被 1 步 session 淹没
-   *   - abilitySnapshot 仍正常更新（fire-and-forget）
    */
   function savePerQuestion() {
-    // 同步更新能力画像（fire-and-forget）
-    computeAndSaveAbilityProfile(buildProfileContext())
     // 取 session.answers 最后一条（刚答完的那题），单独写入 db.answers + db.questions
     // sessionId=0 表示这条 answer 暂未关联到任何 session record
     // 等到 group checkpoint / final 时，persistSession 会再写一份带 sessionId 的完整 record
@@ -82,7 +66,6 @@ export function usePracticeSaver() {
    *   - 这样 1 个 group = 1 个 session, 最近练习列表清晰可读
    */
   async function saveGroupCheckpoint(history) {
-    computeAndSaveAbilityProfile(buildProfileContext())
     const evaluations = extractEvaluationsJSON(history)
     await persistSession({
       answers: practiceStore.session.answers,
@@ -100,7 +83,6 @@ export function usePracticeSaver() {
    * @param {Array} history - 引擎 history（用于提取 evaluations）
    */
   async function saveAdaptiveFinal(answers, history) {
-    computeAndSaveAbilityProfile(buildProfileContext())
     const evaluations = extractEvaluationsJSON(history)
     practiceStore.session.answers = answers
     await persistSession({
@@ -118,7 +100,6 @@ export function usePracticeSaver() {
    * - 同步更新能力画像
    */
   async function savePracticeFinal() {
-    computeAndSaveAbilityProfile(buildProfileContext())
     await persistSession({
       answers: practiceStore.session.answers,
       configSnapshot: practiceStore.session.configSnapshot,

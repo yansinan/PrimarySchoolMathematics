@@ -2,7 +2,7 @@
 
 > **性质**: 基础架构文档 (Architecture Constitution)
 > **维护**: 项目组 / 所有 agent 必须遵守
-> **版本**: v2.3 (2026-06-06 → 2026-06-08 v3 调优稳定)
+> **版本**: v4.2 (2026-06-10 Profile+Engine 类化 + 文件清理)
 > **作用**: 后续所有重构 / 新功能 / 修 bug 的**基础依据**. 违反本文档的 PR 需在描述中显式说明.
 > **配套**:
 > - [IMPLEMENTATION_HISTORY.md](./IMPLEMENTATION_HISTORY.md) — 实施过程（v2.3 + v3 调优的"做了什么、为什么"）
@@ -101,9 +101,10 @@ src/
 │  └ index.js
 │
 ├ utils/                                U 层（按子域分目录）
-│  ├ algorithm/     adaptiveEngine / adaptiveBatch / diagnostic /
+│  ├ algorithm/     adaptiveBatch / diagnostic /
 │  │                displayStrategy / equationCore / equationParser /
-│  │                EquationSolver / paperGenerator / psm
+│  │                EquationSolver / paperGenerator / psm /
+│  │                question (含 matchLevel + groupAnswersByLevel) / answer / wrongAnswer
 │  ├ form/          formDefaults / formValidation
 │  ├ store/         database / configStorage
 │  ├ time/          timeFormat / timeConstants
@@ -113,10 +114,13 @@ src/
 ├ services/                             ⭐ S 层（顶层，与 utils/components 同级）
 │  ├ analysis.js                        ⭐ C1+C2+C3 升层
 │  ├ sessionPersistence.js              ⭐ E1 抽层（persistSession + persistSingleAnswer）
-│  ├ abilityProfile.js                   ⭐ A4b 升层
+│  ├ abilityProfile.js                  ⭐ Profile 类（load / computeDifficultyIdx / 强弱项查询）
+│  ├ adaptiveEngine.js                  ⭐ Engine 类（2026-06-10 升层自 utils/algorithm）
 │  ├ chartBuilder.js                    ⭐ arch-v2.3 新建
 │  ├ operatorMap.js                     ⭐ arch-v2.3 新建
-│  └ index.js                           ✅ 桶导出
+│  ├ PracticeSession.js                 ⭐ session 域类
+│  ├ statsAggregator.js                 ⭐ 聚合统计
+│  └ index.js                           ✅ 桶导出（含 analysis / operatorMap / abilityProfile / adaptiveEngine / sessionPersistence / databaseInit）
 │
 ├ composables/                          C 层
 │  ├ useAdaptiveSession.js               ⭐ 含 completeGroup / afterAnswer / adjustNextQuestion
@@ -211,10 +215,17 @@ src/
 
 - Vue 3 架构指南: https://cn.vuejs.org/guide/scaling-up/tooling.html
 - Pinia 风格指南: https://pinia.vuejs.org/cookbook/options-api.html
-- 现行服务层样板: `src/services/chartBuilder.js` (124 行, Chart.js 封装)
+- 现行服务层样板: `src/services/chartBuilder.js` (Chart.js 封装)
   `src/services/operatorMap.js` (34 行, 单一来源)
   `src/services/analysis.js` (887 行, 升层)
-  `src/services/sessionPersistence.js` (109 行, 含 persistSession + persistSingleAnswer)
+  `src/services/sessionPersistence.js` (含 persistSession + persistSingleAnswer)
+  `src/services/databaseInit.js` (Dexie 实例 + schema 骨架类, 纯叶子模块)
+  `src/services/wrongAnswerService.js` (错题 CRUD)
+  `src/services/PracticeSession.js` (session 域类 + CRUD)
+  `src/services/adaptiveEngine.js` (Engine 类 + generateQuestionPlan / adjustNextQuestion 等方法)
+  `src/services/statsAggregator.js` (聚合统计, 替代 useStatsQuery 内联)
+
+> **已删除死代理**：`src/utils/store/database.js` 和 `src/services/database.js` 已清理。所有调用方直引 `@/services/databaseInit`。
 - 现行 composable 样板: `src/composables/useAdaptiveSession.js` (358 行, 含 completeGroup / afterAnswer / adjustNextQuestion)
   `src/composables/useStatsDrawer.js` (102 行, V→M 整改样板)
   `src/composables/useSubmitHandler.js` (113 行, V→C 整改样板)

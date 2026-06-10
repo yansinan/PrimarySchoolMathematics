@@ -7,7 +7,7 @@
  * 工具：vitest + fake-indexeddb（让 Dexie 在 Node 环境跑）
  */
 import { describe, it, expect, beforeEach } from 'vitest'
-import db from '@/utils/store/database'
+import { DB } from '@/services/databaseInit'
 import {
   findEquivalent,
   findRelated,
@@ -80,8 +80,8 @@ function mkQuestion(overrides = {}) {
 
 beforeEach(async () => {
   // 每个 test 前清空表（fake-indexeddb 持久在内存中）
-  await db.questions.clear()
-  await db.answers.clear()
+  await DB.questions.clear()
+  await DB.answers.clear()
   nextId = 1
 })
 // ── 3.0 effectiveResponseTime 测试已迁 answer.spec.js ──────────────
@@ -90,7 +90,7 @@ beforeEach(async () => {
 
 describe('findEquivalent', () => {
   beforeEach(async () => {
-    await db.questions.bulkAdd([
+    await DB.questions.bulkAdd([
       mkQuestion({ id: 1, equation: '4+3=', solution: 7, operandMin: 3, operandMax: 4, operands: [3, 4] }),
       mkQuestion({ id: 2, equation: '3+4=', solution: 7, operandMin: 3, operandMax: 4, operands: [3, 4] }),
       mkQuestion({ id: 3, equation: '8-3=', solution: 5, operator: '-', operandMin: 3, operandMax: 8, operands: [3, 8] }),
@@ -117,7 +117,7 @@ describe('findEquivalent', () => {
 
 describe('findRelated', () => {
   beforeEach(async () => {
-    await db.questions.bulkAdd([
+    await DB.questions.bulkAdd([
       mkQuestion({ id: 1, equation: '34+3=', solution: 37, operandMin: 3, operandMax: 34, operands: [3, 34] }),
       mkQuestion({ id: 2, equation: '33+3=', solution: 36, operandMin: 3, operandMax: 33, operands: [3, 33] }),
       mkQuestion({ id: 3, equation: '35+3=', solution: 38, operandMin: 3, operandMax: 35, operands: [3, 35] }),
@@ -149,12 +149,12 @@ describe('findRelated', () => {
 
 describe('getMasteryByNumber', () => {
   beforeEach(async () => {
-    await db.questions.bulkAdd([
+    await DB.questions.bulkAdd([
       mkQuestion({ id: 1, equation: '8+3=', solution: 11, operands: [3, 8] }),
       mkQuestion({ id: 2, equation: '8-3=', solution: 5, operator: '-', operands: [3, 8] }),
       mkQuestion({ id: 3, equation: '8+5=', solution: 13, operandMin: 5, operandMax: 8, operands: [5, 8] }),
     ])
-    await db.answers.bulkAdd([
+    await DB.answers.bulkAdd([
       mkAnswer({ questionId: 1, isCorrect: true }),
       mkAnswer({ questionId: 1, isCorrect: true }),
       mkAnswer({ questionId: 2, isCorrect: false, userAnswer: 60 }),
@@ -188,7 +188,7 @@ describe('getMasteryByNumber', () => {
 
 describe('getMasteryByNumberFromAnswersBatch', () => {
   beforeEach(async () => {
-    await db.questions.bulkAdd([
+    await DB.questions.bulkAdd([
       mkQuestion({ id: 1, equation: '8+3=', solution: 11, operands: [3, 8] }),
       mkQuestion({ id: 2, equation: '8-3=', solution: 5, operator: '-', operands: [3, 8] }),
       mkQuestion({ id: 3, equation: '4+5=', solution: 9, operands: [4, 5] }),
@@ -198,7 +198,7 @@ describe('getMasteryByNumberFromAnswersBatch', () => {
   it('returns 10 zero-accuracy entries for empty answers', async () => {
     const batch = await getMasteryByNumberFromAnswersBatch([])
     expect(batch).toHaveLength(10)
-    expect(batch[0]).toEqual({ number: 0, total: 0, correct: 0, accuracy: 0, questionsCount: 0 })
+    expect(batch[0]).toEqual({ number: 0, total: 0, correct: 0, score: 0, accuracy: 0, questionsCount: 0 })
     expect(batch[8].total).toBe(0)
   })
 
@@ -268,12 +268,12 @@ describe('getMasteryByNumberFromAnswersBatch', () => {
 
 describe('getWrongAnswers', () => {
   beforeEach(async () => {
-    await db.questions.bulkAdd([
+    await DB.questions.bulkAdd([
       mkQuestion({ id: 1, equation: '23+47=', operator: '+', operands: [23, 47] }),
       mkQuestion({ id: 2, equation: '15-8=', operator: '-', operands: [8, 15] }),
     ])
     const now = Date.now()
-    await db.answers.bulkAdd([
+    await DB.answers.bulkAdd([
       mkAnswer({ questionId: 1, isCorrect: false, userAnswer: 60, timestamp: now - 1000 }),
       mkAnswer({ questionId: 1, isCorrect: true, userAnswer: 70, timestamp: now - 2000 }),
       mkAnswer({ questionId: 2, isCorrect: false, userAnswer: 5, timestamp: now - 500 }),
@@ -305,10 +305,10 @@ describe('getWrongAnswers', () => {
 
 describe('evaluateCorrectionEffect', () => {
   beforeEach(async () => {
-    await db.questions.add(mkQuestion({ id: 1, equation: '23+47=' }))
+    await DB.questions.add(mkQuestion({ id: 1, equation: '23+47=' }))
     const now = Date.now()
     // 时序：W W C C C（W=Wrong, C=Correct）
-    await db.answers.bulkAdd([
+    await DB.answers.bulkAdd([
       mkAnswer({ questionId: 1, isCorrect: false, userAnswer: 60, startedAt: now - 5000 }),
       mkAnswer({ questionId: 1, isCorrect: false, userAnswer: 65, startedAt: now - 4000 }),
       mkAnswer({ questionId: 1, isCorrect: true, userAnswer: 70, startedAt: now - 3000 }),
@@ -346,12 +346,12 @@ describe('evaluateCorrectionEffect', () => {
 describe('prioritizeWrongAnswers', () => {
   it('ranks questions by priority (wrongCount + recency + unresolved)', async () => {
     const now = Date.now()
-    await db.questions.bulkAdd([
+    await DB.questions.bulkAdd([
       mkQuestion({ id: 1, equation: '23+47=' }),
       mkQuestion({ id: 2, equation: '15-8=' }),
     ])
     // Q1 错 3 次（含 1 改正）
-    await db.answers.bulkAdd([
+    await DB.answers.bulkAdd([
       mkAnswer({ questionId: 1, isCorrect: false, userAnswer: 60, timestamp: now - 1000 }),
       mkAnswer({ questionId: 1, isCorrect: false, userAnswer: 60, timestamp: now - 2000 }),
       mkAnswer({ questionId: 1, isCorrect: false, userAnswer: 60, timestamp: now - 3000 }),
@@ -377,9 +377,9 @@ describe('prioritizeWrongAnswers', () => {
 
 describe('getLearningCurve', () => {
   beforeEach(async () => {
-    await db.questions.add(mkQuestion({ id: 1, equation: '23+47=' }))
+    await DB.questions.add(mkQuestion({ id: 1, equation: '23+47=' }))
     const now = Date.now()
-    await db.answers.bulkAdd([
+    await DB.answers.bulkAdd([
       mkAnswer({ questionId: 1, isCorrect: false, userAnswer: 60, responseTime: 5000, startedAt: now - 3000 }),
       mkAnswer({ questionId: 1, isCorrect: true, responseTime: 1500, startedAt: now - 2000 }),
       mkAnswer({ questionId: 1, isCorrect: true, responseTime: 100, startedAt: now - 1000 }), // 异常
@@ -412,13 +412,13 @@ describe('getNumberCurve', () => {
   beforeEach(async () => {
     const today = new Date().toISOString().slice(0, 10)
     const yesterday = new Date(Date.now() - 86400e3).toISOString().slice(0, 10)
-    await db.questions.bulkAdd([
+    await DB.questions.bulkAdd([
       mkQuestion({ id: 1, equation: '8+3=', solution: 11, operands: [3, 8] }),
       mkQuestion({ id: 2, equation: '8-3=', solution: 5, operator: '-', operands: [3, 8] }),
     ])
     const now = Date.now()
     // 昨天 3 题（2 对 1 错）
-    await db.answers.bulkAdd([
+    await DB.answers.bulkAdd([
       mkAnswer({ questionId: 1, isCorrect: true, userAnswer: 11, solution: 11, timestamp: now - 86400e3 - 1000 }),
       mkAnswer({ questionId: 1, isCorrect: true, userAnswer: 11, solution: 11, timestamp: now - 86400e3 - 2000 }),
       mkAnswer({ questionId: 2, isCorrect: false, userAnswer: 60, solution: 5, timestamp: now - 86400e3 - 3000 }),
@@ -442,20 +442,20 @@ describe('getNumberCurve', () => {
 
 describe('getDynamicWeakness', () => {
   beforeEach(async () => {
-    await db.questions.bulkAdd([
+    await DB.questions.bulkAdd([
       mkQuestion({ id: 1, equation: '23+47=' }),
       mkQuestion({ id: 2, equation: '15-8=' }),
     ])
     const now = Date.now()
     // Q1 答 5 次都错（accuracy 0）
     for (let i = 0; i < 5; i++) {
-      await db.answers.add(
+      await DB.answers.add(
         mkAnswer({ questionId: 1, isCorrect: false, userAnswer: 60, timestamp: now - i * 1000 })
       )
     }
     // Q2 答 5 次都对（accuracy 1）
     for (let i = 0; i < 5; i++) {
-      await db.answers.add(
+      await DB.answers.add(
         mkAnswer({ questionId: 2, isCorrect: true, timestamp: now - i * 1000 })
       )
     }
@@ -480,11 +480,11 @@ describe('getDynamicWeakness', () => {
 
   it('strict mode includes question with 1 real wrong + 1 correct (1-strike)', async () => {
     // 准备：清空 + 1 个 Q，1 个真错（rt=2000ms, isTimeout=false） + 1 个对
-    await db.answers.clear()
-    await db.questions.clear()
-    await db.questions.bulkAdd([mkQuestion({ id: 1, equation: '23+47=' })])
+    await DB.answers.clear()
+    await DB.questions.clear()
+    await DB.questions.bulkAdd([mkQuestion({ id: 1, equation: '23+47=' })])
     const now = Date.now()
-    await db.answers.add(
+    await DB.answers.add(
       mkAnswer({
         questionId: 1,
         isCorrect: false,
@@ -493,7 +493,7 @@ describe('getDynamicWeakness', () => {
         timestamp: now,
       })
     )
-    await db.answers.add(
+    await DB.answers.add(
       mkAnswer({ questionId: 1, isCorrect: true, responseTime: 2000, timestamp: now })
     )
     // 调 strict 模式
@@ -507,12 +507,12 @@ describe('getDynamicWeakness', () => {
 
   it('strict mode excludes all-correct questions', async () => {
     // 准备：清空 + 1 个 Q，全对 3 个 answers
-    await db.answers.clear()
-    await db.questions.clear()
-    await db.questions.bulkAdd([mkQuestion({ id: 1, equation: '23+47=' })])
+    await DB.answers.clear()
+    await DB.questions.clear()
+    await DB.questions.bulkAdd([mkQuestion({ id: 1, equation: '23+47=' })])
     const now = Date.now()
     for (let i = 0; i < 3; i++) {
-      await db.answers.add(
+      await DB.answers.add(
         mkAnswer({
           questionId: 1,
           isCorrect: true,
@@ -530,11 +530,11 @@ describe('getDynamicWeakness', () => {
   it('strict mode excludes isTimeout-only wrong (快错/超时不算真错)', async () => {
     // 准备：1 个 Q，1 个快错（rt=100ms, isTimeout=true）+ 1 个超时错（rt=400000ms）
     //        + 1 个对（rt=2000ms）
-    await db.answers.clear()
-    await db.questions.clear()
-    await db.questions.bulkAdd([mkQuestion({ id: 1, equation: '23+47=' })])
+    await DB.answers.clear()
+    await DB.questions.clear()
+    await DB.questions.bulkAdd([mkQuestion({ id: 1, equation: '23+47=' })])
     const now = Date.now()
-    await db.answers.add(
+    await DB.answers.add(
       mkAnswer({
         questionId: 1,
         isCorrect: false,
@@ -543,7 +543,7 @@ describe('getDynamicWeakness', () => {
         timestamp: now,
       })
     )
-    await db.answers.add(
+    await DB.answers.add(
       mkAnswer({
         questionId: 1,
         isCorrect: false,
@@ -552,7 +552,7 @@ describe('getDynamicWeakness', () => {
         timestamp: now - 1000,
       })
     )
-    await db.answers.add(
+    await DB.answers.add(
       mkAnswer({
         questionId: 1,
         isCorrect: true,
@@ -568,11 +568,11 @@ describe('getDynamicWeakness', () => {
 
   it('strict mode requires ≥ 1 correct for comparison (避免全错被高估)', async () => {
     // 准备：1 个 Q，2 个真错（都不是 isTimeout）
-    await db.answers.clear()
-    await db.questions.clear()
-    await db.questions.bulkAdd([mkQuestion({ id: 1, equation: '23+47=' })])
+    await DB.answers.clear()
+    await DB.questions.clear()
+    await DB.questions.bulkAdd([mkQuestion({ id: 1, equation: '23+47=' })])
     const now = Date.now()
-    await db.answers.add(
+    await DB.answers.add(
       mkAnswer({
         questionId: 1,
         isCorrect: false,
@@ -581,7 +581,7 @@ describe('getDynamicWeakness', () => {
         timestamp: now,
       })
     )
-    await db.answers.add(
+    await DB.answers.add(
       mkAnswer({
         questionId: 1,
         isCorrect: false,
@@ -598,12 +598,12 @@ describe('getDynamicWeakness', () => {
 
   it('normal mode unchanged (backward compat) — mode defaults to normal', async () => {
     // 准备：1 个 Q，4 个 answers（3 对 1 错）
-    await db.answers.clear()
-    await db.questions.clear()
-    await db.questions.bulkAdd([mkQuestion({ id: 1, equation: '23+47=' })])
+    await DB.answers.clear()
+    await DB.questions.clear()
+    await DB.questions.bulkAdd([mkQuestion({ id: 1, equation: '23+47=' })])
     const now = Date.now()
     for (let i = 0; i < 3; i++) {
-      await db.answers.add(
+      await DB.answers.add(
         mkAnswer({
           questionId: 1,
           isCorrect: true,
@@ -612,7 +612,7 @@ describe('getDynamicWeakness', () => {
         })
       )
     }
-    await db.answers.add(
+    await DB.answers.add(
       mkAnswer({
         questionId: 1,
         isCorrect: false,
@@ -634,20 +634,20 @@ describe('getDynamicWeakness', () => {
 
 describe('getDynamicStrength', () => {
   beforeEach(async () => {
-    await db.questions.bulkAdd([
+    await DB.questions.bulkAdd([
       mkQuestion({ id: 1, equation: '23+47=' }),
       mkQuestion({ id: 2, equation: '15-8=' }),
     ])
     const now = Date.now()
     // Q1 5 对，avgRT 1500
     for (let i = 0; i < 5; i++) {
-      await db.answers.add(
+      await DB.answers.add(
         mkAnswer({ questionId: 1, isCorrect: true, responseTime: 1500, timestamp: now - i * 1000 })
       )
     }
     // Q2 5 对但慢，avgRT 3000
     for (let i = 0; i < 5; i++) {
-      await db.answers.add(
+      await DB.answers.add(
         mkAnswer({ questionId: 2, isCorrect: true, responseTime: 3000, timestamp: now - i * 1000 })
       )
     }
@@ -663,19 +663,19 @@ describe('getDynamicStrength', () => {
   })
 
   it('handles empty groups without -Infinity bug', async () => {
-    await db.answers.clear()
+    await DB.answers.clear()
     const strength = await getDynamicStrength({ minSample: 3 })
     expect(strength).toEqual([])
   })
 
   it('handles all-no-rt gracefully (maxRT || 1 fallback)', async () => {
-    await db.answers.clear()
-    await db.questions.clear() // 防止与 describe beforeEach Q1 unique 冲突
-    await db.questions.bulkPut([mkQuestion({ id: 1, equation: '23+47=' })])
+    await DB.answers.clear()
+    await DB.questions.clear() // 防止与 describe beforeEach Q1 unique 冲突
+    await DB.questions.bulkPut([mkQuestion({ id: 1, equation: '23+47=' })])
     const now = Date.now()
     // 5 对且全 responseTime=0 + startedAt===endedAt（确保兜底也算 0）
     for (let i = 0; i < 5; i++) {
-      await db.answers.add(
+      await DB.answers.add(
         mkAnswer({
           questionId: 1,
           isCorrect: true,
