@@ -21,8 +21,9 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { ref, onMounted, nextTick } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { formatTimestampForFilename } from '@/utils/time/timeFormat'
 // E3: papers 改从 sessionStorage 读 (路径 4: sessionStorage + key in query)
 // 不再依赖 stores/app.js 跨页面 state
 
@@ -68,31 +69,22 @@ const sheets = computed(() => {
       index += numberOfCols;
     }
     columnsOfPaper = columnsOfPaper.reverse()
-    console.log(columnsOfPaper);
+    if (import.meta.env.DEV) console.log(columnsOfPaper);
     return { paperTitle, paperSubTitle, columnsOfPaper, colWidth, rowHeight }
   })
 })
 
 onMounted(() => {
   // 修改网页标题以作为打印时文件的文件名
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
-  const day = now.getDate();
-  const hour = now.getHours();
-  const minute = now.getMinutes();
-  const second = now.getSeconds();
-  const timeStr = `${year}${month}${day}${hour}${minute}${second}`;
-  console.log(timeStr);
-  document.title = route.query.fileName + timeStr
+  document.title = route.query.fileName + formatTimestampForFilename()
 
   window.onbeforeprint = () => {
-    console.log('before')
+    if (import.meta.env.DEV) console.log('before')
     isPrinting.value = true
   }
 
   window.onafterprint = () => {
-    console.log('after')
+    if (import.meta.env.DEV) console.log('after')
     nextTick(() => {
       isPrinting.value = false
     })

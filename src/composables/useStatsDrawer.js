@@ -11,7 +11,7 @@
 import { computed } from 'vue'
 import { useStatsStore } from '@/stores/stats'
 import { useStatsQuery } from '@/composables'
-import { formatDuration as _formatDuration } from '@/utils/time/timeFormat'
+import { formatDuration as _formatDuration, formatDate as _formatDate } from '@/utils/time/timeFormat'
 // 统一 operator 中文名称（services/operatorMap.js）
 import { OPERATOR_LABELS } from '@/services'
 
@@ -77,9 +77,7 @@ export function useStatsDrawer() {
   }
 
   function formatDate(iso) {
-    if (!iso) return ''
-    const d = new Date(iso)
-    return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+    return _formatDate(iso)
   }
 
   function operatorLabel(op) {

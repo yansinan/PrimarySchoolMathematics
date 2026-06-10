@@ -108,7 +108,7 @@ const formData = ref({ ...DEFAULT_FORM_DATA })
 const configurations = ref([])
 
 onMounted(async () => {
-  console.log('少年，我看你骨骼精奇，是万中无一的编程奇才，有个程序员大佬qq群[217840699]你加下吧!维护世界和平就靠你了')
+  if (import.meta.env.DEV) console.log('少年，我看你骨骼精奇，是万中无一的编程奇才，有个程序员大佬qq群[217840699]你加下吧!维护世界和平就靠你了')
   document.title = '小学数学口算题 | Primary School Mathematics'
 
   refreshConfiguration()
@@ -130,7 +130,7 @@ const addConfiguration = (newId) => {
   refreshConfiguration()
 }
 const selectedConfiguration = (configuration) => {
-  console.log(configuration);
+  if (import.meta.env.DEV) console.log(configuration);
 
   const { data: config } = configuration
   formData.value.step = config.step
@@ -210,7 +210,7 @@ const handleClose = (done) => {
     if (!valid) return
     done()
   })
-  console.log("关闭生成菜单")
+  if (import.meta.env.DEV) console.log("关闭生成菜单")
 }
 </script>
 

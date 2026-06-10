@@ -82,9 +82,11 @@ export async function persistSession({
 
   try {
     const sessionId = await saveSession(sessionData, answersData)
-    console.log(
-      `[SessionPersistence] Session saved to DB: #${sessionId}, ${answers.length} questions, ${Math.round((correctCount / answers.length) * 100)}% accuracy`,
-    )
+    if (import.meta.env.DEV) {
+      console.log(
+        `[SessionPersistence] Session saved to DB: #${sessionId}, ${answers.length} questions, ${Math.round((correctCount / answers.length) * 100)}% accuracy`,
+      )
+    }
     return sessionId
   } catch (err) {
     console.error('[SessionPersistence] Failed to save session:', err)

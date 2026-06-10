@@ -35,3 +35,30 @@ export function formatDuration(ms) {
 
   return parts.join('')
 }
+
+/**
+ * Format an ISO date string to short display format.
+ * @param {string} iso - ISO date string
+ * @returns {string} e.g. "3/15 14:30"
+ */
+export function formatDate(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+/**
+ * Generate a compact timestamp string for filenames.
+ * @param {Date} [date=new Date()]
+ * @returns {string} e.g. "2026611153045"
+ */
+export function formatTimestampForFilename(date) {
+  const d = date || new Date()
+  const y = d.getFullYear()
+  const M = String(d.getMonth() + 1).padStart(2, '0')
+  const D = String(d.getDate()).padStart(2, '0')
+  const h = String(d.getHours()).padStart(2, '0')
+  const m = String(d.getMinutes()).padStart(2, '0')
+  const s = String(d.getSeconds()).padStart(2, '0')
+  return `${y}${M}${D}${h}${m}${s}`
+}
