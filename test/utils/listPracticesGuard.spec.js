@@ -1,10 +1,10 @@
 /**
  * decideListPracticesTransition 单测（纯函数）
  *
- * @see composables/useListPracticesGuard.js
+ * @see utils/listPracticesGuard.js
  */
 import { describe, it, expect } from 'vitest'
-import { decideListPracticesTransition } from '@/composables/useListPracticesGuard'
+import { decideListPracticesTransition } from '@/utils/listPracticesGuard'
 
 describe('decideListPracticesTransition', () => {
   // ── GROUP_START 分支 ──

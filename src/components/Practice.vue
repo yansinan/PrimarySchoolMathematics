@@ -105,7 +105,7 @@ import { useSubmitHandler } from '@/composables/useSubmitHandler'
 import { useAdaptiveSession } from '@/composables/useAdaptiveSession'
 import { usePracticeDialogs } from '@/composables/usePracticeDialogs'
 import { usePracticeSaver } from '@/composables/usePracticeSaver'
-import { decideListPracticesTransition } from '@/composables/useListPracticesGuard'
+import { decideListPracticesTransition } from '@/utils/listPracticesGuard'
 import { useDisplayStrategy } from '@/composables/useDisplayStrategy'  // 🆕 PR-4.2 抽离 displayStats + applyDisplayModeForCurrentQuestion + generateOptions
 import { FEEDBACK_DELAYS, ASSESSMENT_ABORT_WRONG_STREAK, getCommentByRate, ASSIST_LEVELS, MAX_ATTEMPT_PER_QUESTION } from '@/constants/practice'
 
@@ -661,7 +661,7 @@ if (typeof window !== 'undefined') {
     },
 
     /**
-     * 查询当前状态
+     * 查询当前状态（agent 自动化测试友好）
      * @returns {{
      *   phase: string,
      *   isAssessment: boolean,
@@ -669,7 +669,12 @@ if (typeof window !== 'undefined') {
      *   answersCount: number,
      *   correctCount: number,
      *   totalQuestions: number,
-     *   hasProfile: boolean
+     *   hasProfile: boolean,
+     *   // P2-4: engine 扁平字段（避免 agent 写 ?.value?.profile?. 链式）
+     *   engineReady: boolean,
+     *   engineDifficultyIdx: number|null,
+     *   engineStrongCount: number,
+     *   engineWeakCount: number
      * }}
      */
     state: () => ({
@@ -679,7 +684,12 @@ if (typeof window !== 'undefined') {
       answersCount: session.value.answers.length,
       correctCount: correctCount.value,
       totalQuestions: totalQuestions.value,
-      hasProfile: !!abilityProfile.value
+      hasProfile: !!abilityProfile.value,
+      // P2-4: 自适应引擎就绪 + 关键画像数据扁平化
+      engineReady: !!adaptiveEngine.value,
+      engineDifficultyIdx: adaptiveEngine.value?.profile?.difficultyIdx ?? null,
+      engineStrongCount: adaptiveEngine.value?.strongLevelIndices?.length ?? 0,
+      engineWeakCount: adaptiveEngine.value?.weakLevelIndices?.length ?? 0,
     }),
 
     /**
