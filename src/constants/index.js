@@ -5,5 +5,4 @@
  * 维护规则: 新增常量文件后, 在此追加 export * from './xxx'
  */
 export * from './practice'
-export * from './storageKeys'
 export * from './evaluation'
