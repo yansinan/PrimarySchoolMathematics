@@ -194,9 +194,8 @@ const generateFormulas = () => {
   // Capture config snapshot for stats tracking
   practiceStore.setConfigSnapshot(toRaw(unref(formData)))
 
-  // Manual generation → switch to practice mode, clear diagnostic state
+  // Manual generation → switch to practice mode
   practiceStore.setPhase('practice')
-  practiceStore.setAbilityProfile(null)
 
   practiceStore.setGenerateDrawerVisible(false);
   practiceStore.setListPractices(listResult);

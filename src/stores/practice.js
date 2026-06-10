@@ -2,47 +2,14 @@ import { defineStore } from 'pinia'
 import { Answer } from '@/utils/algorithm/answer'
 import { EMPTY_PARSED_EQUATION, getCarryType, parseEquation } from '@/utils/algorithm/equationParser'
 // E1: saveSession / sumResponseTimes 已迁 services/sessionPersistence.js
-import { LS_KEY_PSM_PROFILE } from '@/constants/storageKeys'
-
-const LS_KEY = LS_KEY_PSM_PROFILE
-
-/** 从 localStorage 恢复持久化的诊断状态 */
-function loadPersistedProfile() {
-  try {
-    const raw = localStorage.getItem(LS_KEY)
-    return raw ? JSON.parse(raw) : null
-  } catch { return null }
-}
-
-/** 持久化诊断状态到 localStorage */
-function savePersistedProfile(profile, phase) {
-  try {
-    localStorage.setItem(LS_KEY, JSON.stringify({ profile, phase }))
-  } catch {}
-}
-
-/** 清除持久化的诊断状态 */
-function clearPersistedProfile() {
-  try { localStorage.removeItem(LS_KEY) } catch {}
-}
-
-const saved = loadPersistedProfile()
 
 export const usePracticeStore = defineStore('practice', {
   state: () => ({
     generateDrawerVisible: false,
     listPractices: [],
     /** @type {'idle'|'assessment'|'practice'} */
-    phase: saved?.phase === 'practice' ? 'practice' : 'idle',
-    /** @type {null|{
-     *   levelScores:Object,
-     *   weakLevels:string[],
-     *   allCorrect:boolean,
-     *   diagAnswers?: Array,
-     *   adaptiveHistory?: Array
-     * }} */
-    abilityProfile: saved?.profile || null,
-    /** 当前自适应组序号（0 表示无） */
+    phase: 'idle',
+    /** 当前自适应组序号（0=无）。>=1 表示诊断评估已完成（assessmentCompleted getter 的计算依据） */
     currentGroupIndex: 0,
     /** 自适应阶段累计答题（按题号追加，跨组不去重） */
     adaptiveAnswers: [],
@@ -101,7 +68,14 @@ export const usePracticeStore = defineStore('practice', {
       const done = state.session.diagnosticAnswers.length
       const total = state.listPractices.length
       return `能力评估 ${done}/${total}`
-    }
+    },
+    /**
+     * 诊断评估是否已完成。
+     * 实时计算：currentGroupIndex>=1 表示 completeAssessment 已执行过。
+     * 不存额外布尔字段，随 groupIndex 生命周期自动维护
+     * （Generate.vue 手动出题不走 completeAssessment，groupIndex 保持 0，故为 false）。
+     */
+    assessmentCompleted: (state) => state.currentGroupIndex >= 1,
   },
   actions: {
     setGenerateDrawerVisible(value) {
@@ -123,16 +97,6 @@ export const usePracticeStore = defineStore('practice', {
     // ── Phase management ──
     setPhase(p) {
       this.phase = p
-      if (p === 'idle') clearPersistedProfile()
-      else if (this.abilityProfile) savePersistedProfile(this.abilityProfile, p)
-    },
-    setAbilityProfile(profile) {
-      this.abilityProfile = profile
-      if (profile && this.phase !== 'idle') {
-        savePersistedProfile(profile, this.phase)
-      } else {
-        clearPersistedProfile()
-      }
     },
     /** 启动诊断模式并载入诊断题 */
     startAssessment(questions) {
@@ -153,10 +117,6 @@ export const usePracticeStore = defineStore('practice', {
      *  - session.adaptiveConfig 诊断完成时设置，自适应引擎专用
      */
     completeAssessment(profile, diagAnswers, adaptiveOptions = {}) {
-      const enrichedProfile = {
-        ...profile,
-      }
-      this.abilityProfile = enrichedProfile
       this.phase = 'practice'
       this.currentGroupIndex = 1
       // 设置自适应专用配置（不受 configSnapshot 污染）
@@ -168,7 +128,6 @@ export const usePracticeStore = defineStore('practice', {
       // 同样清掉 diagnosticAnswers，下一轮可能重新诊断
       this.session.diagnosticAnswers = []
       this.session.currentIndex = 0
-      savePersistedProfile(enrichedProfile, 'practice')
     },
     setCurrentDifficulty(idx, groupIdx) {
       this.currentGroupIndex = groupIdx

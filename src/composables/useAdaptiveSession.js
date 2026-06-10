@@ -45,7 +45,7 @@ import { Answer } from '@/utils/algorithm/answer'
  */
 export function useAdaptiveSession(options = {}) {
   const practiceStore = usePracticeStore()
-  const { session, correctCount, isAssessment, totalQuestions, abilityProfile } = storeToRefs(practiceStore)
+  const { session, correctCount, isAssessment, totalQuestions, assessmentCompleted } = storeToRefs(practiceStore)
 
   // 外部依赖（注入模式，默认从 useXxx() 取）
   const router = options.router || useRouter()
@@ -84,7 +84,7 @@ export function useAdaptiveSession(options = {}) {
       const groupIdx = adaptiveGroupIndex.value
       return `${label} · 第${groupIdx}组`
     }
-    if (abilityProfile.value) {
+    if (assessmentCompleted.value) {
       return '智能练习'
     }
     return '一年级'
@@ -109,8 +109,7 @@ export function useAdaptiveSession(options = {}) {
    * - 没有画像：进入空闲态，重新生成诊断题开始评估
    */
   async function startNewAdaptiveSession() {
-    const profile = practiceStore.abilityProfile
-    if (!profile) {
+    if (!practiceStore.assessmentCompleted) {
       // 无画像 → 重新评估
       practiceStore.setPhase('idle')
       practiceStore.clearAdaptiveEngine()
@@ -312,7 +311,7 @@ export function useAdaptiveSession(options = {}) {
         return 'restart'
       } else {
         // 'cancel' 或 'close' 都视为查看分析或返回首页
-        const shouldRestart = practiceStore.abilityProfile && action !== 'cancel'
+        const shouldRestart = practiceStore.assessmentCompleted && action !== 'cancel'
         adaptiveEngine.value = null
         adaptiveGroupIndex.value = 0
         groupAnswerOffset.value = 0

@@ -130,7 +130,7 @@ const {
   isPractice,
   isIdle,
   phase,
-  abilityProfile
+  assessmentCompleted
 } = storeToRefs(practiceStore)
 
 // ── 题目展示策略 composable (PR-4.2 抽离) ──
@@ -466,7 +466,7 @@ watch(listPractices, (newPracticeList) => {
     savedAnswers: session.value.answers,
     isAdaptiveTransition: !!adaptiveEngine.value && adaptiveGroupIndex.value > 1,
     hasAdaptiveEngine: !!adaptiveEngine.value,
-    hasProfile: !!abilityProfile.value,
+    hasProfile: assessmentCompleted.value,
     phase: phase.value,
   })
 
@@ -690,7 +690,7 @@ if (typeof window !== 'undefined') {
       answersCount: session.value.answers.length,
       correctCount: correctCount.value,
       totalQuestions: totalQuestions.value,
-      hasProfile: !!abilityProfile.value,
+      hasProfile: assessmentCompleted.value,
       // P2-4: 自适应引擎就绪 + 关键画像数据扁平化
       engineReady: !!adaptiveEngine.value,
       engineDifficultyIdx: adaptiveEngine.value?.profile?.difficultyIdx ?? null,
@@ -718,7 +718,7 @@ onMounted(() => {
   }
 
   // 情况 2: 已有能力画像但题目已清空（刷新后）→ 恢复练习
-  if (isPractice.value && abilityProfile.value && listPractices.value.length === 0) {
+  if (isPractice.value && assessmentCompleted.value && listPractices.value.length === 0) {
     startNewAdaptiveSession()
   }
 })
