@@ -31,8 +31,9 @@ import {
 } from '@/constants/practice'
 import { DIFFICULTY_LEVELS } from '@/constants/difficulty'
 import { Question } from '@/utils/algorithm/question'
-import { Answer, WrongAnswer } from '@/utils/algorithm'
+import { Answer } from '@/utils/algorithm'
 import { generateOneQuestion } from '@/utils/algorithm/adaptiveBatch'
+import { generateDistractors } from '@/utils/algorithm/distractors'
 
 // 小组题量阶梯（每个速度级别对应一个基数）
 const GROUP_SIZES = [6, 10, 14, 18, 22]
@@ -50,47 +51,10 @@ function weightedRandom(items, weights) {
   return items[items.length - 1]
 }
 
-function generateDistractors(correct, count, wrongPool = [], equation = '') {
-  const distractors = new Set()
-  if (correct == null || isNaN(correct) || correct <= 0) return []
-  if (equation) {
-    const expected = EquationSolver.solve(equation)
-    if (expected != null && expected > 0 && expected !== correct) {
-      console.warn('[generateDistractors] correct=%d != solve(%s)=%d → 降级', correct, equation, expected)
-      return []
-    }
-  }
-  if (wrongPool.length && equation) {
-    const matches = WrongAnswer.findByEquation(wrongPool, equation, { exact: false })
-    for (const w of matches) {
-      const v = Number(w.userAnswer)
-      if (v !== correct && v > 0 && !distractors.has(v)) distractors.add(v)
-      if (distractors.size >= count) return Array.from(distractors).slice(0, count)
-    }
-  }
-  const candidates = [
-    correct + 1, correct - 1,
-    correct + 2, correct - 2,
-    correct + 5, correct - 5,
-    correct + 10, correct - 10,
-    Math.abs(correct - 1),
-    correct + (correct > 5 ? -3 : 3),
-  ]
-  for (const c of candidates) {
-    if (c !== correct && c > 0 && !distractors.has(c)) distractors.add(c)
-    if (distractors.size >= count) break
-  }
-  while (distractors.size < count) {
-    const r = Math.max(1, correct + Math.floor(Math.random() * 10) - 5)
-    if (r !== correct && !distractors.has(r)) distractors.add(r)
-  }
-  return Array.from(distractors).slice(0, count)
-}
-
 function buildReviewQuestion(wa) {
   const eqBody = (wa.equation || '')
     .replace(/=\d+$/, '').replace(/=__$/, '').replace(/=$/, '').trim()
-  const result = {
+  return {
     equation: `${eqBody}=__`,
     solution: wa.solution,
     inputMode: 'vertical_keypad',
@@ -100,8 +64,6 @@ function buildReviewQuestion(wa) {
     isCarry: wa.isCarry,
     isBorrow: wa.isBorrow,
   }
-  const el = equation ? '=__' : ''
-  return { ...result, equation: `${eqBody}${el}` }
 }
 
 function pickInputMode(engine) {
@@ -123,11 +85,8 @@ function pickInputMode(engine) {
   return 'choice2'
 }
 
-// ═══════════════════════════════════════════════════════════════
-// Engine 类
-// ═══════════════════════════════════════════════════════════════
-
 /**
+ * 自适应练习引擎（Service 层）
  * 自适应引擎
  *
  * 职责分工：
