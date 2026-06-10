@@ -257,7 +257,8 @@ export class EquationSolver {
     }
 
     /**
-     * 备用方案：暴力求解
+     * 备用方案：暴力求解（内部实现，不直接调用）
+     * @private
      * @param {string} equation - 题目字符串
      * @returns {number|null} 未知数的解
      */
@@ -311,7 +312,8 @@ export class EquationSolver {
     }
     
     /**
-     * 检查方程的计算结果是否正确
+     * 检查方程的计算结果是否正确（内部实现，不直接调用）
+     * @private
      * @param {string} equation - 题目字符串，可能包含或不包含__
      * @param {number|string} inResult - 用户输入的答案或方程的结果
      * @returns {boolean} 等式是否成立

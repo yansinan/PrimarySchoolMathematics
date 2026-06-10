@@ -316,12 +316,9 @@ function getRandomBracket(step) {
      * @param {number} step
      * @return {number}
      */
-    while (true) {
-        const k = Math.floor(Math.random() * (step * 2 + 1 - 3)); // 获得一个括号起始指针
-        if (k % 2 === 0) {
-            return k;
-        }
-    }
+    // 直接公式：有效位置数 = max(1, step - 1)，返回 0, 2, 4, ..., 2*(count-1)
+    const count = Math.max(1, step - 1)
+    return Math.floor(Math.random() * count) * 2
 }
 
 // 2步算式相关判断设置
