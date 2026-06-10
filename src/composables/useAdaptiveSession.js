@@ -84,7 +84,7 @@ export function useAdaptiveSession(options = {}) {
       const groupIdx = adaptiveGroupIndex.value
       return `${label} · 第${groupIdx}组`
     }
-    if (assessmentCompleted.value) {
+    if (assessmentCompleted.value && !adaptiveEngine.value) {
       return '智能练习'
     }
     return '一年级'
