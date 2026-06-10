@@ -122,12 +122,12 @@ function pickInputMode(engine) {
  *
  * 职责分工：
  *  - Profile（来自 loadProfile）：提供 strong/weakLevelIndices，组边界替换
- *  - Engine#difficultyIdx：own property，会话内临时降级，组边界重置
+ *  - Engine#difficultyIdx：own property，会话内由 evaluateGroup / adjustNextQuestion 维护
  *  - strongLevelIndices / weakLevelIndices：通过 getter 委派 this.profile，消除双源
  *
  * 组边界刷新：
- *   engine.profile = await loadProfile()
- *   engine.difficultyIdx = engine.profile.difficultyIdx   // 重置降级
+ *   engine.profile = await loadProfile()   // 只刷强弱项列表
+ *   engine.difficultyIdx 保留，不从 DB 覆盖  // 与会话内运行时难度是两个独立变量
  */
 export class Engine {
   constructor({

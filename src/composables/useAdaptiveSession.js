@@ -263,11 +263,13 @@ export function useAdaptiveSession(options = {}) {
     practiceStore.currentGroupIndex = adaptiveGroupIndex.value
 
     // ── 实时保存检查点（写 DB） ──
-    // 先读画像（一次 DB 查询），整体替换 engine.profile + 重置降级
+    // 先读画像（一次 DB 查询），更新 engine.profile（强/弱项列表 getter 委派到 profile）
+    // 注意：engine.difficultyIdx（engine 自身字段，由 evaluateGroup / adjustNextQuestion 维护）
+    // 与 dbProfile.difficultyIdx（Profile 实例字段，computeDifficultyIdx 从 DB 全集计算）
+    // 是两个独立变量。组边界只刷 profile 的强弱项列表，不覆盖 engine 自身的运行时难度。
     const dbProfile = await Profile.load()
     adaptiveEngine.value.profile = dbProfile
-    adaptiveEngine.value.difficultyIdx = dbProfile.difficultyIdx
-    practiceStore.currentDifficultyIdx = dbProfile.difficultyIdx
+    practiceStore.currentDifficultyIdx = adaptiveEngine.value.difficultyIdx
 
     await saver.saveGroupCheckpoint(result.engine.history)
 
