@@ -11,7 +11,7 @@
     :show-close="true"
     :close-on-click-modal="true"
     :close-on-press-escape="true"
-    custom-class="eval-dialog"
+    class="eval-dialog"
     @update:model-value="handleUpdate"
   >
     <div v-loading="loading" class="summary-content">
