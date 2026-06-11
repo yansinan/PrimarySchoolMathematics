@@ -145,17 +145,7 @@
             >
               <div class="session-item__left">
                 <div class="session-item__date">{{ formatDate(session.createdAt) }}</div>
-                <div class="session-item__meta">{{ session.totalQuestions }} 题 · {{ formatDuration(session.totalDuration) }}</div>
-              </div>
-              <div class="session-item__right">
-                <el-tag
-                  :type="session.accuracy >= 0.8 ? 'success' : session.accuracy >= 0.6 ? 'warning' : 'danger'"
-                  size="small"
-                  effect="plain"
-                >
-                  {{ Math.round(session.accuracy * 100) }}%
-                </el-tag>
-                <el-icon class="session-item__arrow"><ArrowRight /></el-icon>
+                <div class="session-item__meta">{{ session.totalQuestions }} 题</div>
               </div>
             </div>
           </div>

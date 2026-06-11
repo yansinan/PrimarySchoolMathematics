@@ -17,7 +17,6 @@
  *   await persistSingleAnswer(lastAnswer)
  */
 
-import { sumResponseTimes } from '@/utils/score'
 import { Answer } from '@/utils/algorithm/answer'
 import { DB } from '@/services/databaseInit'
 import { saveSession } from '@/services/PracticeSession'
@@ -50,16 +49,11 @@ export async function persistSession({
     return true
   })
 
-  const correctCount = Answer.sumScores(uniqueAnswers)
-  const totalDuration = sumResponseTimes(uniqueAnswers)
-
   const sessionData = {
     studentId,
     config: configSnapshot || {},
     totalQuestions: uniqueAnswers.length,
-    correctCount,
-    accuracy: uniqueAnswers.length > 0 ? correctCount / uniqueAnswers.length : 0,
-    totalDuration,
+    // correctCount / accuracy / totalDuration: 不写——由 PracticeSession.computeStats 实时算
     evaluations: evaluations || null,
   }
 

@@ -30,10 +30,18 @@ export class PracticeSession extends SchemaSession {
 
   /**
    * 从本 session 的 raw answers 实时算统计（不存 DB）
+   *
+   * 支持两种调用方式：
+   *   1) await session.computeStats()           — 自动从 DB 读
+   *   2) await session.computeStats(rawAnswers)  — 复用已有数据
+   *
+   * @param {Array} [rawAnswers] — 可选的预加载答案数组，避免重复读 DB
    * @returns {Promise<{totalQuestions:number, correctCount:number, accuracy:number, totalDuration:number}>}
    */
-  async computeStats() {
-    const answers = await this.getAnswers()
+  async computeStats(rawAnswers = null) {
+    const answers = rawAnswers
+      ? rawAnswers.map(r => r instanceof Answer ? r : Answer.fromJSON(r))
+      : await this.getAnswers()
     const seen = new Set()
     const unique = answers.filter(a => {
       const key = a.questionIndex ?? a.equation

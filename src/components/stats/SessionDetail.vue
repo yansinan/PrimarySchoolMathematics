@@ -24,15 +24,15 @@
           <el-col :span="8">
             <div class="detail-stat">
               <div class="detail-stat__label">正确率</div>
-              <div class="detail-stat__value" :class="accuracyColor(session.accuracy)">
-                {{ Math.round(session.accuracy * 100) }}%
+              <div class="detail-stat__value" :class="accuracyColor(stats.accuracy)">
+                {{ Math.round(stats.accuracy * 100) }}%
               </div>
             </div>
           </el-col>
           <el-col :span="8">
             <div class="detail-stat">
               <div class="detail-stat__label">用时</div>
-              <div class="detail-stat__value">{{ formatDuration(session.totalDuration) }}</div>
+              <div class="detail-stat__value">{{ formatDuration(stats.totalDuration) }}</div>
             </div>
           </el-col>
         </el-row>
@@ -40,19 +40,19 @@
           <el-col :span="8">
             <div class="detail-stat">
               <div class="detail-stat__label">总题数</div>
-              <div class="detail-stat__value">{{ session.totalQuestions }}</div>
+              <div class="detail-stat__value">{{ stats.totalQuestions }}</div>
             </div>
           </el-col>
           <el-col :span="8">
             <div class="detail-stat">
               <div class="detail-stat__label">正确</div>
-              <div class="detail-stat__value" style="color:#58cc71;">{{ session.correctCount }}</div>
+              <div class="detail-stat__value" style="color:#58cc71;">{{ stats.correctCount }}</div>
             </div>
           </el-col>
           <el-col :span="8">
             <div class="detail-stat">
               <div class="detail-stat__label">错误</div>
-              <div class="detail-stat__value" style="color:#f56c6c;">{{ session.totalQuestions - session.correctCount }}</div>
+              <div class="detail-stat__value" style="color:#f56c6c;">{{ stats.totalQuestions - stats.correctCount }}</div>
             </div>
           </el-col>
         </el-row>
@@ -94,10 +94,11 @@
 </template>
 
 <script setup>
-import { computed, watch } from 'vue'
+import { ref, computed, watch, watchEffect } from 'vue'
 import { Document, Check, Close } from '@element-plus/icons-vue'
 import { useStatsStore } from '@/stores/stats'
 import { formatDuration } from '@/utils/time/timeFormat'
+import { PracticeSession } from '@/services/PracticeSession'
 
 const statsStore = useStatsStore()
 
@@ -110,6 +111,20 @@ const detailVisible = computed({
 
 const session = computed(() => statsStore.selectedSession?.session || {})
 const answers = computed(() => statsStore.selectedSession?.answers || [])
+const stats = ref(null)
+
+watchEffect(async () => {
+  if (statsStore.selectedSession) {
+    const rawSession = statsStore.selectedSession.session
+    const rawAnswers = statsStore.selectedSession.answers || []
+    if (rawSession && rawAnswers.length) {
+      const sess = new PracticeSession(rawSession)
+      stats.value = await sess.computeStats(rawAnswers)
+    }
+  } else {
+    stats.value = null
+  }
+})
 
 function formatDate(iso) {
   if (!iso) return ''
