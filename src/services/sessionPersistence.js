@@ -117,8 +117,8 @@ export async function persistSingleAnswer(answer) {
     try {
       // 深拷贝去除 Pinia reactive proxy（DataCloneError 防护）
       const plain = JSON.parse(JSON.stringify(answer))
-      // 写 answers 表（不关联 sessionId，group checkpoint / final 时 persistSession 会再写带 sessionId 的完整 record）
-      await DB.answers.put(plain)
+      // 写 answers 表（通过 Answer.persist 成员函数，只存元数据）
+      await Answer.persist(plain)
       // ✨ B-2 修复：同步写入 questions 表（equation 唯一键去重，首次创建后续复用 id）
       await Question.save({
         ...plain,

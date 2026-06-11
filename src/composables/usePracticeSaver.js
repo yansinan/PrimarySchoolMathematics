@@ -22,7 +22,8 @@ import { usePracticeStore } from '@/stores/practice'
 import { useStatsQuery } from '@/composables'
 // E1: persistSession 从 S 层调, 不再绕 store action (2026-06-08)
 // E1-B: persistSingleAnswer 同样从 S 层调, 替代原内联 db.answers.put + saveQuestion (2026-06-08)
-import { persistSession, persistSingleAnswer } from '@/services/sessionPersistence'
+import { persistSession } from '@/services/sessionPersistence'
+import { Answer } from '@/utils/algorithm/answer'
 
 /**
  * 从 history 中提取 evaluations（{group, score}[]），转 JSON 字符串
@@ -48,13 +49,13 @@ export function usePracticeSaver() {
    *   - 这样"最近练习"列表只显示 group checkpoint 和最终 session，不再被 1 步 session 淹没
    */
   function savePerQuestion() {
-    // 取 session.answers 最后一条（刚答完的那题），单独写入 db.answers + db.questions
-    // sessionId=0 表示这条 answer 暂未关联到任何 session record
-    // 等到 group checkpoint / final 时，persistSession 会再写一份带 sessionId 的完整 record
-    const answers = practiceStore.session.answers
-    const lastAnswer = answers[answers.length - 1]
+    // P2-2: 诊断阶段答在 diagnosticAnswers，练习阶段答在 answers
+    const target = practiceStore.phase === 'assessment'
+      ? practiceStore.session.diagnosticAnswers
+      : practiceStore.session.answers
+    const lastAnswer = target[target.length - 1]
     if (lastAnswer) {
-      void persistSingleAnswer(lastAnswer)
+      void Answer.persist(lastAnswer)
     }
   }
 
