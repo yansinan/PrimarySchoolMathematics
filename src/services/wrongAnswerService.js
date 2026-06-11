@@ -6,7 +6,6 @@
  *
  * @see v4-PLAN-error-injection.md § v4.0b
  */
-import { DB } from '@/services/databaseInit'
 import { Answer } from '@/utils/algorithm/answer'
 
 /**
@@ -61,10 +60,10 @@ export async function getWrongAnswerByEquation(equation, studentId = 'default') 
  * @returns {Promise<boolean>}
  */
 export async function markWrongAnswerCorrected(sessionId, questionIndex, corrected = true) {
-  const answers = await DB.answers.where('sessionId').equals(sessionId).toArray()
+  const answers = await Answer.findBySession(sessionId)
   const target = answers.find(a => a.questionIndex === questionIndex)
   if (!target) return false
-  await DB.answers.update(target.id, {
+  await Answer.updateOne(target.id, {
     correctedAt: corrected ? new Date().toISOString() : null
   })
   return true
@@ -75,10 +74,10 @@ export async function markWrongAnswerCorrected(sessionId, questionIndex, correct
  * @returns {Promise<boolean>}
  */
 export async function removeWrongAnswer(sessionId, questionIndex) {
-  const answers = await DB.answers.where('sessionId').equals(sessionId).toArray()
+  const answers = await Answer.findBySession(sessionId)
   const target = answers.find(a => a.questionIndex === questionIndex)
   if (!target) return false
-  await DB.answers.delete(target.id)
+  await Answer.deleteOne(target.id)
   return true
 }
 
@@ -87,13 +86,10 @@ export async function removeWrongAnswer(sessionId, questionIndex) {
  * @returns {Promise<number>}
  */
 export async function clearWrongAnswers(studentId = 'default') {
-  const sessions = await DB.practiceSessions.where('studentId').equals(studentId).toArray()
-  const sessionIds = sessions.map(s => s.id)
-  if (!sessionIds.length) return 0
-  const all = await DB.answers.where('sessionId').anyOf(sessionIds).toArray()
-  const instances = all.map(a => new Answer(a))
+  const all = await Answer.getAllByStudent(studentId)
+  const instances = all.map(r => Answer.fromJSON(r))
   const wrongIds = instances.filter(a => !a.isCorrect).map(a => a.id)
   if (!wrongIds.length) return 0
-  await DB.answers.bulkDelete(wrongIds)
+  await Answer.bulkDelete(wrongIds)
   return wrongIds.length
 }

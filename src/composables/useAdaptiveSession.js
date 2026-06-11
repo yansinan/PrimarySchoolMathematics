@@ -33,7 +33,6 @@ import { formatDuration } from '@/utils/time/timeFormat'
 import { getWrongAnswers } from '@/services/wrongAnswerService'
 import { Answer, WrongAnswer } from '@/utils/algorithm'
 import { Question } from '@/utils/algorithm/question'
-import { DB } from '@/services/databaseInit'
 
 /**
  * 自适应会话 composable 工厂
@@ -60,7 +59,7 @@ export function useAdaptiveSession(options = {}) {
     const raw = await getWrongAnswers({ days: 90, limit: 200 })
     const deduped = WrongAnswer.dedup(raw)
     // 重新计算掌握值（基于全部 db.answers）
-    const allRows = await DB.answers.toArray()
+    const allRows = await Answer.getAll()
     const masteryMap = Question.computeMastery(allRows)
     for (const a of deduped) {
       const key = `${a.equation || ''}_${a.solution}`

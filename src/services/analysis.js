@@ -10,7 +10,6 @@
  * - § 3.1 题目聚合（findEquivalent / findRelated / getMasteryByNumber）
  */
 
-import { DB } from '@/services/databaseInit'
 import { Question } from '@/utils/algorithm/question'
 import { Answer } from '@/utils/algorithm/answer'
 import { WrongAnswer } from '@/utils/algorithm/wrongAnswer'
@@ -94,8 +93,8 @@ export async function findRelated(equation, { range = 3, limit = 10 } = {}) {
  */
 export async function getMasteryByNumber(number, { days = 30 } = {}) {
   // P2 阶段 13：不依赖 questions.operands 字段（migration 不一致），
-  // 改从 operandMin + operandMax 反推数位（“3”' ’、‘8' 也击 number=3、8）
-  const allQuestions = await DB.questions.toArray()
+  // 改从 operandMin + operandMax 反推数位（"3"' ’、'8' 也击 number=3、8）
+  const allQuestions = await Question.getAll()
   const questions = allQuestions.filter((q) => Question.extractOperandDigits(q).includes(number))
   const questionIds = questions.map((q) => q.id)
 
@@ -111,12 +110,7 @@ export async function getMasteryByNumber(number, { days = 30 } = {}) {
   }
 
   // 2. 查这些题目的答题记录（questionId 索引 + 时间窗口内存过滤）
-  const cutoff = Date.now() - days * 86400e3
-  const answers = await DB.answers
-    .where('questionId')
-    .anyOf(questionIds)
-    .and((a) => a.timestamp > cutoff)
-    .toArray()
+  const answers = await Answer.findByQuestionIds(questionIds, { days })
 
   // 3. 统计
   const total = answers.length
@@ -309,13 +303,9 @@ export async function evaluateCorrectionEffect(questionId, { days = 30 } = {}) {
   const cutoff = Date.now() - days * 86400e3
   // 按 startedAt 升序（v3 字段，迁移时从 timestamp-responseTime 回填）
   // 用 Answer.fromJSON 包装：isCorrect 走 getter 统一字段 vs 字段混用
-  const raw = await DB.answers
-    .where('questionId')
-    .equals(questionId)
-    .toArray()
+  const raw = await Answer.findByQuestionId(questionId)
   const answers = raw
     .filter((a) => a.startedAt > cutoff)
-    .map(a => a instanceof Answer ? a : new Answer(a))
     .sort((a, b) => a.startedAt - b.startedAt)
 
   if (answers.length === 0) {
@@ -397,8 +387,7 @@ export async function evaluateCorrectionEffect(questionId, { days = 30 } = {}) {
  */
 export async function prioritizeWrongAnswers({ limit = 20 } = {}) {
   // 1. 取所有错题
-  const raw = await DB.answers.toArray()
-  const allAnswers = raw.map(a => a instanceof Answer ? a : new Answer(a))
+  const allAnswers = await Answer.getAll()
   const wrongAnswers = allAnswers.filter((a) => !a.isCorrect)
   if (wrongAnswers.length === 0) return []
 
@@ -424,11 +413,7 @@ export async function prioritizeWrongAnswers({ limit = 20 } = {}) {
 
   // 4. 一次 anyOf 取这些题目的所有记录，内存里求 totalAttempts + lastCorrectAt
   //    用 stored isCorrect 字段（不用 Answer getter，见函数头部注释）
-  const allForQ = await DB.answers
-    .where('questionId')
-    .anyOf(uniqueQIds)
-    .toArray()
-  const forQAnswers = allForQ.map(a => new Answer(a))
+  const forQAnswers = await Answer.findByQuestionIds(uniqueQIds)
   const totalByQ = new Map()
   const lastCorrectByQ = new Map()
   for (const a of forQAnswers) {
@@ -530,20 +515,14 @@ export async function getNumberCurve(number, { days = 30 } = {}) {
   if (number == null) return []
 
   // 1. 查所有 operands 包含 number 的题目（multiEntry 索引）
-  const questions = await DB.questions.where('operands').equals(number).toArray()
+  const questions = await Question.findByOperands(number)
   if (questions.length === 0) return []
 
   const qIds = questions.map((q) => q.id)
 
   // 2. 查这些题目的答题记录（questionId 索引 + 时间窗口内存过滤）
   //    用 timestamp 而非 startedAt：与 getMasteryByNumber 保持一致（同属"数字聚合"语义）
-  const cutoff = Date.now() - days * 86400e3
-  const raw = await DB.answers
-    .where('questionId')
-    .anyOf(qIds)
-    .toArray()
-  const rawAnswers = raw.filter((a) => a.timestamp > cutoff)
-  const answers = rawAnswers.map(a => new Answer(a))
+  const answers = await Answer.findByQuestionIds(qIds, { days })
 
   if (answers.length === 0) return []
 
@@ -595,13 +574,12 @@ export async function getNumberCurve(number, { days = 30 } = {}) {
  */
 async function _aggregateQuestions({ minSample = 3 } = {}) {
   // 1. 全量查 answers（v3 schema 无更强索引）
-  const rawAnswers = await DB.answers.toArray()
+  const rawAnswers = await Answer.getAll()
 
   // 2. 按 questionId 分组 reduce（用 Answer 实例的 getter 读字段）
   const map = new Map()
-  for (const plain of rawAnswers) {
-    if (plain.questionId == null) continue
-    const a = plain instanceof Answer ? plain : new Answer(plain)
+  for (const a of rawAnswers) {
+    if (a.questionId == null) continue
     let g = map.get(a.questionId)
     if (!g) {
       g = {

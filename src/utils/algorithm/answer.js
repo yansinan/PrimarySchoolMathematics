@@ -219,4 +219,79 @@ export class Answer extends Question {
       config: a.sessionId ? (sessionMap[a.sessionId]?.config || null) : null,
     }))
   }
+
+  // ── 通用查询（封装 DB.answers 所有查操作） ──
+
+  /** 按 sessionId 查 → Answer[] */
+  static async findBySession(sessionId) {
+    if (sessionId == null) return []
+    const raw = await DB.answers.where('sessionId').equals(sessionId).toArray()
+    return raw.map(r => Answer.fromJSON(r))
+  }
+
+  /** 按多个 sessionId 查 → Answer[] */
+  static async findBySessions(sessionIds) {
+    if (!sessionIds?.length) return []
+    const raw = await DB.answers.where('sessionId').anyOf(sessionIds).toArray()
+    return raw.map(r => Answer.fromJSON(r))
+  }
+
+  /** 全部答案 → Answer[] */
+  static async getAll() {
+    const raw = await DB.answers.toArray()
+    return raw.map(r => Answer.fromJSON(r))
+  }
+
+  /** 按 questionId 查（可选时间窗口）→ Answer[] */
+  static async findByQuestionId(questionId, { days } = {}) {
+    if (questionId == null) return []
+    const raw = await DB.answers.where('questionId').equals(questionId).toArray()
+    const cutoff = days != null ? Date.now() - days * 86400e3 : 0
+    const filtered = cutoff ? raw.filter(a => a.timestamp > cutoff) : raw
+    return filtered.map(r => Answer.fromJSON(r))
+  }
+
+  /** 按多个 questionId 查（可选时间窗口）→ Answer[] */
+  static async findByQuestionIds(questionIds, { days } = {}) {
+    if (!questionIds?.length) return []
+    const raw = await DB.answers.where('questionId').anyOf(questionIds).toArray()
+    const cutoff = days != null ? Date.now() - days * 86400e3 : 0
+    const filtered = cutoff ? raw.filter(a => a.timestamp > cutoff) : raw
+    return filtered.map(r => Answer.fromJSON(r))
+  }
+
+  /** 游离答案（无 sessionId）→ Answer[] */
+  static async getOrphans() {
+    const raw = await DB.answers.filter(a => !a.sessionId).toArray()
+    return raw.map(r => Answer.fromJSON(r))
+  }
+
+  // ── 通用写操作（封装 DB.answers 所有写操作） ──
+
+  /** 更新单条 answer 字段 */
+  static async updateOne(id, changes) {
+    if (id == null) return false
+    await DB.answers.update(id, changes)
+    return true
+  }
+
+  /** 删除单条 answer */
+  static async deleteOne(id) {
+    if (id == null) return false
+    await DB.answers.delete(id)
+    return true
+  }
+
+  /** 批量删除 answer */
+  static async bulkDelete(ids) {
+    if (!ids?.length) return 0
+    await DB.answers.bulkDelete(ids)
+    return ids.length
+  }
+
+  /** 删除某 session 的所有 answer */
+  static async deleteBySession(sessionId) {
+    if (sessionId == null) return
+    await DB.answers.where('sessionId').equals(sessionId).delete()
+  }
 }

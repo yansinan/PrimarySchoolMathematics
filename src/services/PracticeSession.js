@@ -191,11 +191,9 @@ export class PracticeSession extends SchemaSession {
   static async getBatchSessionStats(sessions) {
     if (!sessions.length) return new Map()
     const ids = sessions.map(s => s.id)
-    const rows = await DB.answers.where('sessionId').anyOf(ids).toArray()
-    // 在数据边界处统一实例化，确保 getter（isCorrect/score）可用
-    const answers = rows.map(r => Answer.fromJSON(r))
+    const rows = await Answer.findBySessions(ids)
     const grouped = {}
-    for (const a of answers) {
+    for (const a of rows) {
       if (!grouped[a.sessionId]) grouped[a.sessionId] = []
       grouped[a.sessionId].push(a)
     }
@@ -205,34 +203,89 @@ export class PracticeSession extends SchemaSession {
     }
     return statsObj
   }
+
+  // ── Session CRUD（封装 DB.practiceSessions 所有操作） ──
+
+  /** 获取最近 sessions（每轮只返回最新一条） */
+  static async list(studentId = 'default', limit = 50) {
+    const all = await DB.practiceSessions
+      .where('studentId').equals(studentId)
+      .reverse().toArray()
+
+    const groups = new Map()
+    const standalone = []
+    for (const s of all) {
+      if (s.practiceSessionId) {
+        if (!groups.has(s.practiceSessionId)) {
+          groups.set(s.practiceSessionId, s)
+        }
+      } else {
+        if (standalone.length < limit * 2) standalone.push(s)
+      }
+    }
+
+    const merged = [...groups.values(), ...standalone]
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+    return merged.slice(0, limit)
+  }
+
+  /** 获取 session 详情（含 answers + siblings） */
+  static async getDetail(sessionId) {
+    const session = await DB.practiceSessions.get(sessionId)
+    const answers = sessionId != null ? await Answer.findBySession(sessionId) : []
+
+    let siblings = []
+    if (session && session.practiceSessionId) {
+      const raw = await PracticeSession.findByPracticeSessionId(session.practiceSessionId)
+      const filtered = raw.filter(s => s.id !== sessionId)
+      siblings = await Promise.all(filtered.map(async s => ({
+        session: s,
+        answers: await Answer.findBySession(s.id),
+      })))
+    }
+
+    return { session, answers, siblings }
+  }
+
+  /** 按 practiceSessionId 查所有 session（按 createdAt 排序） */
+  static async findByPracticeSessionId(practiceSessionId) {
+    if (!practiceSessionId) return []
+    return await DB.practiceSessions
+      .where('practiceSessionId').equals(practiceSessionId)
+      .sortBy('createdAt')
+  }
+
+  /** 删除 session 及其所有 answer */
+  static async deleteOne(sessionId) {
+    await DB.transaction('rw', DB.practiceSessions, DB.answers, async () => {
+      await DB.practiceSessions.delete(sessionId)
+      await Answer.deleteBySession(sessionId)
+    })
+  }
+
+  /** 删除某学生全部 session + 关联的 answer */
+  static async deleteByStudentId(studentId = 'default') {
+    const all = await DB.practiceSessions
+      .where('studentId').equals(studentId).toArray()
+    const sessionIds = all.map(s => s.id)
+    if (!sessionIds.length) return 0
+    await DB.transaction('rw', DB.practiceSessions, DB.answers, async () => {
+      await DB.practiceSessions.where('studentId').equals(studentId).delete()
+      for (const sid of sessionIds) {
+        await Answer.deleteBySession(sid)
+      }
+    })
+    return sessionIds.length
+  }
 }
 
-// ─── Session CRUD ──────────────────────────────────────────────────────────
+// ─── Session CRUD（导出函数，委托给 PracticeSession 类方法） ──────────────
 
 /**
  * 获取最近 sessions（每轮只返回最新一条）
  */
 export async function getSessions(studentId = 'default', limit = 50) {
-  const all = await DB.practiceSessions
-    .where('studentId').equals(studentId)
-    .reverse().toArray()
-
-  // 按 practiceSessionId 分组，每组只保留最新（reverse 下第一个遇到的）
-  const groups = new Map()
-  const standalone = []  // 无 practiceSessionId 的旧数据，每条独立
-  for (const s of all) {
-    if (s.practiceSessionId) {
-      if (!groups.has(s.practiceSessionId)) {
-        groups.set(s.practiceSessionId, s)
-      }
-    } else {
-      if (standalone.length < limit * 2) standalone.push(s)
-    }
-  }
-
-  const merged = [...groups.values(), ...standalone]
-    .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-  return merged.slice(0, limit)
+  return PracticeSession.list(studentId, limit)
 }
 
 /**
@@ -240,35 +293,12 @@ export async function getSessions(studentId = 'default', limit = 50) {
  * 同时返回同 practiceSessionId 的 checkpoint 子 session（含各自答案）
  */
 export async function getSessionDetail(sessionId) {
-  const session = await DB.practiceSessions.get(sessionId)
-  const rawAnswers = await DB.answers
-    .where('sessionId').equals(sessionId).sortBy('timestamp')
-  const answers = rawAnswers.map(r => Answer.fromJSON(r))
-
-  let siblings = []
-  if (session && session.practiceSessionId) {
-    const raw = await DB.practiceSessions
-      .where('practiceSessionId').equals(session.practiceSessionId)
-      .filter(s => s.id !== sessionId)
-      .sortBy('createdAt')
-
-    // 加载每个 checkpoint 各自的答案（统一实例化，确保 getter 可用）
-    siblings = await Promise.all(raw.map(async s => {
-      const sRaw = await DB.answers
-        .where('sessionId').equals(s.id).sortBy('timestamp')
-      return { session: s, answers: sRaw.map(r => Answer.fromJSON(r)) }
-    }))
-  }
-
-  return { session, answers, siblings }
+  return PracticeSession.getDetail(sessionId)
 }
 
 /**
  * 删除 session 及其所有 answer
  */
 export async function deleteSession(sessionId) {
-  await DB.transaction('rw', DB.practiceSessions, DB.answers, async () => {
-    await DB.practiceSessions.delete(sessionId)
-    await DB.answers.where('sessionId').equals(sessionId).delete()
-  })
+  await PracticeSession.deleteOne(sessionId)
 }

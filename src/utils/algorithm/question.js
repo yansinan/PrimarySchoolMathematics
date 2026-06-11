@@ -114,6 +114,14 @@ function _groupAnswersByLevel(answers) {
 // Question 类
 // ═══════════════════════════════════════════════════════════════
 
+/** 题型映射：inputMode + blankMode → 中文标签 */
+const TYPE_LABELS = {
+  choice2: '二选一',
+  choice4: '四选一',
+  vertical_keypad: '竖式',
+  horizontal_keypad: '横式',
+}
+
 export class Question extends DBQuestion {
   static _getDB() { return DB }
 
@@ -149,6 +157,71 @@ export class Question extends DBQuestion {
   get operandRange() { return [this.operandMin, this.operandMax] }
   get needsCarry() { return this.isCarry || (this.difficulty ?? 0) >= 7 }
   get needsBorrow() { return this.isBorrow || (this.difficulty ?? 0) >= 8 }
+
+  /** 题型中文标签（inputMode + blankMode 派生） */
+  get typeLabel() {
+    return Question.getTypeLabel(this)
+  }
+
+  /** 给 plain object 用的静态版 typeLabel */
+  static getTypeLabel(obj) {
+    if (!obj) return ''
+    const base = TYPE_LABELS[obj.inputMode]
+    if (!base) return ''
+    if (obj.blankMode && obj.blankMode !== 'result') {
+      return base + '方程'
+    }
+    return base
+  }
+
+  // ── 掌握值管理 ──
+
+  /** 答错一次扣除的掌握值 */
+  static MASTERY_WRONG_PENALTY = -100
+  /** 改正一次增加的掌握值 */
+  static MASTERY_CORRECT_REWARD = 30
+  /** 完全掌握阈值 */
+  static MASTERY_THRESHOLD = 100
+  /** 不同 inputMode 的额外掌握值加成（在 MASTERY_CORRECT_REWARD 基础上追加） */
+  static MASTERY_MODE_BONUS = {
+    horizontal_keypad: 20,
+    vertical_keypad: 10,
+    choice2: 0,
+    choice4: 5,
+  }
+
+  /** 是否已完全掌握 */
+  get isMastered() {
+    return this.mastery >= Question.MASTERY_THRESHOLD
+  }
+
+  /**
+   * 从一组 answer 记录中归算各 equation 的掌握值
+   * @param {Array} answers — Answer-like 实例或 plain object
+   * @returns {Map<string, number>} key=`equation_solution` → mastery
+   */
+  static computeMastery(answers) {
+    const map = new Map()
+    for (const a of answers) {
+      const key = `${a.equation || ''}_${a.solution}`
+      if (!map.has(key)) map.set(key, 0)
+      const correct = Number(a.userAnswer) === Number(a.solution)
+      if (correct) {
+        // 改正（previousAttemptCount > 0 表示非首次答）
+        if ((a.previousAttemptCount ?? 0) > 0) {
+          const bonus = Question.MASTERY_MODE_BONUS[a.inputMode] || 0
+          map.set(key, map.get(key) + Question.MASTERY_CORRECT_REWARD + bonus)
+        }
+      } else {
+        map.set(key, map.get(key) + Question.MASTERY_WRONG_PENALTY)
+      }
+    }
+    // 钳制
+    for (const [k, v] of map) {
+      map.set(k, Math.max(-999, Math.min(Question.MASTERY_THRESHOLD, v)))
+    }
+    return map
+  }
 
   // ── 持久化 ──
 
@@ -274,6 +347,19 @@ export class Question extends DBQuestion {
     }).filter(Boolean)
     decorated.sort((a, b) => a.dist - b.dist)
     return decorated.map(d => d.q).slice(0, limit)
+  }
+
+  /** 按 operands multiEntry 索引查找题目 → Question[] */
+  static async findByOperands(number) {
+    if (number == null) return []
+    const raw = await DB.questions.where('operands').equals(number).toArray()
+    return raw.map(q => Question.fromJSON(q))
+  }
+
+  /** 全部题目 → Question[] */
+  static async getAll() {
+    const raw = await DB.questions.toArray()
+    return raw.map(q => Question.fromJSON(q))
   }
 
   /** 串行队列：防止快速连续对同一 equation 的 upsert 并发写入冲突 */

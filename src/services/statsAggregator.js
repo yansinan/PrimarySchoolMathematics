@@ -8,8 +8,8 @@
  * @see utils/algorithm/answer.js — Answer.sumScores
  */
 
-import { DB } from './databaseInit'
 import { Answer } from '@/utils/algorithm/answer'
+import { PracticeSession } from './PracticeSession'
 import { parseEquation } from '@/utils/algorithm/equationParser'
 
 /**
@@ -18,8 +18,7 @@ import { parseEquation } from '@/utils/algorithm/equationParser'
  * @returns {Promise<Object>}
  */
 export async function getAggregatedStats(studentId = 'default') {
-  const sessions = await DB.practiceSessions
-    .where('studentId').equals(studentId).reverse().toArray()
+  const sessions = await PracticeSession.list(studentId, 9999)
   if (!sessions.length) return emptyStats()
 
   // 按 practiceSessionId 分组，每组只取最新一条；无 practiceSessionId 的旧数据每条独立
@@ -40,24 +39,23 @@ export async function getAggregatedStats(studentId = 'default') {
   const sessionIds = targetSessions.map(s => s.id)
   // 加载 session 关联的答案 + 游离答案（savePerQuestion 写入的无 sessionId 记录）
   const [attached, orphans] = await Promise.all([
-    DB.answers.where('sessionId').anyOf(sessionIds).toArray(),
-    DB.answers.filter(a => !a.sessionId).toArray(),
+    Answer.findBySessions(sessionIds),
+    Answer.getOrphans(),
   ])
   const allAnswers = [...attached, ...orphans]
-  // 统一实例化，确保 isCorrect/score 等 getter 可用
-  const answerInstances = allAnswers.map(a => a instanceof Answer ? a : new Answer(a))
+  // Answer.findBySessions/getOrphans 已返回 Answer 实例，getter 可用
   // 游离答案用 timestamp 过滤：只取所属 sessions 时间范围内的
   const sessionDateRange = targetSessions.length > 0
     ? { min: Math.min(...targetSessions.map(s => new Date(s.createdAt).getTime())),
         max: Math.max(...targetSessions.map(s => new Date(s.createdAt).getTime())) }
     : null
   const filteredAnswers = sessionDateRange
-    ? answerInstances.filter(a => {
+    ? allAnswers.filter(a => {
         if (a.sessionId) return true
         const t = a.timestamp || 0
         return t >= sessionDateRange.min && t <= sessionDateRange.max + 86400000
       })
-    : answerInstances
+    : allAnswers
 
   // answer 去重兜底：加 sessionId 防跨轮同 equation 误去重
   const seen = new Set()
