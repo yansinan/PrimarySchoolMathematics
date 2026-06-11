@@ -31,7 +31,9 @@ import { sumResponseTimes } from '@/utils/score'
 import { TARGET_LIMITS } from '@/utils/form/formDefaults'
 import { formatDuration } from '@/utils/time/timeFormat'
 import { getWrongAnswers } from '@/services/wrongAnswerService'
-import { Answer } from '@/utils/algorithm/answer'
+import { Answer, WrongAnswer } from '@/utils/algorithm'
+import { Question } from '@/utils/algorithm/question'
+import { DB } from '@/services/databaseInit'
 
 /**
  * 自适应会话 composable 工厂
@@ -52,6 +54,20 @@ export function useAdaptiveSession(options = {}) {
   const statsStore = options.statsStore || useStatsStore()
   const dialogs = options.dialogs || usePracticeDialogs()
   const saver = options.saver || usePracticeSaver()
+
+    // 加载错题库：去重+聚合+实时计算掌握值
+  async function loadWrongPool() {
+    const raw = await getWrongAnswers({ days: 90, limit: 200 })
+    const deduped = WrongAnswer.dedup(raw)
+    // 重新计算掌握值（基于全部 db.answers）
+    const allRows = await DB.answers.toArray()
+    const masteryMap = Question.computeMastery(allRows)
+    for (const a of deduped) {
+      const key = `${a.equation || ''}_${a.solution}`
+      a.mastery = masteryMap.get(key) ?? 0
+    }
+    return deduped.filter(a => !a.isMastered)
+  }
 
   // ── 响应式状态 ──
   /** 自适应引擎实例（由 createAdaptiveEngine 创建） */
@@ -133,7 +149,7 @@ export function useAdaptiveSession(options = {}) {
       targetMin,
       targetMax,
     })
-    engine.wrongAnswerPool = await getWrongAnswers({ days: 90, limit: 100 })
+    engine.wrongAnswerPool = await loadWrongPool()
     adaptiveEngine.value = engine
     adaptiveGroupIndex.value = 1
     // 同步到 store
@@ -197,7 +213,7 @@ export function useAdaptiveSession(options = {}) {
       targetMin,
       targetMax,
     })
-    engine.wrongAnswerPool = await getWrongAnswers({ days: 90, limit: 100 })
+    engine.wrongAnswerPool = await loadWrongPool()
     adaptiveEngine.value = engine
     adaptiveGroupIndex.value = 1
     practiceStore.currentDifficultyIdx = dbProfile.difficultyIdx
@@ -271,6 +287,7 @@ export function useAdaptiveSession(options = {}) {
     adaptiveEngine.value.profile = dbProfile
     practiceStore.currentDifficultyIdx = adaptiveEngine.value.difficultyIdx
 
+    // 保存组 checkpoint
     await saver.saveGroupCheckpoint(result.engine.history)
 
     // ── 强制兜底: 累积答题超过硬上限 → 直接结束 ──
@@ -349,10 +366,9 @@ export function useAdaptiveSession(options = {}) {
   async function afterAnswer() {
     if (!adaptiveEngine.value) return
     const eng = adaptiveEngine.value
-    // 每次都刷新错题池（答对也刷，确保 P1.8 错题复盘能用最新池）
-    eng.wrongAnswerPool = await getWrongAnswers({ days: 90, limit: 100 })
-    // DEBUG BUG-1: 验证画像等级索引实际值
-    // console.log('[DEBUG] strong:', eng.strongLevelIndices, 'weak:', eng.weakLevelIndices, 'difficulty:', eng.difficultyIdx)
+    // 刷新错题池（含掌握值重算）
+    eng.wrongAnswerPool = await loadWrongPool()
+
     const roundAnswers = [...session.value.answers]
     adaptiveEngine.value.adjustNextQuestion(
       roundAnswers,

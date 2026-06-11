@@ -11,6 +11,7 @@ docx
 setup.py
 bestpkg
 .idea
+.hermes
 
 
 # dependencies
