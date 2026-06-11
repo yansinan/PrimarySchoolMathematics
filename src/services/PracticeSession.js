@@ -9,6 +9,7 @@
 
 import { DB, PracticeSession as SchemaSession } from './databaseInit'
 import { Answer } from '@/utils/algorithm/answer'
+import { sumResponseTimes } from '@/utils/score'
 
 // ─── Domain Class ──────────────────────────────────────────────────────────
 
@@ -26,6 +27,29 @@ export class PracticeSession extends SchemaSession {
     const raws = await DB.answers.where('sessionId').equals(this.id).sortBy('timestamp')
     return raws.map(r => Answer.fromJSON(r))
   }
+
+  /**
+   * 从本 session 的 raw answers 实时算统计（不存 DB）
+   * @returns {Promise<{totalQuestions:number, correctCount:number, accuracy:number, totalDuration:number}>}
+   */
+  async computeStats() {
+    const answers = await this.getAnswers()
+    const seen = new Set()
+    const unique = answers.filter(a => {
+      const key = a.questionIndex ?? a.equation
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    const correctCount = Answer.sumScores(unique)
+    const totalDuration = sumResponseTimes(unique)
+    return {
+      totalQuestions: unique.length,
+      correctCount,
+      accuracy: unique.length > 0 ? correctCount / unique.length : 0,
+      totalDuration,
+    }
+  }
 }
 
 // ─── Session CRUD ──────────────────────────────────────────────────────────
@@ -39,9 +63,7 @@ export async function saveSession(sessionData, answersData) {
     studentId: sessionData.studentId || 'default',
     config: sessionData.config || null,
     totalQuestions: sessionData.totalQuestions || 0,
-    correctCount: sessionData.correctCount || 0,
-    accuracy: sessionData.accuracy || 0,
-    totalDuration: sessionData.totalDuration || 0,
+    // correctCount / accuracy / totalDuration: 不写——由 PracticeSession.computeStats 实时算
     evaluations: sessionData.evaluations || null,
     createdAt: now,
     synced: 0,
@@ -54,8 +76,7 @@ export async function saveSession(sessionData, answersData) {
       equation: a.equation || '',
       solution: a.solution ?? 0,
       userAnswer: a.userAnswer ?? 0,
-      // isCorrect / score: 不写——由 Answer.getter 实时算
-      attemptCount: a.attemptCount ?? 1,
+      // isCorrect / score / attemptCount: 不写——由 Answer.getter 实时算
       responseTime: a.responseTime || 0,
       operator: a.operator || '',
       isCarry: !!a.isCarry,
