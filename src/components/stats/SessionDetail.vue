@@ -1,7 +1,7 @@
 <template>
   <el-drawer
     v-model="detailVisible"
-    size="min(460px, 92vw)"
+    size="min(500px, 92vw)"
     direction="rtl"
     @closed="handleClosed"
   >
@@ -24,15 +24,15 @@
           <el-col :span="8">
             <div class="detail-stat">
               <div class="detail-stat__label">正确率</div>
-              <div class="detail-stat__value" :class="accuracyColor(stats.accuracy)">
-                {{ Math.round(stats.accuracy * 100) }}%
+              <div class="detail-stat__value" :class="accuracyColor(roundStats.accuracy)">
+                {{ Math.round(roundStats.accuracy * 100) }}%
               </div>
             </div>
           </el-col>
           <el-col :span="8">
             <div class="detail-stat">
               <div class="detail-stat__label">用时</div>
-              <div class="detail-stat__value">{{ formatDuration(stats.totalDuration) }}</div>
+              <div class="detail-stat__value">{{ formatDuration(roundStats.totalDuration) }}</div>
             </div>
           </el-col>
         </el-row>
@@ -40,19 +40,19 @@
           <el-col :span="8">
             <div class="detail-stat">
               <div class="detail-stat__label">总题数</div>
-              <div class="detail-stat__value">{{ stats.totalQuestions }}</div>
+              <div class="detail-stat__value">{{ roundStats.totalQuestions }}</div>
             </div>
           </el-col>
           <el-col :span="8">
             <div class="detail-stat">
               <div class="detail-stat__label">正确</div>
-              <div class="detail-stat__value" style="color:#58cc71;">{{ stats.correctCount }}</div>
+              <div class="detail-stat__value" style="color:#58cc71;">{{ roundStats.correctCount }}</div>
             </div>
           </el-col>
           <el-col :span="8">
             <div class="detail-stat">
               <div class="detail-stat__label">错误</div>
-              <div class="detail-stat__value" style="color:#f56c6c;">{{ stats.totalQuestions - stats.correctCount }}</div>
+              <div class="detail-stat__value" style="color:#f56c6c;">{{ roundStats.totalQuestions - roundStats.correctCount }}</div>
             </div>
           </el-col>
         </el-row>
@@ -60,27 +60,51 @@
 
       <el-divider />
 
-      <div class="answers-list" v-if="answers.length">
+      <!-- ── 分组展示 ── -->
+      <div v-if="groups.length" class="groups-list">
         <div
-          v-for="(answer, index) in answers"
-          :key="answer.id || index"
-          class="answer-item"
-          :class="{ 'answer-item--correct': answer.isCorrect, 'answer-item--wrong': !answer.isCorrect }"
+          v-for="(g, gi) in groups"
+          :key="gi"
+          class="group-block"
         >
-          <div class="answer-item__index">{{ index + 1 }}</div>
-          <div class="answer-item__equation">{{ displayEquation(answer) }}</div>
-          <div class="answer-item__answer" :class="{ 'answer-item__answer--wrong': !answer.isCorrect }">
-            <template v-if="answer.isCorrect">
-              <el-icon color="#58cc71"><Check /></el-icon>
-              {{ answer.userAnswer }}
-            </template>
-            <template v-else>
-              <el-icon color="#f56c6c"><Close /></el-icon>
-              <span class="answer-item__user-value">{{ answer.userAnswer }}</span>
-              <span class="answer-item__correct-value">(正确答案: {{ answer.solution }})</span>
-            </template>
+          <div class="group-header">
+            <span class="group-header__title">{{ g.label }}</span>
+            <span class="group-header__meta">{{ g.answers.length }} 题</span>
+            <el-tag
+              v-if="g.accuracy != null"
+              :type="g.accuracy >= 0.8 ? 'success' : g.accuracy >= 0.5 ? 'warning' : 'danger'"
+              size="small"
+            >{{ Math.round(g.accuracy * 100) }}%</el-tag>
           </div>
-          <div class="answer-item__time">{{ formatResponseTime(answer.responseTime) }}</div>
+
+          <div class="answers-list">
+            <div
+              v-for="(answer, ai) in g.answers"
+              :key="answer.id || `${gi}-${ai}`"
+              class="answer-item"
+              :class="{ 'answer-item--correct': answer.isCorrect, 'answer-item--wrong': !answer.isCorrect }"
+            >
+              <div class="answer-item__index">{{ ai + 1 }}</div>
+              <div class="answer-item__equation">{{ displayEquation(answer) }}</div>
+              <div class="answer-item__answer" :class="{ 'answer-item__answer--wrong': !answer.isCorrect }">
+                <template v-if="answer.isCorrect">
+                  <el-icon color="#58cc71"><Check /></el-icon>
+                  {{ answer.userAnswer }}
+                </template>
+                <template v-else>
+                  <el-icon color="#f56c6c"><Close /></el-icon>
+                  <span class="answer-item__user-value">{{ answer.userAnswer }}</span>
+                  <span class="answer-item__correct-value">(正确答案: {{ answer.solution }})</span>
+                </template>
+              </div>
+              <div class="answer-item__time">{{ formatResponseTime(answer.responseTime) }}</div>
+              <el-tag
+                v-if="getTypeLabel(answer)"
+                size="small"
+                class="answer-item__type"
+              >{{ getTypeLabel(answer) }}</el-tag>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -99,6 +123,8 @@ import { Document, Check, Close } from '@element-plus/icons-vue'
 import { useStatsStore } from '@/stores/stats'
 import { formatDuration } from '@/utils/time/timeFormat'
 import { PracticeSession } from '@/services/PracticeSession'
+import { Question } from '@/utils/algorithm/question'
+import { Answer } from '@/utils/algorithm/answer'
 
 const statsStore = useStatsStore()
 
@@ -110,19 +136,51 @@ const detailVisible = computed({
 })
 
 const session = computed(() => statsStore.selectedSession?.session || {})
-const answers = computed(() => statsStore.selectedSession?.answers || [])
-const stats = ref(null)
+const siblings = computed(() => statsStore.selectedSession?.siblings || [])
+const roundStats = ref({ totalQuestions: 0, correctCount: 0, accuracy: 0, totalDuration: 0 })
 
+/** 分组: sibling（checkpoint）各一组，最后余下的 main session answers 作为最后一组 */
+const groups = computed(() => {
+  const result = []
+  for (const sib of siblings.value) {
+    const grp = buildGroup(sib.session, sib.answers)
+    result.push(grp)
+  }
+  // main session 的 answers 作为最终组
+  const mainAnswers = statsStore.selectedSession?.answers || []
+  if (mainAnswers.length) {
+    result.push(buildGroup(session.value, mainAnswers, true))
+  }
+  return result
+})
+
+function buildGroup(sess, answers, isFinal = false) {
+  const correct = answers.filter(a => Answer.isCorrect(a)).length
+  return {
+    label: isFinal ? '最终组' : `第${sess.id}组`,
+    answers,
+    accuracy: answers.length ? correct / answers.length : 0,
+  }
+}
+
+/** 计算整轮统计（所有 answers 合并） */
 watchEffect(async () => {
   if (statsStore.selectedSession) {
-    const rawSession = statsStore.selectedSession.session
-    const rawAnswers = statsStore.selectedSession.answers || []
-    if (rawSession && rawAnswers.length) {
-      const sess = new PracticeSession(rawSession)
-      stats.value = await sess.computeStats(rawAnswers)
+    const allAnswers = []
+    for (const sib of siblings.value) {
+      allAnswers.push(...sib.answers)
+    }
+    allAnswers.push(...(statsStore.selectedSession.answers || []))
+
+    if (allAnswers.length) {
+      const instances = allAnswers.map(r => r instanceof Answer ? r : Answer.fromJSON(r))
+      const sess = new PracticeSession({})
+      roundStats.value = await sess.computeStats(instances)
+    } else {
+      roundStats.value = { totalQuestions: 0, correctCount: 0, accuracy: 0, totalDuration: 0 }
     }
   } else {
-    stats.value = null
+    roundStats.value = { totalQuestions: 0, correctCount: 0, accuracy: 0, totalDuration: 0 }
   }
 })
 
@@ -144,10 +202,13 @@ function accuracyColor(accuracy) {
 
 function displayEquation(answer) {
   if (!answer) return ''
-  // Show operator symbol in display form
   return (answer.equation || '')
     .replace(/\*/g, '×')
     .replace(/\//g, '÷')
+}
+
+function getTypeLabel(answer) {
+  return Question.getTypeLabel(answer)
 }
 
 function handleClosed() {
@@ -190,17 +251,49 @@ function handleClosed() {
 .detail-stat__value.color-warning { color: #e6a23c; }
 .detail-stat__value.color-danger  { color: #f56c6c; }
 
-.answers-list {
+/* ── Group blocks ── */
+.groups-list {
   max-height: calc(100vh - 320px);
   overflow-y: auto;
+}
+
+.group-block {
+  margin-bottom: 16px;
+  border: 1px solid #eef3f9;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: #f5f9ff;
+  border-bottom: 1px solid #eef3f9;
+}
+
+.group-header__title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #1e3c5c;
+}
+
+.group-header__meta {
+  font-size: 12px;
+  color: #8fa3b8;
+  margin-right: auto;
+}
+
+/* ── Answer items ── */
+.answers-list {
+  padding: 4px 0;
 }
 
 .answer-item {
   display: flex;
   align-items: center;
-  padding: 10px 14px;
-  border-radius: 8px;
-  margin-bottom: 4px;
+  padding: 8px 14px;
   gap: 10px;
   font-size: 14px;
   transition: background 0.15s;
@@ -215,15 +308,15 @@ function handleClosed() {
 }
 
 .answer-item__index {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
   background: #e8f0fa;
   color: #4a6a85;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   flex-shrink: 0;
 }
@@ -231,7 +324,7 @@ function handleClosed() {
 .answer-item__equation {
   flex: 1;
   font-family: 'Courier New', monospace;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
   color: #1e3c5c;
 }
@@ -257,15 +350,20 @@ function handleClosed() {
 .answer-item__correct-value {
   color: #58cc71;
   font-weight: 500;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .answer-item__time {
-  font-size: 12px;
+  font-size: 11px;
   color: #8fa3b8;
   flex-shrink: 0;
-  min-width: 48px;
+  min-width: 40px;
   text-align: right;
+}
+
+.answer-item__type {
+  margin-left: 2px;
+  flex-shrink: 0;
 }
 
 .loading-placeholder {

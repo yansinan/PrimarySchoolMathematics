@@ -239,7 +239,9 @@ export class Engine {
       groupIdx: engine.groupIndex, difficultyIdx: engine.difficultyIdx,
       assistLevel: engine.assistLevel, blankMode: engine.blankMode,
       groupSizeIdx: engine.groupSizeIdx, total, correct, rate, avgTime,
+      evaluation: engine.lastEvaluation,
     })
+    engine.lastEvaluation = undefined  // 消费后重置，防止跨组污染
     engine.groupsAtThisLevel = (engine.groupsAtThisLevel || 0) + 1
     const isGood = rate >= ACCURACY_THRESHOLDS.good
     const isBad = rate < ACCURACY_THRESHOLDS.bad
@@ -324,7 +326,10 @@ export class Engine {
           return m && m.levelIdx <= this.difficultyIdx
         })
         if (candidates.length > 0) {
-          const wa = candidates[Math.floor(Math.random() * candidates.length)]
+          // 选 mastery 最低的（最不熟的优先复习）
+          const wa = candidates.reduce((best, c) =>
+            (c.mastery ?? 0) < (best.mastery ?? 0) ? c : best
+          )
           const idx = this.wrongAnswerPool.indexOf(wa)
           if (idx >= 0) this.wrongAnswerPool.splice(idx, 1)
           listPractices[nextIdx] = buildReviewQuestion(wa)

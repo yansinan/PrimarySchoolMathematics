@@ -132,7 +132,7 @@ export class PracticeSession extends SchemaSession {
       seen.add(key)
       return true
     })
-    const correctCount = unique.filter(a => a.isCorrect).length
+    const correctCount = unique.filter(a => Answer.isCorrect(a)).length
     const totalDuration = sumResponseTimes(unique)
     return {
       totalQuestions: unique.length,
@@ -153,7 +153,7 @@ export class PracticeSession extends SchemaSession {
       const key = a.questionIndex ?? a.equation
       return key != null
     })
-    const correctCount = unique.filter(a => a.isCorrect).length
+    const correctCount = unique.filter(a => Answer.isCorrect(a)).length
     const total = unique.length
     const accuracy = total > 0 ? correctCount / total : 0
 
