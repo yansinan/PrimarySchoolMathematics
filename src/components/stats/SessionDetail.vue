@@ -155,7 +155,7 @@ const groups = computed(() => {
 })
 
 function buildGroup(sess, answers, isFinal = false) {
-  const correct = answers.filter(a => Answer.isCorrect(a)).length
+  const correct = answers.filter(a => a.isCorrect).length
   return {
     label: isFinal ? '最终组' : `第${sess.id}组`,
     answers,

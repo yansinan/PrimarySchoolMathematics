@@ -132,7 +132,7 @@ export class PracticeSession extends SchemaSession {
       seen.add(key)
       return true
     })
-    const correctCount = unique.filter(a => Answer.isCorrect(a)).length
+    const correctCount = unique.filter(a => a.isCorrect).length
     const totalDuration = sumResponseTimes(unique)
     return {
       totalQuestions: unique.length,
@@ -153,7 +153,7 @@ export class PracticeSession extends SchemaSession {
       const key = a.questionIndex ?? a.equation
       return key != null
     })
-    const correctCount = unique.filter(a => Answer.isCorrect(a)).length
+    const correctCount = unique.filter(a => a.isCorrect).length
     const total = unique.length
     const accuracy = total > 0 ? correctCount / total : 0
 
@@ -192,8 +192,10 @@ export class PracticeSession extends SchemaSession {
     if (!sessions.length) return new Map()
     const ids = sessions.map(s => s.id)
     const rows = await DB.answers.where('sessionId').anyOf(ids).toArray()
+    // 在数据边界处统一实例化，确保 getter（isCorrect/score）可用
+    const answers = rows.map(r => Answer.fromJSON(r))
     const grouped = {}
-    for (const a of rows) {
+    for (const a of answers) {
       if (!grouped[a.sessionId]) grouped[a.sessionId] = []
       grouped[a.sessionId].push(a)
     }
@@ -239,8 +241,9 @@ export async function getSessions(studentId = 'default', limit = 50) {
  */
 export async function getSessionDetail(sessionId) {
   const session = await DB.practiceSessions.get(sessionId)
-  const answers = await DB.answers
+  const rawAnswers = await DB.answers
     .where('sessionId').equals(sessionId).sortBy('timestamp')
+  const answers = rawAnswers.map(r => Answer.fromJSON(r))
 
   let siblings = []
   if (session && session.practiceSessionId) {
@@ -249,11 +252,11 @@ export async function getSessionDetail(sessionId) {
       .filter(s => s.id !== sessionId)
       .sortBy('createdAt')
 
-    // 加载每个 checkpoint 各自的答案
+    // 加载每个 checkpoint 各自的答案（统一实例化，确保 getter 可用）
     siblings = await Promise.all(raw.map(async s => {
-      const sAnswers = await DB.answers
+      const sRaw = await DB.answers
         .where('sessionId').equals(s.id).sortBy('timestamp')
-      return { session: s, answers: sAnswers }
+      return { session: s, answers: sRaw.map(r => Answer.fromJSON(r)) }
     }))
   }
 
