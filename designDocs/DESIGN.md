@@ -403,8 +403,8 @@ src/
 
 - [ ] `blankMode='mixed'` 填空位置未实现（`diversifyBatch` 强制 result 填空）
 - [x] `getGroupSize` 使用 `Math.random()`（每次刷新会变）— **已持久化到 `engine.lastGroupSize`**（`IMPLEMENTATION_HISTORY.md §13`）
-- [ ] `generateDistractors` 偶有重复（用 `Set` 兜底）
-- [ ] 诊断只 5 道题，每等级 1 道，可能误判（"错 1 道即薄弱"）
+- [x] `generateDistractors` 偶有重复 — **已用 `Set` 兜底**（`services/adaptiveEngine.js:54`）
+- [x] 诊断 5 题×1 级可能误判 — **已接受当前设计**（快速诊断→`EVAL_WEAK_THRESHOLD=0.5`→自适应自纠正）
 - [ ] `feedbackType === 'wrong'` 弹窗后是否中止 → 阈值 `2` 由 `ASSESSMENT_ABORT_WRONG_STREAK` 控制
 - [ ] E1 提到 `psm.js:getRandomBracket` 有 `while(true)` 永真循环（虽然 diagnostic.js 不用 bracket）
 - [ ] 诊断题生成超过 30 次尝试则丢弃该题（理论极端情况）
