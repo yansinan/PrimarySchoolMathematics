@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { Answer } from '@/utils/algorithm/answer'
 import { EMPTY_PARSED_EQUATION, getCarryType, parseEquation } from '@/utils/algorithm/equationParser'
-// E1: saveSession / sumResponseTimes 已迁 services/sessionPersistence.js
+// E1: session 持久化已迁至 PracticeSession.save()
 
 export const usePracticeStore = defineStore('practice', {
   state: () => ({

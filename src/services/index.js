@@ -16,8 +16,8 @@ export * from './operatorMap'
 export * from './abilityProfile'
 // 自适应引擎 (2026-06-10 升层自 utils/algorithm)
 export * from './adaptiveEngine'
-// Session 持久化 (2026-06-08 E1 抽层自 stores/practice.js#saveSessionToDB)
-export * from './sessionPersistence'
+// PracticeSession 域类 + CRUD（含 save 静态方法继承 sessionPersistence 职责）
+export * from './PracticeSession'
 // 注意: wrongAnswerService 不走桶 — 与 analysis.js#getWrongAnswers 同名冲突
 // 调用方直引: import { getWrongAnswers } from '@/services/wrongAnswerService'
 export * from './databaseInit'

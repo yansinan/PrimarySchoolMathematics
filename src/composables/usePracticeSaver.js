@@ -20,9 +20,8 @@
 
 import { usePracticeStore } from '@/stores/practice'
 import { useStatsQuery } from '@/composables'
-// E1: persistSession 从 S 层调, 不再绕 store action (2026-06-08)
-// 单题写入由 savePerQuestion → Answer.save() + Question.save() 内聚处理
-import { persistSession } from '@/services/sessionPersistence'
+// persistSession 已内聚到 PracticeSession.save() 静态方法
+import { PracticeSession } from '@/services/PracticeSession'
 import { Answer } from '@/utils/algorithm/answer'
 
 /**
@@ -44,7 +43,6 @@ export function usePracticeSaver() {
   /**
    * 1) 每题答完：fire-and-forget
    * 修复 Bug 3:
-   *   - 不再调 practiceStore.persistSession()，避免每答 1 题都创建 1 个 session 记录
    *   - 改为只把"最近一条 answer"写到 db.answers 表（不写 session 表）
    *   - 这样"最近练习"列表只显示 group checkpoint 和最终 session，不再被 1 步 session 淹没
    */
@@ -68,7 +66,7 @@ export function usePracticeSaver() {
    */
   async function saveGroupCheckpoint(history) {
     const evaluations = extractEvaluationsJSON(history)
-    await persistSession({
+    await PracticeSession.save({
       answers: practiceStore.session.answers,
       configSnapshot: practiceStore.session.configSnapshot,
       evaluations,
@@ -86,7 +84,7 @@ export function usePracticeSaver() {
   async function saveAdaptiveFinal(answers, history) {
     const evaluations = extractEvaluationsJSON(history)
     practiceStore.session.answers = answers
-    await persistSession({
+    await PracticeSession.save({
       answers,
       configSnapshot: practiceStore.session.configSnapshot,
       evaluations,
@@ -101,7 +99,7 @@ export function usePracticeSaver() {
    * - 同步更新能力画像
    */
   async function savePracticeFinal() {
-    await persistSession({
+    await PracticeSession.save({
       answers: practiceStore.session.answers,
       configSnapshot: practiceStore.session.configSnapshot,
     })

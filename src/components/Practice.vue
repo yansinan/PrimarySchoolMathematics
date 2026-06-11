@@ -146,7 +146,7 @@ const {
 // ── 弹窗 composable（替代 ElMessageBox 和 window.__evalSelect 桥） ──
 const dialogs = usePracticeDialogs()
 
-// ── 持久化 composable（封装 4 处 persistSession 调用） ──
+// ── 持久化 composable（封装 3 处 PracticeSession.save 调用） ──
 const saver = usePracticeSaver()
 
 // ── 答题数据构造 composable（ARCH 合规：V 不直接 import U） ──
