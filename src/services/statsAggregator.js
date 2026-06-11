@@ -67,17 +67,18 @@ export async function getAggregatedStats(studentId = 'default') {
   })
 
   const tq = uniqueAnswers.length
-  const tc = Answer.sumScores(uniqueAnswers)
+  const tc = uniqueAnswers.filter(a => Answer.isCorrect(a)).length
 
   // ── 运算符统计 ──
   const opStats = {}
   for (const op of ['+', '-', '*', '/']) {
     const byOp = uniqueAnswers.filter(a => a.operator === op)
     if (byOp.length) {
+      const correctCount = byOp.filter(a => Answer.isCorrect(a)).length
       opStats[op] = {
         count: byOp.length,
-        correct: Answer.sumScores(byOp),
-        accuracy: Answer.sumScores(byOp) / byOp.length,
+        correct: correctCount,
+        accuracy: correctCount / byOp.length,
       }
     }
   }
@@ -91,25 +92,25 @@ export async function getAggregatedStats(studentId = 'default') {
   const carrySt = {
     withCarry: {
       count: wc.length,
-      correct: Answer.sumScores(wc),
-      accuracy: wc.length ? Answer.sumScores(wc) / wc.length : 0,
+      correct: wc.filter(a => Answer.isCorrect(a)).length,
+      accuracy: wc.length ? wc.filter(a => Answer.isCorrect(a)).length / wc.length : 0,
     },
     withoutCarry: {
       count: woc.length,
-      correct: Answer.sumScores(woc),
-      accuracy: woc.length ? Answer.sumScores(woc) / woc.length : 0,
+      correct: woc.filter(a => Answer.isCorrect(a)).length,
+      accuracy: woc.length ? woc.filter(a => Answer.isCorrect(a)).length / woc.length : 0,
     },
   }
   const borrowSt = {
     withBorrow: {
       count: wb.length,
-      correct: Answer.sumScores(wb),
-      accuracy: wb.length ? Answer.sumScores(wb) / wb.length : 0,
+      correct: wb.filter(a => Answer.isCorrect(a)).length,
+      accuracy: wb.length ? wb.filter(a => Answer.isCorrect(a)).length / wb.length : 0,
     },
     withoutBorrow: {
       count: wob.length,
-      correct: Answer.sumScores(wob),
-      accuracy: wob.length ? Answer.sumScores(wob) / wob.length : 0,
+      correct: wob.filter(a => Answer.isCorrect(a)).length,
+      accuracy: wob.length ? wob.filter(a => Answer.isCorrect(a)).length / wob.length : 0,
     },
   }
 
@@ -118,10 +119,11 @@ export async function getAggregatedStats(studentId = 'default') {
   const stepCounts = [...new Set(uniqueAnswers.map(a => a.stepCount))].sort()
   for (const step of stepCounts) {
     const byStep = uniqueAnswers.filter(a => a.stepCount === step)
+    const stepCorrect = byStep.filter(a => Answer.isCorrect(a)).length
     stepSt[step] = {
       count: byStep.length,
-      correct: Answer.sumScores(byStep),
-      accuracy: Answer.sumScores(byStep) / byStep.length,
+      correct: stepCorrect,
+      accuracy: stepCorrect / byStep.length,
     }
   }
 
@@ -155,8 +157,8 @@ export async function getAggregatedStats(studentId = 'default') {
         numSt[key] = { number: n, operator: op, count: 0, correct: 0, wrongEquations: [] }
       }
       numSt[key].count++
-      const sc = Answer.sumScores([a])
-      if (sc > 0) numSt[key].correct += sc
+      const isC = Answer.isCorrect(a)
+      if (isC) numSt[key].correct++
       else numSt[key].wrongEquations.push({
         equation: eq,
         userAnswer: a.userAnswer,
