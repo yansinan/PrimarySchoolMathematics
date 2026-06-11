@@ -101,9 +101,10 @@ src/
 │  └ index.js
 │
 ├ utils/                                U 层（按子域分目录）
+│  ├ paperGenerator.js                  算式生成器（顶层 util，不归 algorithm）
 │  ├ algorithm/     adaptiveBatch / diagnostic /
 │  │                displayStrategy / equationCore / equationParser /
-│  │                EquationSolver / paperGenerator / psm /
+│  │                EquationSolver / psm /
 │  │                question (含 matchLevel + groupAnswersByLevel) / answer / wrongAnswer
 │  ├ form/          formDefaults / formValidation
 │  ├ store/         database / configStorage

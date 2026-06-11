@@ -110,7 +110,7 @@ return { levelScores, weakLevels, allCorrect }
 
 ## 3. 路径 A 的下一步：自适应引擎
 
-**入口**：`createAdaptiveEngine(profile, targetMin=10, targetMax=30)` in `src/utils/adaptiveEngine.js`
+**入口**：`new Engine(profile, targetMin=10, targetMax=30)` in `src/services/adaptiveEngine.js`
 
 ### 3.1 初始难度
 
@@ -358,30 +358,44 @@ watch(listPractices) 变空时：
 
 ---
 
-## 10. 模块结构
+## 10. 模块结构（v4.x）
 
 ```
 src/
 ├─ constants/
 │  └─ practice.js          // FEEDBACK_DELAYS / ACCURACY_THRESHOLDS / SPEED_THRESHOLDS / etc.
 ├─ utils/
-│  ├─ equationParser.js    // parseEquation / getCarryType / EMPTY_PARSED_EQUATION
-│  ├─ EquationSolver.js    // solve / toEvalSymbols (CJS)
-│  ├─ psm.js               // FormulasGenerator（第三方口算题生成器）
 │  ├─ paperGenerator.js    // createFormulasGenerator 组装 paperList
-│  ├─ diagnostic.js        // DIAG_LEVELS / generateDiagnosticQuestions / analyzeAbility / generatePracticeConfig
-│  ├─ adaptiveEngine.js    // 12 级难度表 / ASSIST_LEVELS / createAdaptiveEngine / getGroupSize / pickInputMode / diversifyBatch / evaluateGroup
-│  └─ adaptiveBatch.js     // generateAdaptiveBatch（粘合 adaptiveEngine + paperGenerator + diversifyBatch）
+│  ├─ algorithm/
+│  │  ├─ equationParser.js // parseEquation / getCarryType
+│  │  ├─ EquationSolver.js // solve
+│  │  ├─ psm.js            // FormulasGenerator（第三方）
+│  │  ├─ diagnostic.js     // DIAG_LEVELS / generateDiagnosticQuestions / analyzeAbility
+│  │  ├─ adaptiveBatch.js  // generateAdaptiveBatch（粘合 Engine + paperGenerator + diversifyBatch）
+│  │  ├─ displayStrategy.js// decideDisplayMode / updateDisplayStats
+│  │  ├─ question.js       // Question 类（含 matchLevel / groupAnswersByLevel）
+│  │  ├─ answer.js         // Answer 类
+│  │  └─ wrongAnswer.js    // WrongAnswer 类（错题过滤/查询）
+│  └─ ...
+├─ services/               ⭐ S 层（升层至 src/ 顶层）
+│  ├─ adaptiveEngine.js    // Engine 类（P5 出题策略 + pickInputMode / evaluateGroup / diversifyBatch）
+│  ├─ abilityProfile.js    // Profile 类（load / computeDifficultyIdx / 强/弱项查询）
+│  ├─ analysis.js          // 诊断分析
+│  ├─ PracticeSession.js   // session 域类
+│  ├─ wrongAnswerService.js// 错题 DB CRUD
+│  ├─ sessionPersistence.js// 持久化
+│  ├─ statsAggregator.js   // 聚合统计
+│  └─ databaseInit.js      // DB schema
 ├─ composables/
-│  ├─ useAdaptiveSession.js  // 响应式状态 + startNewAdaptiveSession
+│  ├─ useAdaptiveSession.js  // 响应式编排 + completeGroup / afterAnswer
 │  ├─ usePracticeDialogs.js  // Promise 化弹窗
 │  └─ usePracticeSaver.js    // 持久化封装
 ├─ stores/
 │  └─ practice.js          // listPractices / phase / abilityProfile / session
 ├─ components/
-│  └─ Practice.vue         // 入口 + onMounted + handleSubmit + handleNext + watch
+│  └─ Practice.vue         // 入口 + handleSubmit + handleNext
 └─ views/
-   └─ Home.vue             // （实际被 Layout 取代）
+   └─ Home.vue
 ```
 
 ---

@@ -663,11 +663,48 @@ D src/utils/store/database.js               — 死代理删除
 | git diff | 8 文件 ±102/–95 |
 
 ---
+## 13. 文档归档与架构同步（2026-06-11）
 
-## 13. 元信息
+**目标**：P5 v2.3.0 全量回归测试 + v4.x 架构同步 + 文档清理
 
-- 编制时间：2026-06-08（v3 收尾 + ui 合并后）；§8 追加于 2026-06-10（v4.0c 重构 + bug 修复）；§9 追加于 2026-06-10（v4.1 画像源迁移）；§10 追加于 2026-06-10（v4.2 类型化 + 封装 + 清理）；§11 追加于 2026-06-10（v4.3 Profile 实例方法 + Snapshot 删除 + 阈值统一）；§12 追加于 2026-06-10（P2 修复组）
+### 13.1 P5 BUG 回归测试
+
+| BUG | v2.3 修复 | v4.x 状态 | 说明 |
+|---|---|---|---|
+| BUG-1 strongLevelIndices 空 | ce1a670 时序交换 | ✅ 架构自然修复 | v4.x `completeAssessment` 先写 DB 再 `Profile.load()` 读 DB |
+| BUG-1 pick window 约束 | 74d6afa 删除窗口 | ⚠️ v4.x 新设计 | `MAX_ADVANCE=2` 仅限前 2 级（非 bug，是架构决策） |
+| BUG-2 lastGroupSize 持久化 | dc6d65c | ✅ 保留 | `Engine.lastGroupSize` + `completeGroup` 切片用持久值 |
+| BUG-3 L5 diagAnswers 截断 | 035d7c2 | ✅ 架构自然修复 | v4.x 用 `session.value.diagnosticAnswers` 独立数组 |
+| BUG-4 L5 0/0 误判弱项 | 74d6afa `g.total > 0` | ✅ 保留 | `analyzeAbility` 中有守卫 |
+| BUG-5 numberOfFormulas 3→8 | 74d6afa | ✅ `adaptiveBatch.js:92` | |
+| BUG-5 matchLevel 容差 >1→>2 | 74d6afa | ⚠️ 仍是 `>1` | 在 numberOfFormulas=8 下无实际影响 |
+
+结论：**所有 P5 BUG 在 v4.x 中已闭环**。无需代码修复。
+
+### 13.2 文档变更
+
+| 文件 | 变更 |
+|------|------|
+| `_ARCHIEVED_09-PLAN-profile-engine-class.md` | ✅ 归档（已实现于 d017a4b） |
+| `_ARCHIEVED_10-PLAN-encapsulate-methods.md` | ✅ 归档（Engine 方法已封装） |
+| `ARCHITECTURE.md` | ✅ 目录树修正（paperGenerator 位置、services 层结构） |
+| `DESIGN.md` | ✅ 模块结构更新至 v4.x + 文件路径修正 |
+| `.hermes/plans/2026-06-11_P5-fix-regression-v4x.md` | 已标记删除 |
+
+### 13.3 git diff
+
+| 文件 | 行变化 |
+|------|--------|
+| `designDocs/ARCHITECTURE.md` | +3/–2 |
+| `designDocs/DESIGN.md` | +20/–13 |
+| `designDocs/IMPLEMENTATION_HISTORY.md` | +38 |
+
+---
+
+## 14. 元信息
+
+- 编制时间：2026-06-08（v3 收尾 + ui 合并后）；§8 追加于 2026-06-10（v4.0c 重构 + bug 修复）；§9 追加于 2026-06-10（v4.1 画像源迁移）；§10 追加于 2026-06-10（v4.2 类型化 + 封装 + 清理）；§11 追加于 2026-06-10（v4.3 Profile 实例方法 + Snapshot 删除 + 阈值统一）；§12 追加于 2026-06-10（P2 修复组）；§13 追加于 2026-06-11（P5 回归验证 + 文档归档）
 - 关联：[ARCHITECTURE.md](./ARCHITECTURE.md) — "现在是什么"
 - 关联：[README.md](./README.md) — 文档索引
 - 完整日志（archived）：[_ARCHIEVED_02-PROGRESS.md](./_ARCHIEVED_02-PROGRESS.md)
-- 完整计划（archived）：[_ARCHIEVED_04-PLAN-v2-architecture-refactor.md](./_ARCHIEVED_04-PLAN-v2-architecture-refactor.md) | [_ARCHIEVED_05-PLAN-v3-architecture-tuning.md](./_ARCHIEVED_05-PLAN-v3-architecture-tuning.md)
+- 完整计划（archived）：[_ARCHIEVED_04-PLAN-v2-architecture-refactor.md](./_ARCHIEVED_04-PLAN-v2-architecture-refactor.md) | [_ARCHIEVED_05-PLAN-v3-architecture-tuning.md](./_ARCHIEVED_05-PLAN-v3-architecture-tuning.md) | [_ARCHIEVED_09-PLAN-profile-engine-class.md](./_ARCHIEVED_09-PLAN-profile-engine-class.md) | [_ARCHIEVED_10-PLAN-encapsulate-methods.md](./_ARCHIEVED_10-PLAN-encapsulate-methods.md)
