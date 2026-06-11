@@ -201,8 +201,7 @@ export class Answer extends Question {
   }
 
   /**
-   * 获取某学生的全部答题记录（跨所有 session，含 persistSingleAnswer 的无 session 记录）
-   * 获取某学生的全部答题记录（跨所有 session，含 persistSingleAnswer 的无 session 记录）
+   * 获取某学生的全部答题记录（跨所有 session，含 Answer.save 写入的单条记录）
    * 作为唯一事实源：每道答完的题都在 db.answers 中。
    * 返回 plain object 数组（兼容已有调用方的 .map(Answer.fromJSON) 模式）
    * @param {string} [studentId='default']

@@ -21,7 +21,7 @@
 import { usePracticeStore } from '@/stores/practice'
 import { useStatsQuery } from '@/composables'
 // E1: persistSession 从 S 层调, 不再绕 store action (2026-06-08)
-// E1-B: persistSingleAnswer 同样从 S 层调, 替代原内联 db.answers.put + saveQuestion (2026-06-08)
+// 单题写入由 savePerQuestion → Answer.save() + Question.save() 内聚处理
 import { persistSession } from '@/services/sessionPersistence'
 import { Answer } from '@/utils/algorithm/answer'
 

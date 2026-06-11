@@ -1,20 +1,14 @@
 /**
- * Session 持久化 service（E1 抽层, 2026-06-08；E1 方案 B 加 persistSingleAnswer, 2026-06-08）
+ * Session 持久化 service（E1 抽层, 2026-06-08）
  *
- * 替代原 `stores/practice.js#saveSessionToDB`（业务混在 M 层违例）。
- * 接收 composable 拼好的 payload（不依赖 store），按 ARCHITECTURE.md §1.2
- * 纯函数式 S 层：只引 U 层（`@/utils/score`）。
+ * 接收 composable 拼好的 payload，写入 DB。
+ * 单题写入由 `savePerQuestion → Answer.save()` + `Question.save()` 内聚处理。
  *
- * 业务变更影响面：未来如果 save 逻辑变复杂（多步事务、错误重试、上传云端），
- * 只需改本文件。
- *
- * ## 2 个 export
+ * ## 1 个 export
  * - `persistSession(payload)` — 整组 checkpoint / final 保存（含 sessionData + answersData）
- * - `persistSingleAnswer(answer)` — 单题 fire-and-forget 持久化（写 answers + questions 表）
  *
  * @example
  *   await persistSession({ answers, configSnapshot, evaluations })
- *   await persistSingleAnswer(lastAnswer)
  */
 
 import { saveSession } from '@/services/PracticeSession'
@@ -81,6 +75,3 @@ export async function persistSession({
     return null
   }
 }
-
-// 串行队列已内聚到 Question.save()（Q/A/W 继承链共享）
-// persistSingleAnswer 职责由 Answer.save() + Question.save() 替代
