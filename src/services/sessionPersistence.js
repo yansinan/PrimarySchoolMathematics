@@ -67,7 +67,6 @@ export async function persistSession({
     equation: a.equation,
     solution: a.solution,
     userAnswer: a.userAnswer,
-    isCorrect: a.isCorrect,
     responseTime: a.responseTime || 0,
     operator: a.operator || '',
     isCarry: a.isCarry || false,
@@ -75,8 +74,6 @@ export async function persistSession({
     stepCount: a.stepCount || 1,
     operandMin: a.operandMin ?? 0,
     operandMax: a.operandMax ?? 0,
-    attemptCount: a.attemptCount ?? 1,
-    score: typeof a.score === 'number' ? a.score : a.isCorrect ? 1 : 0,
     timestamp: a.timestamp || Date.now(),
   }))
 
