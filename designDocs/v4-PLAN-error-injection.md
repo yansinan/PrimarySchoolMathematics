@@ -1,7 +1,7 @@
 # v4 业务阶段：错误注入专项 + 难度等级扩展
 
 > **性质**：业务规划 (Business Plan) — v3 架构调优后的业务功能新增
-> **状态**：✅ v4.0a 完成 | ✅ v4.0b 完成 | ✅ v4.0c 完成 | ✅ P1.6 完成 | ✅ P1.8 完成 | ❌ v4.2 未开始
+> **状态**：✅ v4.0a 完成 | ✅ v4.0b 完成 | ✅ v4.0c 完成 | ✅ P1.6 完成（wrongAnswerPool 接 generateDistractors） | ✅ P1.8 完成（adjustNextQuestion 接 wrongAnswerPool 错题注入） | ❌ v4.2 未开始
 > **核心设计原则**：增强学生信心是本系统的最优先考虑。在此基础上，练习掌握以往错题是系统第二目标。
 > **配套**：
 > - [ARCHITECTURE.md](../ARCHITECTURE.md) — 架构宪法（实施时遵守）
