@@ -276,23 +276,32 @@ export class Question extends DBQuestion {
     return decorated.map(d => d.q).slice(0, limit)
   }
 
+  /** 串行队列：防止快速连续对同一 equation 的 upsert 并发写入冲突 */
+  static _saveQueue = Promise.resolve()
+
   static async save(questionData) {
     if (!questionData?.equation) return
-    const { id: _ignored, ...clean } = questionData
-    return DB.transaction('rw', DB.questions, async () => {
-      const existing = await DB.questions.where('equation').equals(clean.equation).first()
-      if (existing) {
-        console.debug('[Question.save] upsert existing:', clean.equation, 'id:', existing.id)
-        await DB.questions.update(existing.id, clean)
-      } else {
-        console.debug('[Question.save] add new:', clean.equation)
-        await DB.questions.add(clean)
-      }
-    }).catch((txErr) => {
-      console.warn('[Question.save] tx retries exhausted, fallback update:', txErr?.name)
-      return DB.questions.where('equation').equals(clean.equation).first().then((existing) => {
-        if (existing) return DB.questions.update(existing.id, clean)
-      })
+    await Question._saveQueue
+    const next = new Promise(async (resolve) => {
+      const { id: _ignored, ...clean } = questionData
+      try {
+        await DB.transaction('rw', DB.questions, async () => {
+          const existing = await DB.questions.where('equation').equals(clean.equation).first()
+          if (existing) {
+            console.debug('[Question.save] upsert existing:', clean.equation, 'id:', existing.id)
+            await DB.questions.update(existing.id, clean)
+          } else {
+            console.debug('[Question.save] add new:', clean.equation)
+            await DB.questions.add(clean)
+          }
+        }).catch((txErr) => {
+          console.warn('[Question.save] tx retries exhausted, fallback update:', txErr?.name)
+          return DB.questions.where('equation').equals(clean.equation).first().then((existing) => {
+            if (existing) return DB.questions.update(existing.id, clean)
+          })
+        })
+      } finally { resolve() }
     })
+    Question._saveQueue = next
   }
 }

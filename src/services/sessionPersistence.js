@@ -17,10 +17,7 @@
  *   await persistSingleAnswer(lastAnswer)
  */
 
-import { Answer } from '@/utils/algorithm/answer'
-import { DB } from '@/services/databaseInit'
 import { saveSession } from '@/services/PracticeSession'
-import { Question } from '@/utils/algorithm/question'
 
 /**
  * 持久化 1 个练习 session 到 IndexedDB。
@@ -75,7 +72,7 @@ export async function persistSession({
     const sessionId = await saveSession(sessionData, answersData)
     if (import.meta.env.DEV) {
       console.log(
-        `[SessionPersistence] Session saved to DB: #${sessionId}, ${answers.length} questions, ${Math.round((correctCount / answers.length) * 100)}% accuracy`,
+        `[SessionPersistence] Session saved to DB: #${sessionId}, ${answers.length} questions`,
       )
     }
     return sessionId
@@ -85,42 +82,5 @@ export async function persistSession({
   }
 }
 
-// 串行化锁：确保 persistSingleAnswer 即使并发调用也能顺序执行
-// 防止两次快速答题对同一 equation 的并行写入冲突
-let _saveQueue = Promise.resolve()
-
-/**
- * 持久化 1 条答题（fire-and-forget，每题答完调用）。
- *
- * 替代原 `usePracticeSaver#savePerQuestion` 内的硬编 `db.answers.put` + `saveQuestion` 编排（E1 方案 B 抽层）。
- * 业务变更影响面：未来加批量重试 / 上传云端只改本文件。
- *
- * @param {Object} answer - 单条答题记录（含 equation / userAnswer / isCorrect / operandMin / operandMax 等）
- * @returns {Promise<void>}
- */
-export async function persistSingleAnswer(answer) {
-  if (!answer) return
-  // 串行化：通过链式 Promise 排队，消除并发 race
-  await _saveQueue
-  // eslint-disable-next-line no-async-promise-executor
-  const next = new Promise(async (resolve) => {
-    // 将当前执行赋给 _saveQueue，后续调用必须等本批完成
-    try {
-      // 深拷贝去除 Pinia reactive proxy（DataCloneError 防护）
-      const plain = JSON.parse(JSON.stringify(answer))
-      // 写 answers 表（通过 Answer.save 成员函数，只存元数据）
-      await Answer.save(plain)
-      // ✨ B-2 修复：同步写入 questions 表（equation 唯一键去重，首次创建后续复用 id）
-      await Question.save({
-        ...plain,
-        operands: [plain.operandMin, plain.operandMax].filter(x => x > 0),
-      })
-    } catch (err) {
-      console.error('[SessionPersistence] Failed to persist single answer:', err.message || err)
-      if (err.failures) console.error('  failures:', err.failures.map(f => f.message || f))
-    } finally {
-      resolve()
-    }
-  })
-  _saveQueue = next
-}
+// 串行队列已内聚到 Question.save()（Q/A/W 继承链共享）
+// persistSingleAnswer 职责由 Answer.save() + Question.save() 替代
