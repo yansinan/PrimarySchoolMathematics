@@ -10,6 +10,7 @@
 import { DB, PracticeSession as SchemaSession } from './databaseInit'
 import { Answer } from '@/utils/algorithm/answer'
 import { sumResponseTimes } from '@/utils/score'
+import { DIFFICULTY_LEVELS } from '@/constants/difficulty'
 
 // ─── Domain Class ──────────────────────────────────────────────────────────
 
@@ -27,6 +28,7 @@ export class PracticeSession extends SchemaSession {
    * @param {Object} [options.configSnapshot] - Generate.vue 传来的 config 快照
    * @param {string} [options.evaluations]   - JSON 字符串或 null
    * @param {string} [options.studentId='default']
+   * @param {string} [options.practiceSessionId] — 练轮次 ID，同一轮所有 session 共用
    * @returns {Promise<number|null>} sessionId 或 null（失败时）
    */
   static async save({
@@ -34,6 +36,7 @@ export class PracticeSession extends SchemaSession {
     configSnapshot,
     evaluations,
     studentId = 'default',
+    practiceSessionId = null,
   }) {
     if (!answers || !answers.length) return null
 
@@ -50,6 +53,7 @@ export class PracticeSession extends SchemaSession {
     const session = {
       studentId,
       config: configSnapshot || null,
+      practiceSessionId,
       totalQuestions: uniqueAnswers.length,
       // correctCount / accuracy / totalDuration: 不写——由 computeStats 实时算
       evaluations: evaluations || null,
@@ -70,6 +74,8 @@ export class PracticeSession extends SchemaSession {
       stepCount: a.stepCount || 1,
       operandMin: a.operandMin ?? 0,
       operandMax: a.operandMax ?? 0,
+      inputMode: a.inputMode || '',
+      blankMode: a.blankMode || 'result',
       timestamp: a.timestamp || Date.now(),
       synced: 0,
     }))
@@ -79,7 +85,8 @@ export class PracticeSession extends SchemaSession {
         const sessionId = await DB.practiceSessions.add(session)
         const CHUNK = 500
         for (let i = 0; i < answersData.length; i += CHUNK) {
-          await DB.answers.bulkAdd(answersData.slice(i, i + CHUNK))
+          const chunk = answersData.slice(i, i + CHUNK).map(a => ({ ...a, sessionId }))
+          await DB.answers.bulkAdd(chunk)
         }
         return sessionId
       })
@@ -125,7 +132,7 @@ export class PracticeSession extends SchemaSession {
       seen.add(key)
       return true
     })
-    const correctCount = Answer.sumScores(unique)
+    const correctCount = unique.filter(a => a.isCorrect).length
     const totalDuration = sumResponseTimes(unique)
     return {
       totalQuestions: unique.length,
@@ -134,27 +141,123 @@ export class PracticeSession extends SchemaSession {
       totalDuration,
     }
   }
+
+  /**
+   * 计算 session 摘要统计（不依赖 DB 的纯函数）
+   * @param {Object} session — 原始 session 记录
+   * @param {Array} answers — 本 session 的答案数组
+   * @returns {{ totalQuestions, correctCount, accuracy, difficultyLabel, completion, practiceType }}
+   */
+  static computeSessionStats(session, answers = []) {
+    const unique = answers.filter(a => {
+      const key = a.questionIndex ?? a.equation
+      return key != null
+    })
+    const correctCount = unique.filter(a => a.isCorrect).length
+    const total = unique.length
+    const accuracy = total > 0 ? correctCount / total : 0
+
+    // 难度标签：从 config 读 difficultyIdx
+    let difficultyLabel = '—'
+    try {
+      const cfg = typeof session.config === 'string' ? JSON.parse(session.config) : session.config
+      if (cfg?.difficultyIdx != null) {
+        const d = DIFFICULTY_LEVELS[cfg.difficultyIdx]
+        if (d) difficultyLabel = d.label
+      }
+    } catch { /* ignore */ }
+
+    // 完成度：实际题数 / 计划目标
+    let completion = total > 0 ? 1 : 0
+    try {
+      const cfg = typeof session.config === 'string' ? JSON.parse(session.config) : session.config
+      const targetMax = cfg?.targetMax || 30
+      completion = targetMax > 0 ? Math.min(1, total / targetMax) : 1
+    } catch { /* ignore */ }
+
+    // 练习类型
+    let practiceType = '普通'
+    if (session.evaluations) practiceType = '自适应'
+    else if (session.config?.diagnostic) practiceType = '诊断'
+
+    return { totalQuestions: total, correctCount, accuracy, difficultyLabel, completion, practiceType }
+  }
+
+  /**
+   * 批量加载 sessions 的统计信息
+   * @param {Array<Object>} sessions
+   * @returns {Promise<Map<number, Object>>} sessionId → stats
+   */
+  static async getBatchSessionStats(sessions) {
+    if (!sessions.length) return new Map()
+    const ids = sessions.map(s => s.id)
+    const rows = await DB.answers.where('sessionId').anyOf(ids).toArray()
+    const grouped = {}
+    for (const a of rows) {
+      if (!grouped[a.sessionId]) grouped[a.sessionId] = []
+      grouped[a.sessionId].push(a)
+    }
+    const statsObj = {}
+    for (const s of sessions) {
+      statsObj[s.id] = PracticeSession.computeSessionStats(s, grouped[s.id] || [])
+    }
+    return statsObj
+  }
 }
 
 // ─── Session CRUD ──────────────────────────────────────────────────────────
 
 /**
- * 获取最近 sessions
+ * 获取最近 sessions（每轮只返回最新一条）
  */
 export async function getSessions(studentId = 'default', limit = 50) {
-  return DB.practiceSessions
+  const all = await DB.practiceSessions
     .where('studentId').equals(studentId)
-    .reverse().limit(limit).toArray()
+    .reverse().toArray()
+
+  // 按 practiceSessionId 分组，每组只保留最新（reverse 下第一个遇到的）
+  const groups = new Map()
+  const standalone = []  // 无 practiceSessionId 的旧数据，每条独立
+  for (const s of all) {
+    if (s.practiceSessionId) {
+      if (!groups.has(s.practiceSessionId)) {
+        groups.set(s.practiceSessionId, s)
+      }
+    } else {
+      if (standalone.length < limit * 2) standalone.push(s)
+    }
+  }
+
+  const merged = [...groups.values(), ...standalone]
+    .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+  return merged.slice(0, limit)
 }
 
 /**
  * 获取 session 详情（原始数据）
+ * 同时返回同 practiceSessionId 的 checkpoint 子 session（含各自答案）
  */
 export async function getSessionDetail(sessionId) {
   const session = await DB.practiceSessions.get(sessionId)
   const answers = await DB.answers
     .where('sessionId').equals(sessionId).sortBy('timestamp')
-  return { session, answers }
+
+  let siblings = []
+  if (session && session.practiceSessionId) {
+    const raw = await DB.practiceSessions
+      .where('practiceSessionId').equals(session.practiceSessionId)
+      .filter(s => s.id !== sessionId)
+      .sortBy('createdAt')
+
+    // 加载每个 checkpoint 各自的答案
+    siblings = await Promise.all(raw.map(async s => {
+      const sAnswers = await DB.answers
+        .where('sessionId').equals(s.id).sortBy('timestamp')
+      return { session: s, answers: sAnswers }
+    }))
+  }
+
+  return { session, answers, siblings }
 }
 
 /**

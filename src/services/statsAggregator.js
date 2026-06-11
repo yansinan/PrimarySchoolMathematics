@@ -22,17 +22,57 @@ export async function getAggregatedStats(studentId = 'default') {
     .where('studentId').equals(studentId).reverse().toArray()
   if (!sessions.length) return emptyStats()
 
-  const sessionIds = sessions.map(s => s.id)
-  const allAnswers = await DB.answers
-    .where('sessionId').anyOf(sessionIds).toArray()
+  // 按 practiceSessionId 分组，每组只取最新一条；无 practiceSessionId 的旧数据每条独立
+  const groups = new Map()
+  const standalone = []
+  for (const s of sessions) {
+    if (s.practiceSessionId) {
+      if (!groups.has(s.practiceSessionId)) {
+        groups.set(s.practiceSessionId, s)
+      }
+    } else {
+      standalone.push(s)
+    }
+  }
+  const targetSessions = [...groups.values(), ...standalone]
+  if (!targetSessions.length) return emptyStats()
 
-  const tq = allAnswers.length
-  const tc = Answer.sumScores(allAnswers)
+  const sessionIds = targetSessions.map(s => s.id)
+  // 加载 session 关联的答案 + 游离答案（savePerQuestion 写入的无 sessionId 记录）
+  const [attached, orphans] = await Promise.all([
+    DB.answers.where('sessionId').anyOf(sessionIds).toArray(),
+    DB.answers.filter(a => !a.sessionId).toArray(),
+  ])
+  const allAnswers = [...attached, ...orphans]
+  // 游离答案用 timestamp 过滤：只取所属 sessions 时间范围内的
+  const sessionDateRange = targetSessions.length > 0
+    ? { min: Math.min(...targetSessions.map(s => new Date(s.createdAt).getTime())),
+        max: Math.max(...targetSessions.map(s => new Date(s.createdAt).getTime())) }
+    : null
+  const filteredAnswers = sessionDateRange
+    ? allAnswers.filter(a => {
+        if (a.sessionId) return true
+        const t = a.timestamp || 0
+        return t >= sessionDateRange.min && t <= sessionDateRange.max + 86400000
+      })
+    : allAnswers
+
+  // answer 去重兜底：加 sessionId 防跨轮同 equation 误去重
+  const seen = new Set()
+  const uniqueAnswers = filteredAnswers.filter(a => {
+    const key = `${a.sessionId || 0}_${a.equation}_${a.solution}_${a.questionIndex ?? ''}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+
+  const tq = uniqueAnswers.length
+  const tc = Answer.sumScores(uniqueAnswers)
 
   // ── 运算符统计 ──
   const opStats = {}
   for (const op of ['+', '-', '*', '/']) {
-    const byOp = allAnswers.filter(a => a.operator === op)
+    const byOp = uniqueAnswers.filter(a => a.operator === op)
     if (byOp.length) {
       opStats[op] = {
         count: byOp.length,
@@ -43,10 +83,10 @@ export async function getAggregatedStats(studentId = 'default') {
   }
 
   // ── 进位 / 退位统计 ──
-  const wc = allAnswers.filter(a => a.isCarry)
-  const woc = allAnswers.filter(a => !a.isCarry && (a.operator === '+' || a.operator === '-'))
-  const wb = allAnswers.filter(a => a.isBorrow)
-  const wob = allAnswers.filter(a => !a.isBorrow && (a.operator === '+' || a.operator === '-'))
+  const wc = uniqueAnswers.filter(a => a.isCarry)
+  const woc = uniqueAnswers.filter(a => !a.isCarry && (a.operator === '+' || a.operator === '-'))
+  const wb = uniqueAnswers.filter(a => a.isBorrow)
+  const wob = uniqueAnswers.filter(a => !a.isBorrow && (a.operator === '+' || a.operator === '-'))
 
   const carrySt = {
     withCarry: {
@@ -75,9 +115,9 @@ export async function getAggregatedStats(studentId = 'default') {
 
   // ── 步数统计 ──
   const stepSt = {}
-  const stepCounts = [...new Set(allAnswers.map(a => a.stepCount))].sort()
+  const stepCounts = [...new Set(uniqueAnswers.map(a => a.stepCount))].sort()
   for (const step of stepCounts) {
-    const byStep = allAnswers.filter(a => a.stepCount === step)
+    const byStep = uniqueAnswers.filter(a => a.stepCount === step)
     stepSt[step] = {
       count: byStep.length,
       correct: Answer.sumScores(byStep),
@@ -86,7 +126,7 @@ export async function getAggregatedStats(studentId = 'default') {
   }
 
   // ── 连续练习天数 ──
-  const uniqueDays = [...new Set(sessions.map(s => s.createdAt.slice(0, 10)))].sort().reverse()
+  const uniqueDays = [...new Set(targetSessions.map(s => s.createdAt.slice(0, 10)))].sort().reverse()
   let streak = 0
   const today = new Date()
   for (let i = 0; i < uniqueDays.length; i++) {
@@ -98,7 +138,7 @@ export async function getAggregatedStats(studentId = 'default') {
 
   // ── 数字粒度统计 ──
   const numSt = {}
-  for (const a of allAnswers) {
+  for (const a of uniqueAnswers) {
     const { equation: eq, operator: op } = a
     if (!op) continue
     const parsed = parseEquation(eq)
@@ -136,7 +176,7 @@ export async function getAggregatedStats(studentId = 'default') {
   const overallAccuracy = tq ? tc / tq : 0
 
   return {
-    totalSessions: sessions.length,
+    totalSessions: targetSessions.length,
     totalQuestions: tq,
     totalCorrect: tc,
     overallAccuracy,
