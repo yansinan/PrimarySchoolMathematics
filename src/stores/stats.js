@@ -24,6 +24,8 @@ export const useStatsStore = defineStore('stats', {
     sessions: [],
     selectedSession: null,
     aggregatedStats: null,
+    // 按 sessionId 的缓存统计（正确率/难度/完成度/类型）
+    sessionStats: {},
     // P2 阶段 14: 全量历史答案缓存
     // - 由 StatsDrawer 打开时触发 useStatsQuery.loadAllAnswers() 填充
     // - 供 useAbilityProfile(options.answers) 用, 让"你掌握得怎么样"显示
@@ -40,12 +42,13 @@ export const useStatsStore = defineStore('stats', {
      * Returns: [{ label: '2026-06-01', accuracy: 0.85 }, ...]
      */
     accuracyTrend(state) {
+      const stats = this.sessionStats
       return state.sessions
         .slice()
         .reverse()
         .map(s => ({
           label: s.createdAt ? s.createdAt.slice(0, 10) : '',
-          accuracy: s.accuracy || 0
+          accuracy: (stats[s.id]?.accuracy) || 0
         }))
     },
 

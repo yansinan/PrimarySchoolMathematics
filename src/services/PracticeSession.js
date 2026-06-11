@@ -125,19 +125,12 @@ export class PracticeSession extends SchemaSession {
     const answers = rawAnswers
       ? rawAnswers.map(r => r instanceof Answer ? r : Answer.fromJSON(r))
       : await this.getAnswers()
-    const seen = new Set()
-    const unique = answers.filter(a => {
-      const key = a.questionIndex ?? a.equation
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
-    const correctCount = unique.filter(a => a.isCorrect).length
-    const totalDuration = sumResponseTimes(unique)
+    const correctCount = answers.filter(a => a.isCorrect).length
+    const totalDuration = sumResponseTimes(answers)
     return {
-      totalQuestions: unique.length,
+      totalQuestions: answers.length,
       correctCount,
-      accuracy: unique.length > 0 ? correctCount / unique.length : 0,
+      accuracy: answers.length > 0 ? correctCount / answers.length : 0,
       totalDuration,
     }
   }
@@ -149,12 +142,8 @@ export class PracticeSession extends SchemaSession {
    * @returns {{ totalQuestions, correctCount, accuracy, difficultyLabel, completion, practiceType }}
    */
   static computeSessionStats(session, answers = []) {
-    const unique = answers.filter(a => {
-      const key = a.questionIndex ?? a.equation
-      return key != null
-    })
-    const correctCount = unique.filter(a => a.isCorrect).length
-    const total = unique.length
+    const correctCount = answers.filter(a => a.isCorrect).length
+    const total = answers.length
     const accuracy = total > 0 ? correctCount / total : 0
 
     // 难度标签：从 config 读 difficultyIdx

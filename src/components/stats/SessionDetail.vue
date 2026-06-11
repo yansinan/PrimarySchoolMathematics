@@ -91,6 +91,12 @@
                   <el-icon color="#58cc71"><Check /></el-icon>
                   {{ answer.userAnswer }}
                 </template>
+                <template v-else-if="answer.isFixed">
+                  <el-icon color="#e6a23c"><WarningFilled /></el-icon>
+                  <span class="answer-item__user-value">{{ answer.userAnswer }}</span>
+                  <el-tag size="small" type="warning" effect="dark" class="answer-item__fix-tag">已改正</el-tag>
+                  <span class="answer-item__correct-value">(正确答案: {{ answer.solution }})</span>
+                </template>
                 <template v-else>
                   <el-icon color="#f56c6c"><Close /></el-icon>
                   <span class="answer-item__user-value">{{ answer.userAnswer }}</span>
@@ -119,7 +125,7 @@
 
 <script setup>
 import { ref, computed, watch, watchEffect } from 'vue'
-import { Document, Check, Close } from '@element-plus/icons-vue'
+import { Document, Check, Close, WarningFilled } from '@element-plus/icons-vue'
 import { useStatsStore } from '@/stores/stats'
 import { formatDuration } from '@/utils/time/timeFormat'
 import { PracticeSession } from '@/services/PracticeSession'
@@ -142,22 +148,25 @@ const roundStats = ref({ totalQuestions: 0, correctCount: 0, accuracy: 0, totalD
 /** 分组: sibling（checkpoint）各一组，最后余下的 main session answers 作为最后一组 */
 const groups = computed(() => {
   const result = []
+  let groupIdx = 0
   for (const sib of siblings.value) {
-    const grp = buildGroup(sib.session, sib.answers)
+    groupIdx++
+    const grp = buildGroup(sib.session, sib.answers, groupIdx)
     result.push(grp)
   }
   // main session 的 answers 作为最终组
   const mainAnswers = statsStore.selectedSession?.answers || []
   if (mainAnswers.length) {
-    result.push(buildGroup(session.value, mainAnswers, true))
+    groupIdx++
+    result.push(buildGroup(session.value, mainAnswers, groupIdx))
   }
   return result
 })
 
-function buildGroup(sess, answers, isFinal = false) {
+function buildGroup(sess, answers, groupIndex) {
   const correct = answers.filter(a => a.isCorrect).length
   return {
-    label: isFinal ? '最终组' : `第${sess.id}组`,
+    label: `第${groupIndex}组`,
     answers,
     accuracy: answers.length ? correct / answers.length : 0,
   }
@@ -351,6 +360,10 @@ function handleClosed() {
   color: #58cc71;
   font-weight: 500;
   font-size: 12px;
+}
+
+.answer-item__fix-tag {
+  margin-left: 4px;
 }
 
 .answer-item__time {

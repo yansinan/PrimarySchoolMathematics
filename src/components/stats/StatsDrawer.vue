@@ -145,7 +145,22 @@
             >
               <div class="session-item__left">
                 <div class="session-item__date">{{ formatDate(session.createdAt) }}</div>
-                <div class="session-item__meta">{{ session.totalQuestions }} 题</div>
+                <div class="session-item__meta">
+                  <el-tag size="small" type="info" class="session-tag">{{ (sessionStats[session.id]?.practiceType) || '练习' }}</el-tag>
+                  <el-tag v-if="sessionStats[session.id]?.difficultyLabel && sessionStats[session.id].difficultyLabel !== '—'" size="small" class="session-tag">{{ sessionStats[session.id].difficultyLabel }}</el-tag>
+                </div>
+              </div>
+              <div class="session-item__right">
+                <span class="session-item__count">{{ sessionStats[session.id]?.totalQuestions || session.totalQuestions }}题</span>
+                <span
+                  v-if="sessionStats[session.id]?.completion != null"
+                  class="session-item__completion"
+                  :class="sessionStats[session.id].completion >= 1 ? 'session-item__completion--done' : ''"
+                >
+                  <template v-if="sessionStats[session.id].completion >= 1">✓</template>
+                  <template v-else>{{ Math.round(sessionStats[session.id].completion * 100) }}%</template>
+                </span>
+                <el-icon class="session-item__arrow"><ArrowRight /></el-icon>
               </div>
             </div>
           </div>
@@ -196,7 +211,7 @@ import SessionDetail from './SessionDetail.vue'
 // 坑: 若写成 const stats = useStatsDrawer(), 模板中 stats.xxx 是 Ref 对象不是值
 const {
   isDrawerOpen, toggleDrawer, loading, aggregatedStats,
-  overallAccuracyPercent, sessions, accuracyTrend,
+  overallAccuracyPercent, sessions, sessionStats, accuracyTrend,
   operatorBreakdown, allAnswers,
   openSessionDetail, refreshAll, loadAllAnswers, openDrawer,
   exportData, importData, formatDate, formatDuration
@@ -225,6 +240,12 @@ function discClass(accuracy) {
   if (accuracy >= 0.80) return 'num-disc--m'
   if (accuracy >= 0.50) return 'num-disc--w'
   return 'num-disc--d'
+}
+
+function accuracyColor(accuracy) {
+  if (accuracy >= 0.8) return '#58cc71'
+  if (accuracy >= 0.6) return '#e6a23c'
+  return '#f56c6c'
 }
 
 // ── 游戏等级（P5: 游戏化设计） ──
@@ -461,9 +482,14 @@ onBeforeUnmount(() => {
 }
 
 .session-item__meta {
-  font-size: 12px;
-  color: #8fa3b8;
-  margin-top: 2px;
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.session-tag {
+  font-size: 11px;
 }
 
 .session-item__right {
@@ -471,6 +497,23 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+}
+
+.session-item__count {
+  font-size: 12px;
+  color: #8fa3b8;
+  font-weight: 500;
+}
+
+.session-item__completion {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e6a23c;
+}
+
+.session-item__completion--done {
+  color: #58cc71;
+  font-size: 16px;
 }
 
 .session-item__arrow {
