@@ -230,10 +230,11 @@ export class Engine {
 
   evaluateGroup(groupAnswers) {
     const engine = this
-    const total = groupAnswers.length
-    const correct = groupAnswers.filter(a => Answer.isCorrect(a)).length
+    const instances = groupAnswers.map(a => a instanceof Answer ? a : new Answer(a))
+    const total = instances.length
+    const correct = instances.filter(a => a.isCorrect).length
     const rate = total > 0 ? correct / total : 0
-    const avgTime = total > 0 ? sumResponseTimes(groupAnswers) / total : Infinity
+    const avgTime = total > 0 ? sumResponseTimes(instances) / total : Infinity
     engine.history = engine.history || []
     engine.history.push({
       groupIdx: engine.groupIndex, difficultyIdx: engine.difficultyIdx,

@@ -396,10 +396,10 @@ export async function evaluateCorrectionEffect(questionId, { days = 30 } = {}) {
  * }>>}
  */
 export async function prioritizeWrongAnswers({ limit = 20 } = {}) {
-  // 1. 取所有错题（用 Answer.isCorrect 静态方法——数学真理：userAnswer === solution）
-  //    Answer.isCorrect 是 getter 优先的静态方法，兼容 Answer 实例和 plain object
-  const allAnswers = await DB.answers.toArray()
-  const wrongAnswers = allAnswers.filter((a) => !Answer.isCorrect(a))
+  // 1. 取所有错题
+  const raw = await DB.answers.toArray()
+  const allAnswers = raw.map(a => a instanceof Answer ? a : new Answer(a))
+  const wrongAnswers = allAnswers.filter((a) => !a.isCorrect)
   if (wrongAnswers.length === 0) return []
 
   // 2. 按 questionId 聚合：wrongCount + lastWrongAt
@@ -428,11 +428,12 @@ export async function prioritizeWrongAnswers({ limit = 20 } = {}) {
     .where('questionId')
     .anyOf(uniqueQIds)
     .toArray()
+  const forQAnswers = allForQ.map(a => new Answer(a))
   const totalByQ = new Map()
   const lastCorrectByQ = new Map()
-  for (const a of allForQ) {
+  for (const a of forQAnswers) {
     totalByQ.set(a.questionId, (totalByQ.get(a.questionId) || 0) + 1)
-    if (Answer.isCorrect(a)) {
+    if (a.isCorrect) {
       const cur = lastCorrectByQ.get(a.questionId) || 0
       if (a.timestamp > cur) lastCorrectByQ.set(a.questionId, a.timestamp)
     }
@@ -541,12 +542,12 @@ export async function getNumberCurve(number, { days = 30 } = {}) {
     .where('questionId')
     .anyOf(qIds)
     .toArray()
-  const answers = raw.filter((a) => a.timestamp > cutoff)
+  const rawAnswers = raw.filter((a) => a.timestamp > cutoff)
+  const answers = rawAnswers.map(a => new Answer(a))
 
   if (answers.length === 0) return []
 
   // 3. 按日期桶聚合（YYYY-MM-DD 字符串）
-  //    用 Answer.isCorrect 静态方法（getter 优先——数学真理）
   const buckets = new Map() // date -> { total, correct, qIds: Set }
   for (const a of answers) {
     const date = new Date(a.timestamp).toISOString().slice(0, 10)
@@ -556,7 +557,7 @@ export async function getNumberCurve(number, { days = 30 } = {}) {
       buckets.set(date, bucket)
     }
     bucket.total += 1
-    if (Answer.isCorrect(a)) bucket.correct += 1
+    if (a.isCorrect) bucket.correct += 1
     if (a.questionId != null) bucket.qIds.add(a.questionId)
   }
 

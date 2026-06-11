@@ -26,6 +26,36 @@ export class WrongAnswer extends Answer {
   constructor(raw) {
     super(raw)
   }
+
+  /**
+   * 去重并聚合错题：同名同答案只留一条，附带 wrongCount 和 correctedCount。
+   * 已完全掌握（mastery >= 100）的题目排除在外。
+   * 库里所有记录都存，查询时聚合。
+   * @param {Array} answers — Answer-like 实例或 plain object
+   * @returns {Array<WrongAnswer>} — 每项带 wrongCount / correctedCount
+   */
+  static dedup(answers) {
+    const groups = new Map()
+    for (const a of answers) {
+      const inst = a instanceof WrongAnswer ? a : WrongAnswer.fromJSON(a)
+      const key = `${inst.equation || ''}_${inst.solution}`
+      if (!groups.has(key)) {
+        groups.set(key, { item: inst, wrongCount: 0, correctedCount: 0 })
+      }
+      const g = groups.get(key)
+      g.wrongCount++
+      if (inst.isFixed) g.correctedCount++
+    }
+    return [...groups.values()]
+      .filter(g => !g.item.isMastered)  // 排除已完全掌握
+      .map(g => {
+        g.item.wrongCount = g.wrongCount
+        g.item.correctedCount = g.correctedCount
+        return g.item
+      })
+      .sort((a, b) => (a.mastery ?? 0) - (b.mastery ?? 0))  // 最不熟排最前
+  }
+
   // ── 查询（静态） ──
   /**
    * 纯函数过滤 + 排序错题数组。
@@ -48,7 +78,7 @@ export class WrongAnswer extends Answer {
       : 0
     return (answers || [])
       .map(a => (a instanceof WrongAnswer) ? a : WrongAnswer.fromJSON(a))
-      .filter(a => !Answer.isCorrect(a))  // 数学真理：userAnswer === solution
+      .filter(a => !a.isCorrect)
       .filter(a => !operator || a.operator === operator)
       .filter(a => {
         if (minOperand == null || maxOperand == null) return true

@@ -44,18 +44,20 @@ export async function getAggregatedStats(studentId = 'default') {
     DB.answers.filter(a => !a.sessionId).toArray(),
   ])
   const allAnswers = [...attached, ...orphans]
+  // 统一实例化，确保 isCorrect/score 等 getter 可用
+  const answerInstances = allAnswers.map(a => a instanceof Answer ? a : new Answer(a))
   // 游离答案用 timestamp 过滤：只取所属 sessions 时间范围内的
   const sessionDateRange = targetSessions.length > 0
     ? { min: Math.min(...targetSessions.map(s => new Date(s.createdAt).getTime())),
         max: Math.max(...targetSessions.map(s => new Date(s.createdAt).getTime())) }
     : null
   const filteredAnswers = sessionDateRange
-    ? allAnswers.filter(a => {
+    ? answerInstances.filter(a => {
         if (a.sessionId) return true
         const t = a.timestamp || 0
         return t >= sessionDateRange.min && t <= sessionDateRange.max + 86400000
       })
-    : allAnswers
+    : answerInstances
 
   // answer 去重兜底：加 sessionId 防跨轮同 equation 误去重
   const seen = new Set()
@@ -67,14 +69,14 @@ export async function getAggregatedStats(studentId = 'default') {
   })
 
   const tq = uniqueAnswers.length
-  const tc = uniqueAnswers.filter(a => Answer.isCorrect(a)).length
+  const tc = uniqueAnswers.filter(a => a.isCorrect).length
 
   // ── 运算符统计 ──
   const opStats = {}
   for (const op of ['+', '-', '*', '/']) {
     const byOp = uniqueAnswers.filter(a => a.operator === op)
     if (byOp.length) {
-      const correctCount = byOp.filter(a => Answer.isCorrect(a)).length
+      const correctCount = byOp.filter(a => a.isCorrect).length
       opStats[op] = {
         count: byOp.length,
         correct: correctCount,
@@ -92,25 +94,25 @@ export async function getAggregatedStats(studentId = 'default') {
   const carrySt = {
     withCarry: {
       count: wc.length,
-      correct: wc.filter(a => Answer.isCorrect(a)).length,
-      accuracy: wc.length ? wc.filter(a => Answer.isCorrect(a)).length / wc.length : 0,
+      correct: wc.filter(a => a.isCorrect).length,
+      accuracy: wc.length ? wc.filter(a => a.isCorrect).length / wc.length : 0,
     },
     withoutCarry: {
       count: woc.length,
-      correct: woc.filter(a => Answer.isCorrect(a)).length,
-      accuracy: woc.length ? woc.filter(a => Answer.isCorrect(a)).length / woc.length : 0,
+      correct: woc.filter(a => a.isCorrect).length,
+      accuracy: woc.length ? woc.filter(a => a.isCorrect).length / woc.length : 0,
     },
   }
   const borrowSt = {
     withBorrow: {
       count: wb.length,
-      correct: wb.filter(a => Answer.isCorrect(a)).length,
-      accuracy: wb.length ? wb.filter(a => Answer.isCorrect(a)).length / wb.length : 0,
+      correct: wb.filter(a => a.isCorrect).length,
+      accuracy: wb.length ? wb.filter(a => a.isCorrect).length / wb.length : 0,
     },
     withoutBorrow: {
       count: wob.length,
-      correct: wob.filter(a => Answer.isCorrect(a)).length,
-      accuracy: wob.length ? wob.filter(a => Answer.isCorrect(a)).length / wob.length : 0,
+      correct: wob.filter(a => a.isCorrect).length,
+      accuracy: wob.length ? wob.filter(a => a.isCorrect).length / wob.length : 0,
     },
   }
 
@@ -119,7 +121,7 @@ export async function getAggregatedStats(studentId = 'default') {
   const stepCounts = [...new Set(uniqueAnswers.map(a => a.stepCount))].sort()
   for (const step of stepCounts) {
     const byStep = uniqueAnswers.filter(a => a.stepCount === step)
-    const stepCorrect = byStep.filter(a => Answer.isCorrect(a)).length
+    const stepCorrect = byStep.filter(a => a.isCorrect).length
     stepSt[step] = {
       count: byStep.length,
       correct: stepCorrect,
@@ -157,7 +159,7 @@ export async function getAggregatedStats(studentId = 'default') {
         numSt[key] = { number: n, operator: op, count: 0, correct: 0, wrongEquations: [] }
       }
       numSt[key].count++
-      const isC = Answer.isCorrect(a)
+      const isC = a.isCorrect
       if (isC) numSt[key].correct++
       else numSt[key].wrongEquations.push({
         equation: eq,

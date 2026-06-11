@@ -245,11 +245,12 @@ export function useAdaptiveSession(options = {}) {
    */
   async function completeGroup() {
     const allAnswers = [...session.value.answers]
+    const instances = allAnswers.map(a => a instanceof Answer ? a : new Answer(a))
     const engine = adaptiveEngine.value
     // 用持久化的 lastGroupSize，不重新调 getGroupSize（防随机抖动导致切片错位）
     const size = engine.lastGroupSize || engine.getGroupSize()
-    const groupAnswers = allAnswers.slice(-size)
-    const groupCorrect = groupAnswers.filter(a => Answer.isCorrect(a)).length
+    const groupAnswers = instances.slice(-size)
+    const groupCorrect = groupAnswers.filter(a => a.isCorrect).length
     const groupTime = sumResponseTimes(groupAnswers)
 
     // ── 小组反馈 ──

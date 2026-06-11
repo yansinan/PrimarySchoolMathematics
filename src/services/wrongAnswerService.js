@@ -50,9 +50,10 @@ export async function countWrongAnswers(opts = {}) {
  * @returns {Promise<Answer|null>}
  */
 export async function getWrongAnswerByEquation(equation, studentId = 'default') {
-  const all = await Answer.getAllByStudent(studentId)
-  const found = all.find(a => a.equation === equation && !Answer.isCorrect(a))
-  return found ? Answer.fromJSON(found) : null
+  const raw = await Answer.getAllByStudent(studentId)
+  const all = raw.map(r => Answer.fromJSON(r))
+  const found = all.find(a => a.equation === equation && !a.isCorrect)
+  return found || null
 }
 
 /**
@@ -90,7 +91,8 @@ export async function clearWrongAnswers(studentId = 'default') {
   const sessionIds = sessions.map(s => s.id)
   if (!sessionIds.length) return 0
   const all = await DB.answers.where('sessionId').anyOf(sessionIds).toArray()
-  const wrongIds = all.filter(a => !Answer.isCorrect(a)).map(a => a.id)
+  const instances = all.map(a => new Answer(a))
+  const wrongIds = instances.filter(a => !a.isCorrect).map(a => a.id)
   if (!wrongIds.length) return 0
   await DB.answers.bulkDelete(wrongIds)
   return wrongIds.length

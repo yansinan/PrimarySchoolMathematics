@@ -133,7 +133,9 @@ export function useAbilityProfile(options = {}) {
   })
 
   const fullCorrectCount = computed(() => {
-    return (answers.value || []).filter((answer) => Answer.isCorrect(answer)).length
+    const raw = answers.value || []
+    const instances = raw.map(a => a instanceof Answer ? a : new Answer(a))
+    return instances.filter(a => a.isCorrect).length
   })
 
   // 顶层包 weaknessV2 / strengthV2, V 模板不用写 .value
