@@ -55,7 +55,7 @@ export function usePracticeSaver() {
       : practiceStore.session.answers
     const lastAnswer = target[target.length - 1]
     if (lastAnswer) {
-      void Answer.persist(lastAnswer)
+      void Answer.save(lastAnswer)
     }
   }
 

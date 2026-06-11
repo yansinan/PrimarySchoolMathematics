@@ -131,17 +131,15 @@ export class Answer extends Question {
   }
 
   /**
-   * 持久化单条答题到 DB（通过 Q/A/W 成员函数写 db.answers 表）
+   * 持久化单条答题到 DB（覆盖 Question.save 写 questions 表，本方法写 answers 表）
    *
    * 只存元数据（toJSON 输出），不存可计算字段（isCorrect/attemptCount/score）。
    * 对应 reads 路径用 Answer.fromJSON(plain) 包回实例，通过 getter 重算。
    *
-   * 替代 sessionPersistence.js 中的 raw DB.answers.put。
-   *
    * @param {Object|Answer} answerLike — Answer 实例或 raw plain object
    * @returns {Promise<void>}
    */
-  static async persist(answerLike) {
+  static async save(answerLike) {
     if (!answerLike) return
     // 是 Answer 实例 → 走 toJSON 去掉 getter 字段；否则当 plain object 处理
     const plain = answerLike instanceof Answer
