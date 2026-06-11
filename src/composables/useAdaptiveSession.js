@@ -188,7 +188,7 @@ export function useAdaptiveSession(options = {}) {
     const targetMax = 30
     practiceStore.completeAssessment(profile, snapshot, { targetMin, targetMax })
 
-    // 从 DB 加载画像创建引擎（诊断答案已由 persistSingleAnswer 写入 DB）
+    // 从 DB 加载画像创建引擎（诊断答案已由 savePerQuestion 写入 DB）
     const dbProfile = await Profile.load()
     const engine = new Engine({
       difficultyIdx: dbProfile.difficultyIdx,
