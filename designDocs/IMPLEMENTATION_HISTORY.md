@@ -701,9 +701,59 @@ D src/utils/store/database.js               — 死代理删除
 
 ---
 
-## 14. 元信息
+## 14. 代码整理 + I-1 engine 递升（2026-06-11）
 
-- 编制时间：2026-06-08（v3 收尾 + ui 合并后）；§8 追加于 2026-06-10（v4.0c 重构 + bug 修复）；§9 追加于 2026-06-10（v4.1 画像源迁移）；§10 追加于 2026-06-10（v4.2 类型化 + 封装 + 清理）；§11 追加于 2026-06-10（v4.3 Profile 实例方法 + Snapshot 删除 + 阈值统一）；§12 追加于 2026-06-10（P2 修复组）；§13 追加于 2026-06-11（P5 回归验证 + 文档归档）
+**目标**：清掉 `.refactor-todo.md` 所有余留项：E1/E5/C5/C8/C10/E4/E9-E11/E13/E15-E16/I-1/I-2/I-7。
+
+### 14.1 变更总览
+
+| ID | 改动 | 文件 | 提交 |
+|----|------|------|------|
+| E1 | `getRandomBracket` `while(true)` → 直接公式 | `psm.js` | `666bace` |
+| C5 | `checkResult`/`solveByBruteForce` 标 `@private` | `EquationSolver.js` | `666bace` |
+| I-2/I-7/E13 | 删 `abilityProfile`+localStorage 全线，替换为 `assessmentCompleted` getter | `stores/practice.js`, `Practice.vue`, `useAdaptiveSession.js`, `Generate.vue` | `baca670` |
+| — | 删 `stageName` '智能练习' 瞬态分支 + onMounted 刷新恢复死分支 | `Practice.vue`, `useAdaptiveSession.js` | `40ad43f` |
+| — | 删 `storageKeys.js`（已无消费者） | `constants/` | `4fc1989` |
+| E5 | `formatDate` 迁 `utils/timeFormat.js` | `timeFormat.js`, `useStatsDrawer.js` | `b225764` |
+| C10 | Print.vue 手拼文件名 → `formatTimestampForFilename()` | `Print.vue` | `b225764` |
+| C8 | 6 处 console.log 加 DEV 守卫 | `Print.vue`, `Generate.vue`, `sessionPersistence.js` | `b225764` |
+| E15-E16 | `generateDistractors` 回归 engine，composable 直接读 `q.options` | `adaptiveEngine.js`, `useDisplayStrategy.js` | `f48fe9b` |
+| E4 | `refreshAll` loading 统一管理，删子函数独立 loading | `useStatsQuery.js` | `6deb765` |
+| I-1 | 组边界不覆盖 `engine.difficultyIdx`，保留会话级递升 | `useAdaptiveSession.js`, `adaptiveEngine.js` | `4f30b2b` |
+
+### 14.2 I-1 engine.difficultyIdx 递升修复
+
+**根因**：`completeGroup` 中 `evaluateGroup` 对 `engine.difficultyIdx` 的 ±1 调整，立即被下一行 `Profile.load()` 的 DB 值覆盖。
+
+```js
+// 改前：
+const dbProfile = await Profile.load()
+adaptiveEngine.value.profile = dbProfile
+adaptiveEngine.value.difficultyIdx = dbProfile.difficultyIdx  // ← 覆盖 evaluateGroup 的结果
+practiceStore.currentDifficultyIdx = dbProfile.difficultyIdx
+
+// 改后：
+const dbProfile = await Profile.load()
+adaptiveEngine.value.profile = dbProfile  // 只刷强/弱项列表
+practiceStore.currentDifficultyIdx = adaptiveEngine.value.difficultyIdx  // 取 engine 自身值
+```
+
+**关键概念**：`engine.difficultyIdx`（engine 自身字段，由 `evaluateGroup`/`adjustNextQuestion` 维护）与 `dbProfile.difficultyIdx`（Profile 实例字段，`computeDifficultyIdx` 从 DB 全集计算）是两个独立变量。组边界只刷 profile 的强弱项列表，不覆盖 engine 自身的运行时难度。
+
+**跨会话**：`startNewAdaptiveSession()` 新建 Engine 时仍从 `Profile.load()` 读 DB 值作为起点。
+
+### 14.3 验证结果
+
+| 测试 | 结果 |
+|------|------|
+| `npx vitest run` | 117/117 PASS ✅ |
+| `npx vite build` | 构建成功 ✅ |
+
+---
+
+## 15. 元信息
+
+- 编制时间：2026-06-08（v3 收尾 + ui 合并后）；§8 追加于 2026-06-10（v4.0c 重构 + bug 修复）；§9 追加于 2026-06-10（v4.1 画像源迁移）；§10 追加于 2026-06-10（v4.2 类型化 + 封装 + 清理）；§11 追加于 2026-06-10（v4.3 Profile 实例方法 + Snapshot 删除 + 阈值统一）；§12 追加于 2026-06-10（P2 修复组）；§13 追加于 2026-06-11（P5 回归验证 + 文档归档）；§14 追加于 2026-06-11（代码整理回 + I-1 engine 递升）
 - 关联：[ARCHITECTURE.md](./ARCHITECTURE.md) — "现在是什么"
 - 关联：[README.md](./README.md) — 文档索引
 - 完整日志（archived）：[_ARCHIEVED_02-PROGRESS.md](./_ARCHIEVED_02-PROGRESS.md)
