@@ -114,14 +114,15 @@ src/
 │
 ├ services/                             ⭐ S 层（顶层，与 utils/components 同级）
 │  ├ analysis.js                        ⭐ C1+C2+C3 升层
-│  ├ sessionPersistence.js              ⭐ E1 抽层（persistSession + persistSingleAnswer）
 │  ├ abilityProfile.js                  ⭐ Profile 类（load / computeDifficultyIdx / 强弱项查询）
 │  ├ adaptiveEngine.js                  ⭐ Engine 类（2026-06-10 升层自 utils/algorithm）
+│  ├ PracticeSession.js                 ⭐ session 域类（save / getAnswers / computeStats / CRUD）
 │  ├ chartBuilder.js                    ⭐ arch-v2.3 新建
 │  ├ operatorMap.js                     ⭐ arch-v2.3 新建
-│  ├ PracticeSession.js                 ⭐ session 域类
 │  ├ statsAggregator.js                 ⭐ 聚合统计
-│  └ index.js                           ✅ 桶导出（含 analysis / operatorMap / abilityProfile / adaptiveEngine / sessionPersistence / databaseInit）
+│  ├ wrongAnswerService.js              ⭐ 错题 CRUD（2026-06）
+│  ├ databaseInit.js                    ⭐ DB schema + 骨架类
+│  └ index.js                           ✅ 桶导出（含 analysis / operatorMap / abilityProfile / adaptiveEngine / PracticeSession / databaseInit）
 │
 ├ composables/                          C 层
 │  ├ useAdaptiveSession.js               ⭐ 含 completeGroup / afterAnswer / adjustNextQuestion
@@ -219,11 +220,10 @@ src/
 - 现行服务层样板: `src/services/chartBuilder.js` (Chart.js 封装)
   `src/services/operatorMap.js` (34 行, 单一来源)
   `src/services/analysis.js` (887 行, 升层)
-  `src/services/sessionPersistence.js` (含 persistSession + persistSingleAnswer)
+  `src/services/PracticeSession.js` (域类 + save / getAnswers / computeStats)
   `src/services/databaseInit.js` (Dexie 实例 + schema 骨架类, 纯叶子模块)
   `src/services/wrongAnswerService.js` (错题 CRUD)
-  `src/services/PracticeSession.js` (session 域类 + CRUD)
-  `src/services/adaptiveEngine.js` (Engine 类 + generateQuestionPlan / adjustNextQuestion 等方法)
+  `src/services/adaptiveEngine.js` (Engine 类)
   `src/services/statsAggregator.js` (聚合统计, 替代 useStatsQuery 内联)
 
 > **已删除死代理**：`src/utils/store/database.js` 和 `src/services/database.js` 已清理。所有调用方直引 `@/services/databaseInit`。

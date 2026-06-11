@@ -93,7 +93,7 @@ export {
 | `stores/practice.js:3` | `import { saveSession } from '@/utils/store/database'` | 🟡 v4.0c（小心）|
 | `stores/stats.js:3-12` | `import { getSessions, ... } from '@/utils/store/database'` | 🟡 v4.0c（小心）|
 | `services/abilityProfile.js:27` | `import { saveAbilitySnapshot } from '@/utils/store/database'` | 🟢 v4.0c |
-| `services/sessionPersistence.js:30` | `import db, { saveSession } from '@/utils/store/database'` | 🟢 v4.0c |
+| `services/PracticeSession.js` | `import { saveSession } from '@/services/PracticeSession'` | 🟢 v4.0c |
 | `views/ResetData.vue:32` | `import { clearAllData } from '@/utils/store/database'` | 🟢 v4.0c |
 | `utils/services/__tests__/analysis.spec.js:10` | `import db from '@/utils/store/database'` | 🟢 v4.0c |
 | `services/__tests__/analysis.spec.js:10` | `import db from '@/utils/store/database'` | 🟢 v4.0c |

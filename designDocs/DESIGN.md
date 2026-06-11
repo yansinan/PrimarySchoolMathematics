@@ -381,9 +381,8 @@ src/
 │  ├─ adaptiveEngine.js    // Engine 类（P5 出题策略 + pickInputMode / evaluateGroup / diversifyBatch）
 │  ├─ abilityProfile.js    // Profile 类（load / computeDifficultyIdx / 强/弱项查询）
 │  ├─ analysis.js          // 诊断分析
-│  ├─ PracticeSession.js   // session 域类
+│  ├─ PracticeSession.js   // session 域类（save / getAnswers / computeStats / CRUD）
 │  ├─ wrongAnswerService.js// 错题 DB CRUD
-│  ├─ sessionPersistence.js// 持久化
 │  ├─ statsAggregator.js   // 聚合统计
 │  └─ databaseInit.js      // DB schema
 ├─ composables/
@@ -403,7 +402,7 @@ src/
 ## 11. 已知约束 / TODO
 
 - [ ] `blankMode='mixed'` 填空位置未实现（`diversifyBatch` 强制 result 填空）
-- [ ] `getGroupSize` 仍使用 `Math.random()`（每次刷新会变），未持久化
+- [x] `getGroupSize` 使用 `Math.random()`（每次刷新会变）— **已持久化到 `engine.lastGroupSize`**（`IMPLEMENTATION_HISTORY.md §13`）
 - [ ] `generateDistractors` 偶有重复（用 `Set` 兜底）
 - [ ] 诊断只 5 道题，每等级 1 道，可能误判（"错 1 道即薄弱"）
 - [ ] `feedbackType === 'wrong'` 弹窗后是否中止 → 阈值 `2` 由 `ASSESSMENT_ABORT_WRONG_STREAK` 控制
