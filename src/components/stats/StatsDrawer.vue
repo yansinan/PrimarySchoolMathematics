@@ -160,6 +160,13 @@
                   <template v-if="sessionStats[session.id].completion >= 1">✓</template>
                   <template v-else>{{ Math.round(sessionStats[session.id].completion * 100) }}%</template>
                 </span>
+                <el-tag
+                  v-if="sessionStats[session.id]?.accuracy != null"
+                  size="small"
+                  :type="accuracyTagType(sessionStats[session.id].accuracy)"
+                  effect="dark"
+                  class="session-accuracy-tag"
+                >{{ Math.round(sessionStats[session.id].accuracy * 100) }}%</el-tag>
                 <el-icon class="session-item__arrow"><ArrowRight /></el-icon>
               </div>
             </div>
@@ -246,6 +253,12 @@ function accuracyColor(accuracy) {
   if (accuracy >= 0.8) return '#58cc71'
   if (accuracy >= 0.6) return '#e6a23c'
   return '#f56c6c'
+}
+
+function accuracyTagType(accuracy) {
+  if (accuracy >= 0.8) return 'success'
+  if (accuracy >= 0.6) return 'warning'
+  return 'danger'
 }
 
 // ── 游戏等级（P5: 游戏化设计） ──
@@ -519,6 +532,10 @@ onBeforeUnmount(() => {
 .session-item__arrow {
   color: #c0ccda;
   font-size: 14px;
+}
+
+.session-accuracy-tag {
+  margin-left: 2px;
 }
 
 .w-full {
