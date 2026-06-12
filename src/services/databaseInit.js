@@ -17,8 +17,9 @@ import Dexie from 'dexie'
 class PracticeSession {
   constructor() {
     this.studentId = 'default'; this.config = null
-    this.totalQuestions = 0; this.correctCount = 0; this.accuracy = 0
-    this.totalDuration = 0; this.evaluations = null
+    this.evaluations = null; this.practiceSessionId = null
+    this.profileSnapshot = null; this.finalProfileSnapshot = null
+    this.completed = false
     this.createdAt = new Date().toISOString(); this.synced = 0; this.updatedAt = new Date().toISOString()
   }
 }
@@ -26,20 +27,20 @@ class PracticeSession {
 class Answer {
   constructor() {
     this.sessionId = 0; this.equation = ''; this.solution = 0; this.userAnswer = 0
-    this.isCorrect = false; this.attemptCount = 1; this.score = 0
     this.responseTime = 0; this.operator = ''; this.isCarry = false
     this.isBorrow = false; this.stepCount = 1; this.operandMin = 0
-    this.operandMax = 0; this.timestamp = Date.now(); this.synced = 0
+    this.operandMax = 0; this.inputMode = ''; this.blankMode = 'result'
+    this.questionId = 0; this.questionIndex = 0; this.previousAttemptCount = 0
+    this.correctedAt = null; this.startedAt = Date.now(); this.endedAt = null
+    this.practiceSessionId = null
+    this.timestamp = Date.now(); this.synced = 0
   }
 }
 
 class Question {
   constructor() {
     this.equation = ''; this.solution = 0; this.operator = ''
-    this.operandMin = 0; this.operandMax = 0; this.operands = []
-    this.isCarry = false; this.isBorrow = false; this.difficulty = 0
-    this.inputMode = ''; this.layout = ''; this.assistLevel = 0
-    this.blankMode = 'result'; this.createdAt = Date.now(); this.synced = 0
+    this.createdAt = Date.now(); this.synced = 0
   }
 }
 
@@ -66,6 +67,12 @@ class PracticeDB extends Dexie {
       practiceSessions: '++id, studentId, createdAt, synced, updatedAt',
       answers: '++id, sessionId, questionId, isCorrect, startedAt, synced, timestamp',
       questions: '++id, &equation, operator, difficulty, createdAt, *operands',
+    })
+    // v5: practiceSessionId 索引
+    this.version(5).stores({
+      practiceSessions: '++id, studentId, createdAt, synced, updatedAt, practiceSessionId',
+      answers: '++id, sessionId, questionId, startedAt, synced, timestamp, practiceSessionId',
+      questions: '++id, &equation, operator, createdAt, synced',
     })
 
     this.practiceSessions.mapToClass(PracticeSession)

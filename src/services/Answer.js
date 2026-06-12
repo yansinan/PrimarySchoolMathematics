@@ -5,21 +5,32 @@
  *          └─ schema 骨架    └─ 题元数据+查询   └─答题数据+getter  └─错题专用
  *
  * extends Question — 继承题目元数据 + 添加答题元数据。
- * 区分：
- * - 存储字段：question 数据 + 答题数据 + 时间戳
- * - 派生字段（getter）：isCorrect / level / attemptCount / score / isWrong / isFixed
+ * 从 Question 继承的静态方法：fromJSON / save / getAll / findByOperator / findByEquation
+ *   filterByLevel / findByOperands / findEquivalent / findRelated / loadByIds / matchLevel / ...（见 Question）
+ * ⚠ 注意：all static query methods on Question operate on DB.questions; Answer's operate on DB.answers.
  *
- * 存储：
- *   旧 plain object（isCorrect/attemptCount/score 直接存）→ 新 Answer 实例
- *   调用 toJSON() 转为 plain object 存 db
- *   读取时 Answer.fromJSON(plain) 包成实例
+ * ▸ 本类职责：答题数据 + 派生 getter + DB.answers 表 CRUD。单条 answer 的读写查删。
  *
- * @see utils/algorithm/question.js — 父类
- * @see utils/algorithm/wrongAnswer.js — 子类（错题）
- * @see ARCHITECTURE.md § 1.1 U 层
+ * ▸ 子类 WrongAnswer 继承的静态方法（勿在 WrongAnswer 重复定义）:
+ *   save(), isCorrect(), computeMastery(), sumScores(), getLearningCurve(),
+ *   getAllByStudent(), findBySession(), findByPracticeSessionId(), findBySessions(),
+ *   getAll(), findByQuestionId(), findByQuestionIds(), getOrphans(),
+ *   updateOne(), deleteOne(), bulkDelete(), deleteBySession()
+ *
+ * ▸ 方法分组速览:
+ *   ─ 派生 getter: isCorrect / attemptCount / isFixed / isWrong / score / effectiveResponseTime / isTimeout / isMastered
+ *   ─ 修正操作: markFixed() / unmarkFixed()
+ *   ─ 持久化: save(answerLike) — 写入 DB.answers 表 / toJSON()
+ *   ─ 查询（DB.answers）: getAllByStudent / findBySession / findByQuestionId / getAll / getOrphans / ...
+ *   ─ 写操作（DB.answers）: updateOne / deleteOne / bulkDelete / deleteBySession
+ *   ─ 聚合: computeMastery(answers) → Map / sumScores(answers) → number / getLearningCurve(questionId)
+ *   ─ 辅助: isRecent(days) / matchesOperand(min, max) / static isCorrect(answerLike)
+ *
+ * @see ./Question — 父类
+ * @see ./WrongAnswer — 子类（错题）
  */
 
-import { Question } from './question'
+import { Question } from './Question'
 import { DB } from '@/services/databaseInit'
 // 引入 DB Answer 确保 domain Answer 覆盖其全部字段
 import { Answer as DBAnswer } from '@/services/databaseInit'
@@ -66,11 +77,6 @@ export class Answer extends Question {
     return Math.max(0, 1 - (this.attemptCount - 1) / 3)
   }
 
-  /** 答对且非修正（即"真正掌握"） */
-  get isMastered() {
-    return this.isCorrect && !this.isFixed
-  }
-
   /**
    * 有效 responseTime（兜底计算）
    * - 优先用 this.responseTime（v1/v2 旧字段，可能为 0/undefined）
@@ -92,6 +98,53 @@ export class Answer extends Question {
   get isTimeout() {
     const rt = this.effectiveResponseTime
     return rt != null && (rt < 200 || rt > 5 * 60 * 1000)
+  }
+
+  // ── 掌握值管理（从 Question 迁入）──
+
+  /** 答错一次扣除的掌握值 */
+  static MASTERY_WRONG_PENALTY = -100
+  /** 改正一次增加的掌握值 */
+  static MASTERY_CORRECT_REWARD = 30
+  /** 完全掌握阈值 */
+  static MASTERY_THRESHOLD = 100
+  /** 不同 inputMode 的额外掌握值加成（在 MASTERY_CORRECT_REWARD 基础上追加） */
+  static MASTERY_MODE_BONUS = {
+    horizontal_keypad: 20,
+    vertical_keypad: 10,
+    choice2: 0,
+    choice4: 5,
+  }
+
+  /** 是否已完全掌握（基于外部预计算的 mastery 字段，非 async getter） */
+  get isMastered() {
+    return (this.mastery ?? 0) >= Answer.MASTERY_THRESHOLD
+  }
+
+  /**
+   * 从一组 answer 记录中归算各 equation 的掌握值
+   * @param {Array} answers — Answer-like 实例或 plain object
+   * @returns {Map<string, number>} key=`equation_solution` → mastery
+   */
+  static computeMastery(answers) {
+    const map = new Map()
+    for (const a of answers) {
+      const key = `${a.equation || ''}_${a.solution}`
+      if (!map.has(key)) map.set(key, 0)
+      const correct = Number(a.userAnswer) === Number(a.solution)
+      if (correct) {
+        if ((a.previousAttemptCount ?? 0) > 0) {
+          const bonus = Answer.MASTERY_MODE_BONUS[a.inputMode] || 0
+          map.set(key, map.get(key) + Answer.MASTERY_CORRECT_REWARD + bonus)
+        }
+      } else {
+        map.set(key, map.get(key) + Answer.MASTERY_WRONG_PENALTY)
+      }
+    }
+    for (const [k, v] of map) {
+      map.set(k, Math.max(-999, Math.min(Answer.MASTERY_THRESHOLD, v)))
+    }
+    return map
   }
 
   // ── 业务操作 ──
@@ -127,6 +180,7 @@ export class Answer extends Question {
       // 系统字段
       sessionId: this.sessionId,
       questionId: this.questionId,
+      practiceSessionId: this.practiceSessionId,
     }
   }
 
@@ -145,7 +199,18 @@ export class Answer extends Question {
     const plain = answerLike instanceof Answer
       ? answerLike.toJSON()
       : JSON.parse(JSON.stringify(answerLike))
-    await DB.answers.put(plain)
+
+    // 自动补齐 questionId
+    if (!plain.questionId && plain.equation) {
+      try {
+        const q = await DB.questions.where('equation').equals(plain.equation).first()
+        if (q?.id) plain.questionId = q.id
+      } catch {
+        // question may not exist yet; skip
+      }
+    }
+
+    return await DB.answers.put(plain)
   }
 
   // ── 静态方法（不受实例限制） ──
@@ -226,6 +291,13 @@ export class Answer extends Question {
   static async findBySession(sessionId) {
     if (sessionId == null) return []
     const raw = await DB.answers.where('sessionId').equals(sessionId).toArray()
+    return raw.map(r => Answer.fromJSON(r))
+  }
+
+  /** 按 practiceSessionId 查 → Answer[] */
+  static async findByPracticeSessionId(psId) {
+    if (psId == null) return []
+    const raw = await DB.answers.where('practiceSessionId').equals(psId).toArray()
     return raw.map(r => Answer.fromJSON(r))
   }
 

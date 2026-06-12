@@ -16,8 +16,11 @@ export * from './operatorMap'
 export * from './abilityProfile'
 // 自适应引擎 (2026-06-10 升层自 utils/algorithm)
 export * from './adaptiveEngine'
-// PracticeSession 域类 + CRUD（含 save 静态方法继承 sessionPersistence 职责）
+// PracticeSession 域类 + CRUD
 export * from './PracticeSession'
-// 注意: wrongAnswerService 不走桶 — 与 analysis.js#getWrongAnswers 同名冲突
-// 调用方直引: import { getWrongAnswers } from '@/services/wrongAnswerService'
-export * from './databaseInit'
+// 领域模型 (2026-06-12 迁自 utils/algorithm)
+export * from './Question'
+export * from './Answer'
+export * from './WrongAnswer'
+// 领域模型 (2026-06-12 迁自 utils/algorithm，含原 wrongAnswerService CRUD)
+export { DB } from './databaseInit'

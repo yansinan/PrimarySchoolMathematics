@@ -30,9 +30,8 @@ import { getGroupComment, getCommentByRate } from '@/constants/practice'
 import { sumResponseTimes } from '@/utils/score'
 import { TARGET_LIMITS } from '@/utils/form/formDefaults'
 import { formatDuration } from '@/utils/time/timeFormat'
-import { getWrongAnswers } from '@/services/wrongAnswerService'
-import { Answer, WrongAnswer } from '@/utils/algorithm'
-import { Question } from '@/utils/algorithm/question'
+import { Answer, WrongAnswer } from '@/services'
+import { PracticeSession } from '@/services/PracticeSession'
 
 /**
  * 自适应会话 composable 工厂
@@ -52,23 +51,10 @@ export function useAdaptiveSession(options = {}) {
   const router = options.router || useRouter()
   const statsStore = options.statsStore || useStatsStore()
   const dialogs = options.dialogs || usePracticeDialogs()
-  const saver = options.saver || usePracticeSaver()
+  let _profileForSaver = null
+  const saver = options.saver || usePracticeSaver(() => _profileForSaver)
 
-    // 加载错题库：去重+聚合+实时计算掌握值
-  async function loadWrongPool() {
-    const raw = await getWrongAnswers({ days: 90, limit: 200 })
-    const deduped = WrongAnswer.dedup(raw)
-    // 重新计算掌握值（基于全部 db.answers）
-    const allRows = await Answer.getAll()
-    const masteryMap = Question.computeMastery(allRows)
-    for (const a of deduped) {
-      const key = `${a.equation || ''}_${a.solution}`
-      a.mastery = masteryMap.get(key) ?? 0
-    }
-    return deduped.filter(a => !a.isMastered)
-  }
 
-  // ── 响应式状态 ──
   /** 自适应引擎实例（由 createAdaptiveEngine 创建） */
   const adaptiveEngine = ref(null)
   /** 当前组序号（从 1 开始） */
@@ -148,7 +134,10 @@ export function useAdaptiveSession(options = {}) {
       targetMin,
       targetMax,
     })
-    engine.wrongAnswerPool = await loadWrongPool()
+    // 暂存 profile 快照（第一题写入时一并创建 session）
+    practiceStore.session._pendingProfileSnapshot = dbProfile.snapshot()
+    _profileForSaver = dbProfile
+    engine.wrongAnswerPool = await WrongAnswer.loadPool(dbProfile)
     adaptiveEngine.value = engine
     adaptiveGroupIndex.value = 1
     // 同步到 store
@@ -212,7 +201,10 @@ export function useAdaptiveSession(options = {}) {
       targetMin,
       targetMax,
     })
-    engine.wrongAnswerPool = await loadWrongPool()
+    _profileForSaver = dbProfile
+    // 暂存 profile 快照（第一题写入时一并创建 session）
+    practiceStore.session._pendingProfileSnapshot = dbProfile.snapshot()
+    engine.wrongAnswerPool = await WrongAnswer.loadPool(dbProfile)
     adaptiveEngine.value = engine
     adaptiveGroupIndex.value = 1
     practiceStore.currentDifficultyIdx = dbProfile.difficultyIdx
@@ -317,7 +309,15 @@ export function useAdaptiveSession(options = {}) {
       } catch { /* 弹窗异常 → action 保持 'close' */ }
 
       // 无论 action 是什么, 都先保存到数据库
-      await saver.saveAdaptiveFinal(finalAnswers, (result.engine && result.engine.history) || [])
+      const profile = _profileForSaver
+      const history = (result.engine && result.engine.history) || []
+      const evaluations = (history || [])
+        .filter(h => h.evaluation != null)
+        .map(h => ({ group: h.groupIdx, score: h.evaluation }))
+      await saver.saveSessionFinal({
+        evaluations: evaluations.length ? JSON.stringify(evaluations) : null,
+        finalProfileSnapshot: profile?.snapshot ? profile.snapshot() : null,
+      })
       practiceStore.setListPractices([])
 
       if (action === 'confirm') {
@@ -366,10 +366,14 @@ export function useAdaptiveSession(options = {}) {
   async function afterAnswer() {
     if (!adaptiveEngine.value) return
     const eng = adaptiveEngine.value
-    // 刷新错题池（含掌握值重算）
-    eng.wrongAnswerPool = await loadWrongPool()
-
+    const profile = _profileForSaver || eng.profile
     const roundAnswers = [...session.value.answers]
+
+    // 加载错题池（读 profile.masteryMap，不再 getAll）
+    if (profile) {
+      eng.wrongAnswerPool = await WrongAnswer.loadPool(profile)
+    }
+
     adaptiveEngine.value.adjustNextQuestion(
       roundAnswers,
       practiceStore.session.currentIndex,

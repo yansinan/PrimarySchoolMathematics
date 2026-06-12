@@ -5,8 +5,7 @@
  * @see utils/algorithm/answer.js
  */
 import { describe, it, expect } from 'vitest'
-import { Question } from '@/utils/algorithm/question'
-import { Answer } from '@/utils/algorithm/answer'
+import { Question, Answer } from '@/services'
 
 // ── Question 类 ──────────────────────────────────────────────────
 
@@ -49,10 +48,8 @@ describe('Question', () => {
     expect(q.difficulty).toBe(0)
     expect(q.operandMin).toBe(0)
     expect(q.operandMax).toBe(0)
-    expect(q.operands).toEqual([])
     expect(q.isCarry).toBe(false)
     expect(q.isBorrow).toBe(false)
-    expect(q.blankMode).toBe('result')
     expect(q.synced).toBe(0)
   })
 
@@ -237,14 +234,22 @@ describe('Answer', () => {
     })
   })
 
-  describe('isMastered getter', () => {
-    it('true when isCorrect=true and isFixed=false', () => {
-      const a = new Answer({ ...questionPart, ...answerPart, userAnswer: 70, solution: 70 })
+  describe('isMastered getter (mastery-based)', () => {
+    it('true when mastery >= MASTERY_THRESHOLD', () => {
+      const a = new Answer({ equation: '23+47=', solution: 70, userAnswer: 70 })
+      a.mastery = 100
       expect(a.isMastered).toBe(true)
     })
 
-    it('false when isCorrect=false (not mastered yet)', () => {
-      const a = new Answer({ ...questionPart, ...answerPart, userAnswer: 60, solution: 70 })
+    it('false when mastery < MASTERY_THRESHOLD', () => {
+      const a = new Answer({ equation: '23+47=', solution: 70, userAnswer: 70 })
+      a.mastery = 50
+      expect(a.isMastered).toBe(false)
+    })
+
+    it('false when no mastery set (undefined)', () => {
+      const a = new Answer({ equation: '23+47=', solution: 70, userAnswer: 70 })
+      expect(a.mastery).toBeUndefined()
       expect(a.isMastered).toBe(false)
     })
   })
@@ -275,7 +280,6 @@ describe('Answer', () => {
     expect(json.equation).toBe('23+47=__')
     expect(json.solution).toBe(70)
     expect(json.operator).toBe('+')
-    expect(json.operandMin).toBe(23)
     // Answer fields
     expect(json.userAnswer).toBe(60)
     expect(json.responseTime).toBe(1500)

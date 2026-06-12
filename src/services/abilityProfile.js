@@ -13,8 +13,7 @@
  *  - services/adaptiveEngine.js — Engine 类
  */
 
-import { Answer } from '@/utils/algorithm/answer'
-import { Question } from '@/utils/algorithm/question'
+import { Answer, Question } from '@/services'
 import { DIFFICULTY_LEVELS } from '@/constants/difficulty'
 import { STRONG_THRESHOLD, WEAK_THRESHOLD } from '@/constants/practice'
 
@@ -32,11 +31,12 @@ import { STRONG_THRESHOLD, WEAK_THRESHOLD } from '@/constants/practice'
  * @see utils/algorithm/adaptiveEngine.js — computeDifficultyIdx（原 U 层函数已 inline）
  */
 export class Profile {
-  /** @param {{ difficultyIdx: number, strongLevelIndices: number[], weakLevelIndices: number[], _rawAnswers?: Array }} data */
+  /** @param {{ difficultyIdx: number, strongLevelIndices: number[], weakLevelIndices: number[], _rawAnswers?: Array, masteryMap?: Map }} data */
   constructor(data = {}) {
     this.difficultyIdx = data.difficultyIdx ?? 0
     this.strongLevelIndices = data.strongLevelIndices ?? []
     this.weakLevelIndices = data.weakLevelIndices ?? []
+    this.masteryMap = data.masteryMap || new Map()
     /** @private 原始 DB 行，供调用方复用避免重复查询 */
     this._rawAnswers = data._rawAnswers ?? null
   }
@@ -59,6 +59,53 @@ export class Profile {
   isWeak(levelIdx) { return this.weakLevelIndices.includes(levelIdx) }
 
   /**
+   * 返回当前用户状态快照（可序列化，用于 session 前后对比）
+   * @returns {Object}
+   */
+  snapshot() {
+    return {
+      difficultyIdx: this.difficultyIdx,
+      strongLevelIndices: [...this.strongLevelIndices],
+      weakLevelIndices: [...this.weakLevelIndices],
+      totalAnswered: (this._rawAnswers || []).length,
+      numMastered: this.masteryMap
+        ? [...this.masteryMap.values()].filter(v => v >= Answer.MASTERY_THRESHOLD).length
+        : 0,
+      createdAt: Date.now(),
+    }
+  }
+
+  /**
+   * 记录一条新 answer：写入 DB + 更新缓存 + 增量 mastery（O(1)）
+   * @param {Object|Answer} answerLike — Answer 实例或 raw answerEntry 对象
+   */
+  async recordAnswer(answerLike) {
+    if (!answerLike) return
+    const inst = answerLike instanceof Answer ? answerLike : new Answer(answerLike)
+    // 写入 DB（Answer.save 自动补齐 questionId）
+    await Answer.save(inst)
+    // 缓存追加
+    this._rawAnswers = this._rawAnswers || []
+    this._rawAnswers.push(inst)
+    // 增量更新 mastery
+    const key = `${inst.equation || ''}_${inst.solution}`
+    const cur = this.masteryMap?.get(key) ?? 0
+    let delta = 0
+    if (inst.isCorrect) {
+      if ((inst.previousAttemptCount ?? 0) > 0) {
+        const bonus = Answer.MASTERY_MODE_BONUS[inst.inputMode] ?? 0
+        delta = Answer.MASTERY_CORRECT_REWARD + bonus
+      }
+    } else {
+      delta = Answer.MASTERY_WRONG_PENALTY
+    }
+    if (delta !== 0) {
+      this.masteryMap = this.masteryMap || new Map()
+      this.masteryMap.set(key, Math.max(-999, Math.min(Answer.MASTERY_THRESHOLD, cur + delta)))
+    }
+  }
+
+  /**
    * 从 DB 加载用户画像
    * 唯一事实源：Answer.getAllByStudent 读 db.answers 全表。
    * 调用方：useAdaptiveSession.js（组边界刷新时 3 处调用）
@@ -70,10 +117,12 @@ export class Profile {
     const rows = await Answer.getAllByStudent(studentId)
     const answers = rows.map(r => Answer.fromJSON(r))
     const groups = Question.groupAnswersByLevel(answers)
+    const masteryMap = Answer.computeMastery(answers)
     return new Profile({
       difficultyIdx: Profile.computeDifficultyIdx(answers),
       strongLevelIndices: groups.filter(g => g.accuracy >= STRONG_THRESHOLD).map(g => g.levelIdx),
       weakLevelIndices: groups.filter(g => g.accuracy < WEAK_THRESHOLD).map(g => g.levelIdx),
+      masteryMap,
       _rawAnswers: rows,
     })
   }

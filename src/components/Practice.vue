@@ -431,8 +431,12 @@ const handlePracticeComplete = async () => {
   const correctAns = correctCount.value
   const rate = Math.round((correctAns / totalAns) * 100)
 
-  // 保存到 DB
-  await saver.savePracticeFinal()
+  // 非自适应练习完成时，传 finalProfileSnapshot（从 adaptiveEngine 或当前 profile 获取）
+  let finalProfile = null
+  if (adaptiveEngine?.value?.profile) {
+    finalProfile = adaptiveEngine.value.profile.snapshot()
+  }
+  await saver.saveSessionFinal({ finalProfileSnapshot: finalProfile })
 
   // 评语（抽到 constants/practice.getCommentByRate）
   const { emoji, comment, color: rateColor } = getCommentByRate(rate)
@@ -709,9 +713,20 @@ if (typeof window !== 'undefined') {
   }
 }
 
-/** 首次进入自动触发能力诊断 */
-onMounted(() => {
-  if (isIdle.value && listPractices.value.length === 0) {
+/** 页面载入自动触发能力诊断或恢复自适应 */
+onMounted(async () => {
+  if (listPractices.value.length > 0) return  // 已有题目，不干预
+  // 从 DB 实时计算是否有诊断画像
+  const { Profile } = await import('@/services/abilityProfile')
+  const profile = await Profile.load()
+  const hasAssessment = profile.difficultyIdx > 0 || profile.strongLevelIndices.length > 0
+
+  if (hasAssessment) {
+    practiceStore.setPhase('practice')
+    practiceStore.resetPracticeSession()
+    await startNewAdaptiveSession()
+  } else {
+    practiceStore.setPhase('idle')
     startNewDiagnosticSession()
   }
 })

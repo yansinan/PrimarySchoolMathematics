@@ -1,4 +1,4 @@
-import { Answer } from '@/utils/algorithm/answer'
+import { Answer } from '@/services'
 
 /**
  * 题目得分工具

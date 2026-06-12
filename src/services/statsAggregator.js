@@ -8,7 +8,7 @@
  * @see utils/algorithm/answer.js — Answer.sumScores
  */
 
-import { Answer } from '@/utils/algorithm/answer'
+import { Answer } from '@/services'
 import { PracticeSession } from './PracticeSession'
 import { parseEquation } from '@/utils/algorithm/equationParser'
 
@@ -36,13 +36,15 @@ export async function getAggregatedStats(studentId = 'default') {
   const targetSessions = [...groups.values(), ...standalone]
   if (!targetSessions.length) return emptyStats()
 
-  const sessionIds = targetSessions.map(s => s.id)
-  // 加载 session 关联的答案 + 游离答案（savePerQuestion 写入的无 sessionId 记录）
-  const [attached, orphans] = await Promise.all([
-    Answer.findBySessions(sessionIds),
+  const sessionIds = targetSessions.filter(s => !s.practiceSessionId).map(s => s.id)
+  const practiceSessionIds = [...new Set(targetSessions.filter(s => s.practiceSessionId).map(s => s.practiceSessionId))]
+  // 加载答案：practiceSessionId（新数据）或 sessionId（旧数据）+ 游离答案
+  const [byPsid, bySid, orphans] = await Promise.all([
+    Promise.all(practiceSessionIds.map(psId => Answer.findByPracticeSessionId(psId))).then(r => r.flat()),
+    sessionIds.length ? Answer.findBySessions(sessionIds) : [],
     Answer.getOrphans(),
   ])
-  const allAnswers = [...attached, ...orphans]
+  const allAnswers = [...byPsid, ...bySid, ...orphans]
   // Answer.findBySessions/getOrphans 已返回 Answer 实例，getter 可用
   // 游离答案用 timestamp 过滤：只取所属 sessions 时间范围内的
   const sessionDateRange = targetSessions.length > 0

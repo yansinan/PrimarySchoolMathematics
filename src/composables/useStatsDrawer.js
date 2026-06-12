@@ -31,6 +31,7 @@ export function useStatsDrawer() {
   const aggregatedStats = computed(() => statsStore.aggregatedStats)
   const overallAccuracyPercent = computed(() => statsStore.overallAccuracyPercent)
   const sessions = computed(() => statsStore.sessions)
+  const sessionStats = computed(() => statsStore.sessionStats)
   const accuracyTrend = computed(() => statsStore.accuracyTrend)
   const operatorBreakdown = computed(() => statsStore.operatorBreakdown)
   const allAnswers = computed(() => statsStore.allAnswers)
@@ -98,7 +99,7 @@ export function useStatsDrawer() {
 
   return {
     isDrawerOpen, toggleDrawer, loading, aggregatedStats, overallAccuracyPercent,
-    sessions, accuracyTrend, operatorBreakdown, allAnswers,
+    sessions, sessionStats, accuracyTrend, operatorBreakdown, allAnswers,
     openSessionDetail,
     refreshAll: refreshAllDrawer,
     openDrawer,

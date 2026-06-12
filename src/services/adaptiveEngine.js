@@ -30,8 +30,7 @@ import {
   EVAL_WEAK_THRESHOLD,
 } from '@/constants/practice'
 import { DIFFICULTY_LEVELS } from '@/constants/difficulty'
-import { Question } from '@/utils/algorithm/question'
-import { Answer, WrongAnswer } from '@/utils/algorithm'
+import { Question, Answer, WrongAnswer } from '@/services'
 import { generateOneQuestion } from '@/utils/algorithm/adaptiveBatch'
 
 // 小组题量阶梯（每个速度级别对应一个基数）
@@ -154,6 +153,10 @@ export class Engine {
     this.lastEvaluation = null
     this.lastGroupSize = 0
     this.history = []
+    /** 本 session 已出现的 equation 集合（跨组去重） */
+    this._seenEquations = new Set()
+    /** 本 session 已复习过的 equation 集合（防同一题多次复习） */
+    this._usedReviewKeys = new Set()
     this.baseConfig = {
       step: '1', whereIsResult: '0', enableBrackets: false,
       remainder: '3', solution: '0', numberOfPapers: 1,
@@ -189,8 +192,8 @@ export class Engine {
   }
 
   getGroupSize() {
-    const x = this.groupSizeIdx || 0
-    const base = 2 + 4 * x
+    const x = Math.min(this.groupSizeIdx || 0, GROUP_SIZES.length - 1)
+    const base = GROUP_SIZES[x]
     const jitter = Math.floor(Math.random() * 5) - 2
     const size = Math.max(4, base + jitter * 2)
     this.lastGroupSize = size
@@ -244,32 +247,45 @@ export class Engine {
     })
     engine.lastEvaluation = undefined  // 消费后重置，防止跨组污染
     engine.groupsAtThisLevel = (engine.groupsAtThisLevel || 0) + 1
+    // 递增题量档位（GROUP_SIZES: 6 → 10 → 14 → 18 → 22）
+    engine.groupSizeIdx = Math.min(GROUP_SIZES.length - 1, (engine.groupSizeIdx ?? 0) + 1)
     const isGood = rate >= ACCURACY_THRESHOLDS.good
     const isBad = rate < ACCURACY_THRESHOLDS.bad
     if (isGood) { engine.consecutiveGood++; engine.consecutiveBad = 0 }
     else if (isBad) { engine.consecutiveBad++; engine.consecutiveGood = 0 }
     else { engine.consecutiveGood = 0; engine.consecutiveBad = 0 }
 
-    let nextSize = this.getGroupSize()
+    engine.totalAnswered += total; engine.groupIndex++
+
     let done = false
+    if (engine.totalAnswered >= engine.targetMax) { done = true }
+
+    let nextSize = done ? 0 : this.getGroupSize()
+    // 不超 targetMax
+    if (!done && nextSize > 0) {
+      const remaining = engine.targetMax - engine.totalAnswered
+      if (remaining > 0) nextSize = Math.min(nextSize, remaining)
+    }
     const maxLevel = DIFFICULTY_LEVELS.length - 1
 
-    if (engine.totalAnswered >= engine.targetMax) { done = true }
-    else if (engine.consecutiveGood >= CONSECUTIVE_GOOD_TO_ADVANCE && engine.groupsAtThisLevel >= MIN_GROUPS_PER_DIMENSION) {
+    if (!done && engine.consecutiveGood >= CONSECUTIVE_GOOD_TO_ADVANCE && engine.groupsAtThisLevel >= MIN_GROUPS_PER_DIMENSION) {
       if (engine.difficultyIdx < maxLevel) {
         engine.difficultyIdx = Math.min(maxLevel, engine.difficultyIdx + 1)
         engine.assistLevel = Math.min(MAX_NORMAL_ASSIST_LEVEL, engine.assistLevel + 1)
         engine.groupsAtThisLevel = 0; engine.consecutiveGood = 0; engine.blankMode = 'result'
         nextSize = this.getGroupSize()
+        const remaining = engine.targetMax - engine.totalAnswered
+        if (remaining > 0) nextSize = Math.min(nextSize, remaining)
       } else { done = true }
-    } else if (engine.consecutiveBad >= CONSECUTIVE_GOOD_TO_ADVANCE && engine.groupsAtThisLevel >= MIN_GROUPS_PER_DIMENSION) {
+    } else if (!done && engine.consecutiveBad >= CONSECUTIVE_GOOD_TO_ADVANCE && engine.groupsAtThisLevel >= MIN_GROUPS_PER_DIMENSION) {
       if (engine.difficultyIdx > 0) {
         engine.difficultyIdx = Math.max(0, engine.difficultyIdx - 1)
         engine.assistLevel = 0; engine.groupsAtThisLevel = 0; engine.consecutiveBad = 0
         nextSize = this.getGroupSize()
+        const remaining = engine.targetMax - engine.totalAnswered
+        if (remaining > 0) nextSize = Math.min(nextSize, remaining)
       } else { done = true }
     }
-    engine.totalAnswered += total; engine.groupIndex++
     return { engine, nextGroupSize: nextSize || this.getGroupSize(), done, history: engine.history }
   }
 
@@ -327,15 +343,29 @@ export class Engine {
           return m && m.levelIdx <= this.difficultyIdx
         })
         if (candidates.length > 0) {
-          // 选 mastery 最低的（最不熟的优先复习）
-          const wa = candidates.reduce((best, c) =>
-            (c.mastery ?? 0) < (best.mastery ?? 0) ? c : best
-          )
-          const idx = this.wrongAnswerPool.indexOf(wa)
-          if (idx >= 0) this.wrongAnswerPool.splice(idx, 1)
-          listPractices[nextIdx] = buildReviewQuestion(wa)
-          isReview = true
+          // 排除本 session 已复习过的
+          const available = candidates.filter(c => {
+            const key = `${c.equation || ''}_${c.solution}`
+            return !this._usedReviewKeys.has(key)
+          })
+          if (available.length > 0) {
+            // 选 mastery 最低的（最不熟的优先复习）
+            const wa = available.reduce((best, c) =>
+              (c.mastery ?? 0) < (best.mastery ?? 0) ? c : best
+            )
+            const idx = this.wrongAnswerPool.indexOf(wa)
+            if (idx >= 0) this.wrongAnswerPool.splice(idx, 1)
+            const reviewQ = buildReviewQuestion(wa)
+            this._usedReviewKeys.add(`${wa.equation || ''}_${wa.solution}`)
+            listPractices[nextIdx] = reviewQ
+            isReview = true
+          }
         }
+      }
+      // 复习题也加入 session 级去重集
+      if (isReview) {
+        const eqKey = (listPractices[nextIdx]?.equation || '').replace(/=$/, '')
+        this._seenEquations.add(eqKey)
       }
     }
     if (!isReview && nextIdx >= 0 && nextIdx < listPractices.length) {
@@ -349,9 +379,11 @@ export class Engine {
       const isCurrent = nextLevelIdx === this.difficultyIdx
       if (!inStrong && !inWeak && !isChallenge && !isCurrent) {
         // P2-1: 即时生成新题替换（不再从 reserve pool 预生成池中取）
-        // 用当前 listPractices 已用的 equation 作 seen 去重
-        const seen = new Set(listPractices.map(q => (q.equation || '').replace(/=$/, '')))
-        const fresh = generateOneQuestion(this.difficultyIdx, this, seen, 'swap')
+        // 将当前 listPractices 中已有方程加入 session 级去重集
+        for (const q of listPractices) {
+          this._seenEquations.add((q.equation || '').replace(/=$/, ''))
+        }
+        const fresh = generateOneQuestion(this.difficultyIdx, this, this._seenEquations, 'swap')
         if (fresh) {
           const diversified = this.diversifyBatch([fresh])
           if (diversified[0]) listPractices[nextIdx] = diversified[0]
@@ -379,13 +411,23 @@ export class Engine {
         this.difficultyIdx = Math.max(0, this.difficultyIdx - 1)
         // P2-1: 连续答错换更简单的题——即时生成（不再从 reserve pool 取）
         if (nextIdx >= 0 && nextIdx < listPractices.length) {
-          const seen = new Set(listPractices.map(q => (q.equation || '').replace(/=$/, '')))
-          const fresh = generateOneQuestion(this.difficultyIdx, this, seen, 'downshift')
+          // 将当前 listPractices 中已有方程加入 session 级去重集
+          for (const q of listPractices) {
+            this._seenEquations.add((q.equation || '').replace(/=$/, ''))
+          }
+          const fresh = generateOneQuestion(this.difficultyIdx, this, this._seenEquations, 'downshift')
           if (fresh) {
             const diversified = this.diversifyBatch([fresh])
             if (diversified[0]) listPractices[nextIdx] = diversified[0]
           }
         }
+      }
+    }
+    // ─── 添加 downshift 路径的 listPractices 方程到 _seenEquations ───
+    if (!isReview && nextIdx >= 0 && nextIdx < listPractices.length) {
+      const q = listPractices[nextIdx]
+      if (q && q.equation) {
+        this._seenEquations.add((q.equation || '').replace(/=$/, ''))
       }
     }
     if (!roundAnswers || roundAnswers.length < 3) return

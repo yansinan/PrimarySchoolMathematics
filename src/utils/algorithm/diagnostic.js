@@ -7,8 +7,7 @@
  */
 
 import { EquationSolver } from './EquationSolver'
-import { Answer } from '@/utils/algorithm/answer'
-import { Question } from '@/utils/algorithm/question'
+import { Answer, Question } from '@/services'
 import { EVAL_WEAK_THRESHOLD } from '@/constants/practice'
 
 // ─── 难度等级定义 ───

@@ -758,3 +758,46 @@ practiceStore.currentDifficultyIdx = adaptiveEngine.value.difficultyIdx  // 取 
 - 关联：[README.md](./README.md) — 文档索引
 - 完整日志（archived）：[_ARCHIEVED_02-PROGRESS.md](./_ARCHIEVED_02-PROGRESS.md)
 - 完整计划（archived）：[_ARCHIEVED_04-PLAN-v2-architecture-refactor.md](./_ARCHIEVED_04-PLAN-v2-architecture-refactor.md) | [_ARCHIEVED_05-PLAN-v3-architecture-tuning.md](./_ARCHIEVED_05-PLAN-v3-architecture-tuning.md) | [_ARCHIEVED_09-PLAN-profile-engine-class.md](./_ARCHIEVED_09-PLAN-profile-engine-class.md) | [_ARCHIEVED_10-PLAN-encapsulate-methods.md](./_ARCHIEVED_10-PLAN-encapsulate-methods.md)
+
+---
+
+## 16. Q/A/W 迁 S 层 + barrel 冲突修复 + wrongAnswerService 删除（2026-06-12）
+
+**目标**：Question/Answer/WrongAnswer 从 `utils/algorithm/` 迁到 `services/`，文件名改为大写，全部 import 走 `@/services` 桶，删除 wrongAnswerService.js 和 4 个死方法。
+
+### 16.1 变更总览
+
+| 变更 | 文件 | 说明 |
+|------|------|------|
+| **迁 S 层** | `services/Question.js` / `Answer.js` / `WrongAnswer.js`（**新建**） | 从 `utils/algorithm/` 复制，import 路径改为 `./Question` / `./Answer` / `./Question` |
+| **删旧文件** | `utils/algorithm/question.js` / `answer.js` / `wrongAnswer.js`（**删除**） | 21 处 import 全部改 `@/services` 桶后清理 |
+| **删 barrel 导出** | `utils/algorithm/index.js` | 移除 3 条 `export *`，加注释 |
+| **修自适应** | `utils/algorithm/adaptiveBatch.js` | `import { Question } from './question'` → `@/services` |
+| **修测试引用** | `test/utils/algorithm/answer.spec.js` | `@/utils/algorithm/...` → `@/services` |
+| **修 barrel** | `services/index.js` | 加 3 个 `export *`；`export * from './databaseInit'` → `export { DB }`（修复 Question/Answer 被 schema 类覆盖的 bug） |
+| **删 wrongAnswerService.js** | `services/wrongAnswerService.js`（**删除**） | 6 个函数分析：getWrongAnswers/countWrongAnswers 是死包装；其余 4 个无 production 调用 → 直接删 |
+| **删 4 个死方法** | `services/WrongAnswer.js` | 删 `findByExactEquation` / `markCorrected` / `removeOne` / `clearAll`（0 production 调用） |
+| **类注释重写** | `Question.js` / `Answer.js` / `WrongAnswer.js` | 加继承方法清单 + 方法分组 + ⚠ 命名提醒，避免 agent 重复造轮子 |
+
+### 16.2 关键发现
+
+1. **barrel `export *` 陷阱**：`services/index.js` 的 `export * from './databaseInit'` 暴露了 schema 骨架类 `Question`（数据库字段构造器），**覆盖**了 domain `Question.js` 中带全部静态方法（`findEquivalent`/`getAll`/`loadByIds` 等）的域类。修复：改用 `export { DB }` 显式导。
+2. **wrongAnswerService.js 已死**：全部 6 个导出函数（`getWrongAnswers` / `countWrongAnswers` / `getWrongAnswerByEquation` / `markWrongAnswerCorrected` / `removeWrongAnswer` / `clearWrongAnswers`）**production 代码零调用**，仅被测试引用。迁入 WrongAnswer 再删掉。
+3. **所有读取 `isFixed`/`correctedAt` 的位置全走 getter**，无一处直接读 `raw.correctedAt`。
+
+### 16.3 git diff 统计
+
+| 变动 | 行 |
+|------|---:|
+| 文件新增 | +3（services/Question/Answer/WrongAnswer） |
+| 文件删除 | -4（utils/algorithm/ 旧 3 + services/wrongAnswerService.js） |
+| 文件修改 | ~20（import 路径 + barrel + 注释 + adaptiveBatch + test） |
+| 测试 | 118→105 项（删 4 个死方法对应的 13 个测试；修正 2 个 use markCorrected 的测试） |
+
+### 16.4 验证结果
+
+| 测试 | 结果 |
+|------|------|
+| `npx vitest run` | 105/105 PASS ✅ |
+| 浏览器模块加载 | 6 个导出函数全部正确解析 ✅ |
+| 端到端答题测试 | 答错 `938-246=__`，`getWrongAnswers()` 正确返回 1 条记录 ✅ |

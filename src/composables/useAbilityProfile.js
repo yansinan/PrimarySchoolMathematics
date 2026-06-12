@@ -3,8 +3,7 @@ import { storeToRefs } from 'pinia'
 import { usePracticeStore } from '@/stores/practice'
 import { useAbilityAnalysis } from '@/composables/useAbilityAnalysis'
 import { DIFFICULTY_LEVELS } from '@/constants/difficulty'
-import { Question } from '@/utils/algorithm/question'
-import { Answer } from '@/utils/algorithm/answer'
+import { Question, Answer } from '@/services'
 import { STRONG_THRESHOLD, WEAK_THRESHOLD } from '@/constants/practice'
 
 function resolveSource(source, fallback) {

@@ -10,9 +10,7 @@
  * - § 3.1 题目聚合（findEquivalent / findRelated / getMasteryByNumber）
  */
 
-import { Question } from '@/utils/algorithm/question'
-import { Answer } from '@/utils/algorithm/answer'
-import { WrongAnswer } from '@/utils/algorithm/wrongAnswer'
+import { Question, Answer, WrongAnswer } from '@/services'
 
 // ─── 辅助工具 ─────────────────────────────────────────────────────
 

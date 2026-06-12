@@ -73,6 +73,8 @@ export function useSubmitHandler({ practiceStore, saver }) {
       stepCount,
       operandMin,
       operandMax,
+      inputMode: currentQuestion.inputMode || '',
+      blankMode: currentQuestion.blankMode || 'result',
       questionIndex: newQuestionIndex,
     }
 

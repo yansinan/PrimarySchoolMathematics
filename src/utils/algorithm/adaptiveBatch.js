@@ -20,7 +20,7 @@
 import { createFormulasGenerator } from '../paperGenerator'
 import { EquationSolver } from './EquationSolver'
 import { DIFFICULTY_LEVELS } from '../../constants/difficulty'
-import { Question } from './question'
+import { Question } from '@/services'
 
 /**
  * 根据自适应引擎和排列方案生成一组题（仅主题库，不含 reserve）
@@ -32,7 +32,7 @@ import { Question } from './question'
  */
 export function generateAdaptiveBatch(engine, count, plan) {
   const questions = []
-  const seen = new Set()  // 去重
+  const seen = engine._seenEquations || new Set()  // 去重（跨组）
 
   for (const slotType of plan) {
     const levelIdx = pickLevelForSlot(engine, slotType)

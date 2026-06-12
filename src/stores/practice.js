@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
-import { Answer } from '@/utils/algorithm/answer'
+import { Answer } from '@/services'
 import { EMPTY_PARSED_EQUATION, getCarryType, parseEquation } from '@/utils/algorithm/equationParser'
-// E1: session 持久化已迁至 PracticeSession.save()
 
 export const usePracticeStore = defineStore('practice', {
   state: () => ({
@@ -21,6 +20,10 @@ export const usePracticeStore = defineStore('practice', {
       // P2-2: 诊断阶段答题 — 与练习阶段 session.answers 完全隔离
       // 防止诊断 5 道题污染练习统计（避免原 125% bug）
       diagnosticAnswers: [],
+      practiceSessionId: null,
+      sessionDbId: null,          // 对应 DB practiceSessions 表的 auto id (FK)
+      _pendingProfileSnapshot: null,  // 练习开始时暂存的 profile 快照（第一题写入时一并入库）
+      lastSavedAnswerCount: 0,
       currentAnswer: '',
       feedbackType: null,
       selectedOption: null,
@@ -71,11 +74,10 @@ export const usePracticeStore = defineStore('practice', {
     },
     /**
      * 诊断评估是否已完成。
-     * 实时计算：currentGroupIndex>=1 表示 completeAssessment 已执行过。
-     * 不存额外布尔字段，随 groupIndex 生命周期自动维护
-     * （Generate.vue 手动出题不走 completeAssessment，groupIndex 保持 0，故为 false）。
+     * phase === 'practice' 表示 completeAssessment 已执行过且进入练习模式。
+     * 不额外存字段，phase 在 completeAssessment 时持久化到 localStorage。
      */
-    assessmentCompleted: (state) => state.currentGroupIndex >= 1,
+    assessmentCompleted: (state) => state.phase === 'practice',
   },
   actions: {
     setGenerateDrawerVisible(value) {

@@ -8,7 +8,7 @@
  */
 
 import { DB, PracticeSession as SchemaSession } from './databaseInit'
-import { Answer } from '@/utils/algorithm/answer'
+import { Answer } from '@/services'
 import { sumResponseTimes } from '@/utils/score'
 import { DIFFICULTY_LEVELS } from '@/constants/difficulty'
 
@@ -21,90 +21,62 @@ export class PracticeSession extends SchemaSession {
   }
 
   /**
-   * 保存一个练习 session（含答案）
-   *
+   * 练习开始：创建 session 空壳（先于任何 answer，保证 FK 完整性）
    * @param {Object} options
-   * @param {Array}  options.answers         - session.answers 原始数据（含跨组重复，不去重）
-   * @param {Object} [options.configSnapshot] - Generate.vue 传来的 config 快照
-   * @param {string} [options.evaluations]   - JSON 字符串或 null
+   * @param {string} options.practiceSessionId
+   * @param {Object} [options.configSnapshot] — 练习配置快照
+   * @param {Object} [options.profileSnapshot] — 用户状态快照（开始前）
    * @param {string} [options.studentId='default']
-   * @param {string} [options.practiceSessionId] — 练轮次 ID，同一轮所有 session 共用
-   * @returns {Promise<number|null>} sessionId 或 null（失败时）
+   * @returns {Promise<number|null>}
    */
-  static async save({
-    answers,
-    configSnapshot,
-    evaluations,
-    studentId = 'default',
-    practiceSessionId = null,
-  }) {
-    if (!answers || !answers.length) return null
-
-    // 按 questionIndex 去重,确保每个问题只算 1 次
-    const seen = new Set()
-    const uniqueAnswers = answers.filter((a) => {
-      const key = a.questionIndex ?? a.equation
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
-
+  static async create({ practiceSessionId, configSnapshot, profileSnapshot, evaluations, completed, studentId = 'default' } = {}) {
+    if (!practiceSessionId) return null
     const now = new Date().toISOString()
-    const session = {
-      studentId,
-      config: configSnapshot || null,
-      practiceSessionId,
-      totalQuestions: uniqueAnswers.length,
-      // correctCount / accuracy / totalDuration: 不写——由 computeStats 实时算
-      evaluations: evaluations || null,
-      createdAt: now,
-      synced: 0,
-      updatedAt: now,
-    }
-
-    const answersData = answers.map((a) => ({
-      equation: a.equation || '',
-      solution: a.solution ?? 0,
-      userAnswer: a.userAnswer ?? 0,
-      // isCorrect / score / attemptCount: 不写——由 Answer.getter 实时算
-      responseTime: a.responseTime || 0,
-      operator: a.operator || '',
-      isCarry: !!a.isCarry,
-      isBorrow: !!a.isBorrow,
-      stepCount: a.stepCount || 1,
-      operandMin: a.operandMin ?? 0,
-      operandMax: a.operandMax ?? 0,
-      inputMode: a.inputMode || '',
-      blankMode: a.blankMode || 'result',
-      timestamp: a.timestamp || Date.now(),
-      synced: 0,
-    }))
-
     try {
-      const id = await DB.transaction('rw', DB.practiceSessions, DB.answers, async () => {
-        const sessionId = await DB.practiceSessions.add(session)
-        const CHUNK = 500
-        for (let i = 0; i < answersData.length; i += CHUNK) {
-          const chunk = answersData.slice(i, i + CHUNK).map(a => ({ ...a, sessionId }))
-          await DB.answers.bulkAdd(chunk)
-        }
-        return sessionId
+      return await DB.practiceSessions.add({
+        studentId,
+        practiceSessionId,
+        config: configSnapshot || null,
+        profileSnapshot: profileSnapshot || null,
+        evaluations: evaluations || null,
+        completed: completed === true,
+        createdAt: now,
+        synced: 0,
+        updatedAt: now,
       })
-      if (import.meta.env.DEV) {
-        console.log(
-          `[PracticeSession] Session saved: #${id}, ${answers.length} questions`,
-        )
-      }
-      return id
     } catch (err) {
-      console.error('[PracticeSession] Failed to save session:', err)
+      console.error('[PracticeSession] Failed to create session:', err)
       return null
     }
   }
 
   /**
+   * 组/轮完成：更新 session metadata（不写 answers）
+   * @param {Object} options
+   * @param {string} options.practiceSessionId
+   * @param {string} [options.evaluations] — JSON 字符串
+   * @param {Object} [options.finalProfileSnapshot] — 结束时的用户状态
+   * @returns {Promise<number>} 更新的记录数
+   */
+  static async update({ practiceSessionId, evaluations, finalProfileSnapshot } = {}) {
+    if (!practiceSessionId) return 0
+    try {
+      return await DB.practiceSessions
+        .where('practiceSessionId').equals(practiceSessionId)
+        .modify({
+          ...(evaluations != null ? { evaluations } : {}),
+          ...(finalProfileSnapshot != null ? { finalProfileSnapshot, completed: true } : {}),
+          updatedAt: new Date().toISOString(),
+        })
+    } catch (err) {
+      console.error('[PracticeSession] Failed to update session:', err)
+      return 0
+    }
+  }
+
+  /**
    * 本 session 关联的所有答案（Answer 实例，走 getter）
-   * @returns {Promise<import('@/utils/algorithm/answer').Answer[]>}
+   * @returns {Promise<import('@/services').Answer>}
    */
   async getAnswers() {
     const raws = await DB.answers.where('sessionId').equals(this.id).sortBy('timestamp')
@@ -179,16 +151,30 @@ export class PracticeSession extends SchemaSession {
    */
   static async getBatchSessionStats(sessions) {
     if (!sessions.length) return new Map()
-    const ids = sessions.map(s => s.id)
-    const rows = await Answer.findBySessions(ids)
+    // 用 practiceSessionId 分组查 answers（而非 sessionId）
+    const psIds = [...new Set(sessions.filter(s => s.practiceSessionId).map(s => s.practiceSessionId))]
+    const standaloneIds = sessions.filter(s => !s.practiceSessionId).map(s => s.id)
+    const allRows = []
+    if (psIds.length) {
+      const byPsid = (await DB.answers
+        .where('practiceSessionId').anyOf(psIds).toArray())
+        .map(r => Answer.fromJSON(r))
+      allRows.push(...byPsid)
+    }
+    if (standaloneIds.length) {
+      const bySid = await Answer.findBySessions(standaloneIds)
+      allRows.push(...bySid)
+    }
     const grouped = {}
-    for (const a of rows) {
-      if (!grouped[a.sessionId]) grouped[a.sessionId] = []
-      grouped[a.sessionId].push(a)
+    for (const a of allRows) {
+      const key = a.practiceSessionId || a.sessionId
+      if (!grouped[key]) grouped[key] = []
+      grouped[key].push(a)
     }
     const statsObj = {}
     for (const s of sessions) {
-      statsObj[s.id] = PracticeSession.computeSessionStats(s, grouped[s.id] || [])
+      const key = s.practiceSessionId || s.id
+      statsObj[s.id] = PracticeSession.computeSessionStats(s, grouped[key] || [])
     }
     return statsObj
   }
@@ -221,18 +207,42 @@ export class PracticeSession extends SchemaSession {
   /** 获取 session 详情（含 answers + siblings） */
   static async getDetail(sessionId) {
     const session = await DB.practiceSessions.get(sessionId)
-    const answers = sessionId != null ? await Answer.findBySession(sessionId) : []
-
-    let siblings = []
+    // 用 practiceSessionId 查 answers（sessionId 只对应第一条 savePerQuestion 的 session）
+    let answers = []
     if (session && session.practiceSessionId) {
-      const raw = await PracticeSession.findByPracticeSessionId(session.practiceSessionId)
-      const filtered = raw.filter(s => s.id !== sessionId)
-      siblings = await Promise.all(filtered.map(async s => ({
-        session: s,
-        answers: await Answer.findBySession(s.id),
-      })))
+      answers = await Answer.findByPracticeSessionId(session.practiceSessionId)
     }
 
+    let siblings = []
+    let consumed = 0
+    if (session && session.practiceSessionId) {
+      const totalAnswers = answers.length
+      // 按 createdAt 排序，跳过无 evaluations 的（savePerQuestion 创建的空壳）
+      const checkpoints = (await PracticeSession.findByPracticeSessionId(session.practiceSessionId))
+        .filter(s => s.id !== sessionId && s.evaluations)
+        .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''))
+      for (const s of checkpoints) {
+        let groupSize = 0
+        try {
+          const evals = typeof s.evaluations === 'string' ? JSON.parse(s.evaluations) : s.evaluations
+          if (Array.isArray(evals) && evals.length) {
+            const last = evals[evals.length - 1]
+            groupSize = last?.count || 0
+          }
+        } catch { /* ignore */ }
+        if (!groupSize) {
+          groupSize = Math.floor(totalAnswers / (checkpoints.length + 1))
+        }
+        const sliceEnd = Math.min(consumed + groupSize, totalAnswers)
+        siblings.push({ session: s, answers: answers.slice(consumed, sliceEnd) })
+        consumed = sliceEnd
+      }
+      if (consumed < totalAnswers) {
+        answers = answers.slice(consumed)
+      } else {
+        answers = []
+      }
+    }
     return { session, answers, siblings }
   }
 
@@ -242,6 +252,12 @@ export class PracticeSession extends SchemaSession {
     return await DB.practiceSessions
       .where('practiceSessionId').equals(practiceSessionId)
       .sortBy('createdAt')
+  }
+
+  /** 查某学生全部 session（不分组合，供 clearWrongAnswers 之类用） */
+  static async findAllByStudent(studentId = 'default') {
+    return await DB.practiceSessions
+      .where('studentId').equals(studentId).toArray()
   }
 
   /** 删除 session 及其所有 answer */

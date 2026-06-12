@@ -51,14 +51,20 @@ function mkAnswer(overrides = {}) {
 }
 
 function mkQuestion(overrides = {}) {
-  const merged = {
+  // 一致性：若 overrides 传了 operands 但没传 operandMin/Max，自动从 operands 推
+  if (overrides.operands && (overrides.operandMin == null || overrides.operandMax == null)) {
+    overrides.operandMin = Math.min(...overrides.operands)
+    overrides.operandMax = Math.max(...overrides.operands)
+  }
+  // v5 schema 已移除 *operands 索引，test fixture 不再写入 operands 字段
+  const { operands: _ignored, ...rest } = overrides
+  return {
     id: nextId++,
     equation: '23+47=',
     solution: 70,
     operator: '+',
     operandMin: 23,
     operandMax: 47,
-    operands: [23, 47],
     isCarry: true,
     isBorrow: false,
     difficulty: 7,
@@ -67,15 +73,8 @@ function mkQuestion(overrides = {}) {
     assistLevel: 0,
     blankMode: 'result',
     createdAt: Date.now(),
-    ...overrides,
+    ...rest,
   }
-  // 一致性：若 overrides 传了 operands 但没传 operandMin/Max，自动从 operands 推
-  // （阶段 13：getMasteryByNumber 从 operandMin/Max 反推数位，operands 字段与算法解耦）
-  if (overrides.operands && (overrides.operandMin == null || overrides.operandMax == null)) {
-    merged.operandMin = Math.min(...overrides.operands)
-    merged.operandMax = Math.max(...overrides.operands)
-  }
-  return merged
 }
 
 beforeEach(async () => {

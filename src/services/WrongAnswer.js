@@ -1,26 +1,40 @@
 /**
- * WrongAnswer 类（U 层）— 错题领域模型
+ * WrongAnswer 类（S 层）— 错题领域模型
  *
  * 继承链：DBQuestion (databaseInit) → Question → Answer → WrongAnswer
  *          └─ schema 骨架    └─ 题元数据+查询   └─答题数据+getter  └─错题专用
  *
- * extends Answer — 继承题目元数据 + 答题元数据 + 派生 getter。
- * 增加错题专用的过滤/查询方法，将服务层的过滤逻辑内聚到类中。
+ * extends Answer — 继承题目元数据 + 答题元数据 + 全部派生 getter + DB.answers CRUD。
+ * 从 Answer 继承的关键方法（勿重复定义）:
+ *   getAllByStudent() / findBySession() / findBySessions() / getAll()
+ *   findByQuestionId() / findByQuestionIds() / getOrphans()
+ *   updateOne() / deleteOne() / bulkDelete() / deleteBySession()
+ *   computeMastery() / sumScores() / isCorrect() / getLearningCurve()
+ *   fromJSON() / save()
+ * 从 Question 继承: getAll() / findByEquation(collection, ...) / filterByLevel(collection, ...) / 等
  *
- * 本类职责：错题过滤、错题查询（DB → 静态 filterBy）。
- * 无需额外存储字段，Answer 的所有 getter（isWrong / isFixed / level / score）全部继承可用。
+ * ▸ 本类职责：错题过滤、错题聚合、错题查询（DB → filterBy 合并）。
+ *   只增加过滤/查询方法，不新增存储字段——Answer 的所有 getter（isWrong / isFixed / level / score）全部继承可用。
  *
- * 用法：
- *   WrongAnswer.fromJSON(plain)          // DB 行 → 实例
- *   WrongAnswer.filterBy(answers, opts)  // 纯函数过滤+排序
- *   wrongAnswer.isRecent(7)              // 近 7 天？
- *   wrongAnswer.matchesOperand(10, 30)   // 操作数范围重叠？
+ * ▸ 自身方法速览:
+ *   filterBy(answers, opts) — 纯函数过滤 + 排序（operator / operand / days / includeFixed / limit）
+ *   dedup(answers) — 按 equation_solution 去重聚合，附加 wrongCount / correctedCount
+ *   loadPool(profile, opts) — 加载错题池：去重 + mastery 过滤
+ *   findByEquation(collection, equation) — 重载父类，自动 !isCorrect 限定
+ *   filterByLevel(collection, levelIdx) — 重载父类，自动 !isCorrect 限定
+ *   getWrongAnswers(opts) — DB 查询 + question join + filterBy 合并（主要查询入口）
  *
- * @see ../services/wrongAnswerService.js — DB CRUD，查询委托本类
- * @see answer.js — 父类
+ * ⚠ 命名提醒:
+ *   - getWrongAnswers(opts) vs Answer.getAll(): 前者加错题过滤 + question join，后者查全部
+ *   - filterBy(answers, opts) vs filterByLevel(collection, levelIdx): 参数不同，勿混淆
+ *   - findByEquation(collection, eq) vs Question.findByEquation: 后者不限定 !isCorrect
+ *
+ * @see ./Answer — 父类（答对/答错通用 CRUD）
+ * @see ./Question — 祖类（题目元数据 + 查询）
  */
 import { DB } from '@/services/databaseInit'
-import { Answer, Question } from './'
+import { Answer } from './Answer'
+import { Question } from './Question'
 export class WrongAnswer extends Answer {
   // ── 构造 ──
   constructor(raw) {
@@ -29,7 +43,6 @@ export class WrongAnswer extends Answer {
 
   /**
    * 去重并聚合错题：同名同答案只留一条，附带 wrongCount 和 correctedCount。
-   * 已完全掌握（mastery >= 100）的题目排除在外。
    * 库里所有记录都存，查询时聚合。
    * @param {Array} answers — Answer-like 实例或 plain object
    * @returns {Array<WrongAnswer>} — 每项带 wrongCount / correctedCount
@@ -47,13 +60,31 @@ export class WrongAnswer extends Answer {
       if (inst.isFixed) g.correctedCount++
     }
     return [...groups.values()]
-      .filter(g => !g.item.isMastered)  // 排除已完全掌握
       .map(g => {
         g.item.wrongCount = g.wrongCount
         g.item.correctedCount = g.correctedCount
         return g.item
       })
       .sort((a, b) => (a.mastery ?? 0) - (b.mastery ?? 0))  // 最不熟排最前
+  }
+
+  /**
+   * 加载错题池：去重 + 掌握值过滤
+   * 与 Profile.masteryMap 协作（不再自己 getAll）
+   * @param {Object} profile    — Profile 实例（含 masteryMap）
+   * @param {Object} [opts]     — { days, limit }
+   * @returns {Promise<WrongAnswer[]>}
+   */
+  static async loadPool(profile, { days = 90, limit = 200 } = {}) {
+    const raw = await this.getWrongAnswers({ days, limit })
+    if (!raw.length) return []
+    const deduped = this.dedup(raw)
+    if (!profile?.masteryMap) return deduped
+    for (const a of deduped) {
+      const key = `${a.equation || ''}_${a.solution}`
+      a.mastery = profile.masteryMap.get(key) ?? 0
+    }
+    return deduped.filter(a => (a.mastery ?? 0) < Answer.MASTERY_THRESHOLD)
   }
 
   // ── 查询（静态） ──
@@ -135,13 +166,20 @@ export class WrongAnswer extends Answer {
     const cutoff = Date.now() - days * 86400e3
     let candidates
     if (operator) {
-      const qList = await DB.questions.where('operator').equals(operator).toArray()
+      const qList = await Question.findByOperator(operator)
       const qIds = qList.map((q) => q.id)
-      if (!qIds.length) return []
-      candidates = await DB.answers
-        .where('questionId').anyOf(qIds)
-        .and((a) => a.timestamp > cutoff)
-        .toArray()
+      if (!qIds.length) {
+        // 降级：无对应 questions 时按 answer.operator 字段过滤
+        candidates = await DB.answers
+          .where('timestamp').above(cutoff)
+          .filter(a => a.operator === operator)
+          .toArray()
+      } else {
+        candidates = await DB.answers
+          .where('questionId').anyOf(qIds)
+          .and((a) => a.timestamp > cutoff)
+          .toArray()
+      }
     } else {
       candidates = await DB.answers
         .where('timestamp').above(cutoff)

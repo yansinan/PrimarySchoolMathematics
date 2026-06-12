@@ -7,12 +7,30 @@
  * 包装 db.questions 表的元数据 + 派生属性。
  * Answer extends Question，继承所有题目元数据 + 答题元数据。
  *
- * 本类职责：题目查询、难度映射、算式查找。
- * 不涉及答题状态（那是 Answer 的范畴）。
+ * ▸ 本类职责：题目查询、难度映射、算式查找。不涉及答题状态（那是 Answer 的范畴）。
  *
- * @see utils/algorithm/answer.js — Answer（子类）
- * @see utils/algorithm/wrongAnswer.js — WrongAnswer（孙类）
- * @see constants/difficulty.js — DIFFICULTY_LEVELS 等级定义
+ * ▸ 子类 Answer 继承的静态方法（勿在 Answer 重复定义）:
+ *   fromJSON(), save(), getAll(), findByOperator(), findByEquation(),
+ *   filterByLevel(), findByOperands(), findEquivalent(), findRelated(),
+ *   loadByIds(), matchLevel(), groupAnswersByLevel(), getTypeLabel(), extractOperandDigits()
+ *
+ * ▸ 方法分组速览:
+ *   ─ 构造: constructor(raw) → 拆除 getter-only 可计算字段，Object.assign 剩余
+ *   ─ 题目查询（DB）: findByOperator / getAll / findEquivalent / findRelated / findByOperands / loadByIds
+ *   ─ 集合过滤（纯函数）: filterByLevel(collection, levelIdx) / findByEquation(collection, equation, opts)
+ *   ─ 持久化: save(questionData) — 写入 DB.questions 表（upsert）
+ *   ─ 辅助: matchLevel / groupAnswersByLevel / getTypeLabel / extractOperandDigits / _parseEquationTriple
+ *
+ * ▸ 派生 getter（优先于存储字段）:
+ *   operandMin/Max — 从 equation 解析两操作数，懒计算 + 缓存
+ *   isCarry / isBorrow — 进位/退位判定
+ *   difficulty — 匹配 DIFFICULTY_LEVELS 的档位索引
+ *   stepCount — 操作数位数和
+ *   typeLabel — 题型中文标签
+ *
+ * @see ./Answer — Answer（子类）
+ * @see ./WrongAnswer — WrongAnswer（孙类）
+ * @see @/constants/difficulty — DIFFICULTY_LEVELS 等级定义
  */
 
 import { DIFFICULTY_LEVELS } from '@/constants/difficulty'
@@ -148,7 +166,19 @@ export class Question extends DBQuestion {
     super()
     if (!raw) return
     const { isCorrect, attemptCount, score, ...rest } = raw
+    // 移除原型上 getter-only 的可计算字段（Object.assign 无法写入 getter）
+    const getterFields = ['operandMin', 'operandMax', 'isCarry', 'isBorrow', 'difficulty', 'stepCount']
+    for (const f of getterFields) {
+      delete rest[f]
+    }
     Object.assign(this, rest)
+    // 向后兼容：从旧数据库记录缓存可计算字段
+    if (raw.operandMin != null) this._operandMin = raw.operandMin
+    if (raw.operandMax != null) this._operandMax = raw.operandMax
+    if (raw.isCarry != null) this._isCarry = raw.isCarry
+    if (raw.isBorrow != null) this._isBorrow = raw.isBorrow
+    if (raw.difficulty != null) this._difficulty = raw.difficulty
+    if (raw.stepCount != null) this._stepCount = raw.stepCount
   }
 
   // ── 派生属性 ──
@@ -157,6 +187,50 @@ export class Question extends DBQuestion {
   get operandRange() { return [this.operandMin, this.operandMax] }
   get needsCarry() { return this.isCarry || (this.difficulty ?? 0) >= 7 }
   get needsBorrow() { return this.isBorrow || (this.difficulty ?? 0) >= 8 }
+
+  /** 从 equation 解析最小操作数（懒计算 + 缓存） */
+  get operandMin() {
+    if (this._operandMin != null) return this._operandMin
+    const [a, b] = _parseOperands(this.equation, this.operator)
+    if (a != null) this._operandMin = Math.min(a, b)
+    return this._operandMin ?? 0
+  }
+  /** 从 equation 解析最大操作数（懒计算 + 缓存） */
+  get operandMax() {
+    if (this._operandMax != null) return this._operandMax
+    const [a, b] = _parseOperands(this.equation, this.operator)
+    if (a != null) this._operandMax = Math.max(a, b)
+    return this._operandMax ?? 0
+  }
+  /** 是否进位（懒计算 + 缓存） */
+  get isCarry() {
+    if (this._isCarry != null) return this._isCarry
+    const [a, b] = _parseOperands(this.equation, this.operator)
+    return a != null ? _isCarry(a, b) : false
+  }
+  /** 是否退位（懒计算 + 缓存） */
+  get isBorrow() {
+    if (this._isBorrow != null) return this._isBorrow
+    const [a, b] = _parseOperands(this.equation, this.operator)
+    const opNum = _OP_TO_NUM[this.operator]
+    return opNum != null ? _isBorrow(a, b, opNum) : false
+  }
+  /** 难度档位（懒计算 + 缓存） */
+  get difficulty() {
+    if (this._difficulty != null) return this._difficulty
+    const m = Question.matchLevel(this)
+    if (m) this._difficulty = m.levelIdx
+    return this._difficulty ?? 0
+  }
+  /** 操作数位数和（懒计算 + 缓存） */
+  get stepCount() {
+    if (this._stepCount != null) return this._stepCount
+    const [a, b] = _parseOperands(this.equation, this.operator)
+    if (a != null && b != null) {
+      this._stepCount = String(a).length + String(b).length
+    }
+    return this._stepCount ?? 1
+  }
 
   /** 题型中文标签（inputMode + blankMode 派生） */
   get typeLabel() {
@@ -174,64 +248,14 @@ export class Question extends DBQuestion {
     return base
   }
 
-  // ── 掌握值管理 ──
 
-  /** 答错一次扣除的掌握值 */
-  static MASTERY_WRONG_PENALTY = -100
-  /** 改正一次增加的掌握值 */
-  static MASTERY_CORRECT_REWARD = 30
-  /** 完全掌握阈值 */
-  static MASTERY_THRESHOLD = 100
-  /** 不同 inputMode 的额外掌握值加成（在 MASTERY_CORRECT_REWARD 基础上追加） */
-  static MASTERY_MODE_BONUS = {
-    horizontal_keypad: 20,
-    vertical_keypad: 10,
-    choice2: 0,
-    choice4: 5,
-  }
-
-  /** 是否已完全掌握 */
-  get isMastered() {
-    return this.mastery >= Question.MASTERY_THRESHOLD
-  }
-
-  /**
-   * 从一组 answer 记录中归算各 equation 的掌握值
-   * @param {Array} answers — Answer-like 实例或 plain object
-   * @returns {Map<string, number>} key=`equation_solution` → mastery
-   */
-  static computeMastery(answers) {
-    const map = new Map()
-    for (const a of answers) {
-      const key = `${a.equation || ''}_${a.solution}`
-      if (!map.has(key)) map.set(key, 0)
-      const correct = Number(a.userAnswer) === Number(a.solution)
-      if (correct) {
-        // 改正（previousAttemptCount > 0 表示非首次答）
-        if ((a.previousAttemptCount ?? 0) > 0) {
-          const bonus = Question.MASTERY_MODE_BONUS[a.inputMode] || 0
-          map.set(key, map.get(key) + Question.MASTERY_CORRECT_REWARD + bonus)
-        }
-      } else {
-        map.set(key, map.get(key) + Question.MASTERY_WRONG_PENALTY)
-      }
-    }
-    // 钳制
-    for (const [k, v] of map) {
-      map.set(k, Math.max(-999, Math.min(Question.MASTERY_THRESHOLD, v)))
-    }
-    return map
-  }
 
   // ── 持久化 ──
 
   toJSON() {
     return {
       id: this.id, equation: this.equation, solution: this.solution,
-      operator: this.operator, operandMin: this.operandMin, operandMax: this.operandMax,
-      operands: this.operands, isCarry: this.isCarry, isBorrow: this.isBorrow,
-      stepCount: this.stepCount, difficulty: this.difficulty, inputMode: this.inputMode,
-      layout: this.layout, assistLevel: this.assistLevel, blankMode: this.blankMode,
+      operator: this.operator,
       createdAt: this.createdAt, synced: this.synced,
     }
   }
@@ -349,10 +373,19 @@ export class Question extends DBQuestion {
     return decorated.map(d => d.q).slice(0, limit)
   }
 
-  /** 按 operands multiEntry 索引查找题目 → Question[] */
+  /** 从 operandMin/Max 反查包含某数位的题目（替代已移除的 *operands 索引） */
   static async findByOperands(number) {
     if (number == null) return []
-    const raw = await DB.questions.where('operands').equals(number).toArray()
+    const all = await DB.questions.toArray()
+    return all
+      .filter(q => Question.extractOperandDigits(q).includes(number))
+      .map(q => Question.fromJSON(q))
+  }
+
+  /** 按运算符查题目 → Question[] */
+  static async findByOperator(operator) {
+    if (!operator) return []
+    const raw = await DB.questions.where('operator').equals(operator).toArray()
     return raw.map(q => Question.fromJSON(q))
   }
 

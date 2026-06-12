@@ -27,10 +27,10 @@
  * - C → S → D: 此 composable 直接调 database (M 层可引 D 层)
  */
 import { useStatsStore } from '@/stores/stats'
-import { getSessions, getSessionDetail, deleteSession as dbDeleteSession } from '@/services/PracticeSession'
+import { getSessions, getSessionDetail, deleteSession as dbDeleteSession, PracticeSession } from '@/services/PracticeSession'
 import { getAggregatedStats } from '@/services/statsAggregator'
 import { exportAllData, importAllData } from '@/services/databaseInit'
-import { Answer } from '@/utils/algorithm/answer'
+import { Answer } from '@/services'
 
 export function useStatsQuery() {
   const store = useStatsStore()
@@ -43,6 +43,7 @@ export function useStatsQuery() {
   async function loadSessions(studentId = 'default', limit = 50) {
     try {
       store.sessions = await getSessions(studentId, limit)
+      store.sessionStats = await PracticeSession.getBatchSessionStats(store.sessions)
     } catch (err) {
       console.error('[useStatsQuery] Failed to load sessions:', err)
     }

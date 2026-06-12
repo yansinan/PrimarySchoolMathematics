@@ -129,8 +129,7 @@ import { Document, Check, Close, WarningFilled } from '@element-plus/icons-vue'
 import { useStatsStore } from '@/stores/stats'
 import { formatDuration } from '@/utils/time/timeFormat'
 import { PracticeSession } from '@/services/PracticeSession'
-import { Question } from '@/utils/algorithm/question'
-import { Answer } from '@/utils/algorithm/answer'
+import { Question, Answer } from '@/services'
 
 const statsStore = useStatsStore()
 
