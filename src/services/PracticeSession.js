@@ -32,12 +32,17 @@ export class PracticeSession extends SchemaSession {
   static async create({ practiceSessionId, configSnapshot, profileSnapshot, evaluations, completed, studentId = 'default' } = {}) {
     if (!practiceSessionId) return null
     const now = new Date().toISOString()
+    // 深拷贝：Pinia store 中读出的对象可能是 reactive Proxy→IDB structured clone 无法序列化→DataCloneError
+    const safeClone = (v) => {
+      if (v == null || typeof v !== 'object') return v
+      try { return JSON.parse(JSON.stringify(v)) } catch { return v }
+    }
     try {
       return await DB.practiceSessions.add({
         studentId,
         practiceSessionId,
-        config: configSnapshot || null,
-        profileSnapshot: profileSnapshot || null,
+        config: safeClone(configSnapshot) || null,
+        profileSnapshot: safeClone(profileSnapshot) || null,
         evaluations: evaluations || null,
         completed: completed === true,
         createdAt: now,
