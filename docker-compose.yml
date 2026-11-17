@@ -1,0 +1,51 @@
+# PrimarySchoolMathematics — 最小 docker compose（不构建自定义镜像，直接用官方 node 镜像）
+# ────────────────────────────────────────────────────────────────
+# Usage:
+#   sudo docker compose up -d          # 启动（宿主 4003 → 容器 8080）
+#   sudo docker compose logs -f
+#   sudo docker compose down
+#
+# 设计原则（与 spellwell 同思路，两处必要差异已实测）：
+#   - 不写 Dockerfile：直接用现成 node:24-alpine 跑 node_modules/vite/bin/vite.js
+#   - 源码 + node_modules 必须 **可写** 挂载（:rw）：
+#       vite 3 启动时要写 /home/node/vite.config.js.timestamp-*.mjs，
+#       并写 node_modules/.vite 依赖缓存；:ro 会直接 EROFS 启动失败。
+#   - 不重新装依赖：复用仓库里已装好的 node_modules
+#       （其中的 esbuild 是静态链接 Go 二进制，glibc/musl 都能跑，实测 alpine 可用）
+#   - 工作目录保持 /home/node（与原容器一致，vite.config.js 用 __dirname 解析 src）
+#   - 端口 8080 由 vite.config.js 固定（strictPort），宿主映射 4003
+#   - 以宿主机 uid 1000 运行；HOME=/tmp 避免缓存写进项目
+#   - 最小权限：cap_drop ALL
+#
+# 未纳入：frpc 内网穿透。原容器靠 entrypoint.sh 起 frpc + 交互 fish，
+#   改用 compose 后需要单独的 frpc 服务或 sidecar（见 dockers/node.alpine.docker/frpc.ini）。
+
+services:
+  psm:
+    image: node:24-alpine
+    container_name: psm-web
+    restart: on-failure:10
+    user: "1000:1000"
+    working_dir: /home/node
+    command: ["node", "node_modules/vite/bin/vite.js", "--host", "0.0.0.0"]
+    ports:
+      - "${PSM_PORT:-4003}:8080"
+    volumes:
+      - ./:/home/node:rw
+    environment:
+      - HOME=/tmp
+      - TZ=Asia/Shanghai
+      - NODE_OPTIONS=--max-old-space-size=2048
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
