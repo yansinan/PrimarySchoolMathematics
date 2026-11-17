@@ -21,7 +21,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { formatTimestampForFilename } from '@/utils/time/timeFormat'
 // E3: papers 改从 sessionStorage 读 (路径 4: sessionStorage + key in query)

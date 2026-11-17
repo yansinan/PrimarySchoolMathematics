@@ -151,7 +151,17 @@ const selectedConfiguration = (configuration) => {
   formData.value.targetMin = config.targetMin ?? 10
   // 用 applyConfigToFormData 替代 19 行手写赋值（含 targetMin/Max）
   applyConfigToFormData(formData.value, config, { includeAdaptive: true })
+}
 
+const buttonLoading = ref(false)
+
+// 生成卷子：生成试卷数据并跳转 /print 打印页
+const generate = () => {
+  const numberOfFormulas = paperList.value.reduce((prev, cur) => prev + parseInt(cur.numberOfFormulas), 0)
+  if (numberOfFormulas * formData.value.numberOfPapers > 1000) {
+    proxy.$message.error('题目总数不能超过1000题!')
+    return
+  }
   const papers = createFormulasGenerator(toRaw(unref(formData)), toRaw(unref(paperList)))
   // E3: sessionStorage + key in query 替代原 stores/app.js 跨页面 state
   // (路径 4 — papers 大小无限制, URL 短, 刷新/前进后退恢复)
@@ -163,6 +173,7 @@ const selectedConfiguration = (configuration) => {
   router.push({ path: '/print', query: { fileName, key } })
   paperList.value = []
 }
+
 const generateFormulas = () => {
   // 生成试卷数量不能过多
   const numberOfFormulas = paperList.value.reduce((prev, cur) => {
