@@ -46,8 +46,11 @@ describe('Question', () => {
     expect(q.solution).toBe(0)
     expect(q.operator).toBe('')
     expect(q.difficulty).toBe(0)
-    expect(q.operandMin).toBe(0)
-    expect(q.operandMax).toBe(0)
+    // operandMin/Max 是从 equation 派生的（懒计算），5+3= 应解析为 3 / 5。
+    // 旧实现因为缺 operator 就直接返回 [null,null]、getter 兜底成 0，
+    // 那会让档位匹配把「操作数未知」当成「操作数是 0」——这是要修的 bug，不是默认值。
+    expect(q.operandMin).toBe(3)
+    expect(q.operandMax).toBe(5)
     expect(q.isCarry).toBe(false)
     expect(q.isBorrow).toBe(false)
     expect(q.synced).toBe(0)

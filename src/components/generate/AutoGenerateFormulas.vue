@@ -1,6 +1,6 @@
 <template>
   <div>
-    <ElFormItem label="几步运算?">
+    <ElFormItem label="几步运算?" class="step-row">
       <el-radio-group v-model="formData.step" @change="changeStep">
         <el-radio-button v-for="o in stepOptions" :label="o.key" :disabled="o.disabled">{{ o.label }}</el-radio-button>
       </el-radio-group>
@@ -67,7 +67,7 @@
       </ElRow>
     </ElFormItem>
 
-    <ElFormItem label="自适应练习量" :error="targetRangeError">
+    <ElFormItem label="自适应练习量" :error="targetRangeError" class="practice-amount-row">
       <ElRow :gutter="12">
         <ElCol :xs="12" :sm="8">
           <ElFormItem
@@ -300,9 +300,32 @@ const append = () => {
   props.refForm?.validate((valid) => {
     if (!valid) return
 
-    const { step, numberOfFormulas, whereIsResult, formulaList, resultMinValue, resultMaxValue } = cloneDeep(toRaw(formData.value))
+    // 数量与范围守卫：题数不足 1 会让生成器空转/返回空，
+    // 最小值大于最大值则根本无解（psm.js 现在是尝试上限兜底，但仍应在这里挡住）。
+    const count = parseInt(formData.value.numberOfFormulas, 10)
+    if (!Number.isFinite(count) || count < 1) {
+      proxy.$message.error('口算题数量至少为 1')
+      return
+    }
+    const badRange = (formData.value.formulaList || []).find(
+      f => !Number.isFinite(+f.min) || !Number.isFinite(+f.max) || +f.min < 1 || +f.min > +f.max
+    )
+    if (badRange) {
+      proxy.$message.error('算数项范围无效：最小值需 ≥ 1 且不能大于最大值')
+      return
+    }
+
+    // 携带本组的 4 个「其他设置」字段（进位/退位/余数/括号），
+    // 让不同题组可以有各自的进位要求 —— 试卷逻辑里这些本就是每题组独立的
+    const {
+      step, numberOfFormulas, whereIsResult, formulaList,
+      resultMinValue, resultMaxValue,
+      carry, abdication, remainder, enableBrackets,
+    } = cloneDeep(toRaw(formData.value))
     paperList.value.push({
-      step, numberOfFormulas, whereIsResult, formulaList, resultMinValue, resultMaxValue
+      step, numberOfFormulas, whereIsResult, formulaList,
+      resultMinValue, resultMaxValue,
+      carry, abdication, remainder, enableBrackets,
     })
   })
 }
@@ -361,6 +384,50 @@ const addConfiguration = () => {
 @media (max-width: 768px) {
   .target-hint-col {
     margin-top: 4px;
+  }
+}
+
+// ── 手机端（窄屏）排版修正 ──
+@media (max-width: 480px) {
+  // ElRow 的 gutter 会生成左右 -6px 负 margin，窄屏下把抽屉撑出 6px 横向滚动
+  :deep(.el-row) {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  // 几步运算：选项均分一行，「其他设置」整行独占
+  .step-row :deep(.el-form-item__content) {
+    display: block;
+  }
+
+  .step-row :deep(.el-radio-group) {
+    display: flex;
+    width: 100%;
+  }
+
+  .step-row :deep(.el-radio-button) {
+    flex: 1;
+  }
+
+  .step-row :deep(.el-radio-button__inner) {
+    width: 100%;
+    padding: 8px 2px;
+  }
+
+  .step-row :deep(.el-button) {
+    margin: 8px 0 0 !important;
+    width: 100%;
+  }
+
+  // 自适应练习量：两个「最少/最多」输入框原本并排（各 153px），
+  // 前置文字吃掉 68px 后输入区只剩 9px，数字根本没法输入 → 改上下两行
+  .practice-amount-row :deep(.el-col) {
+    flex: 0 0 100% !important;
+    max-width: 100%;
+  }
+
+  .practice-amount-row :deep(.el-form-item) {
+    margin-bottom: 8px;
   }
 }
 </style>

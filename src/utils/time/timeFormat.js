@@ -11,7 +11,7 @@
  * @param {number} ms — Duration in milliseconds
  * @returns {string}
  */
-export function formatDuration(ms) {
+export function formatDuration(ms, { roundSeconds = false } = {}) {
   if (ms == null || ms < 0) return ''
   if (ms === 0) return '0秒'
 
@@ -28,9 +28,9 @@ export function formatDuration(ms) {
   if (minutes > 0) {
     parts.push(`${minutes}分`)
   }
-  // Always show seconds (with one decimal if fractional)
+  // roundSeconds: 整轮用时给人看，秒取整；单题耗时保留一位小数更有信息量
   if (seconds > 0 || parts.length === 0) {
-    parts.push(`${seconds.toFixed(1)}秒`)
+    parts.push(roundSeconds ? `${Math.round(seconds)}秒` : `${seconds.toFixed(1)}秒`)
   }
 
   return parts.join('')

@@ -410,7 +410,9 @@ function getRandomSymbols(symbols, step) {
  * @return {boolean}
  */
 function is_addcarry(a, b) {
-    return (get_num(a) + get_num(b) > 10);
+    // 个位和 >= 10 即为进位（原为 > 10，会把 4+6=10 这类漏判成不进位，
+    // 与 Question.matchLevel 的 _isCarry 口径不一致）
+    return (get_num(a) + get_num(b) >= 10);
 }
 
 /**
@@ -505,7 +507,7 @@ function get_time(func) {
         let start = performance.now();
         func.apply(this, args);
         let end = performance.now();
-        console.log(`程序运行时间:${end - start}ms`);
+        if (import.meta.env.DEV) console.log(`程序运行时间:${end - start}ms`);
     };
 }
 
@@ -572,19 +574,44 @@ export default class FormulasGenerator {
      * @return {Array} 一组口算题
      */
     generate() {
+        const target = parseInt(this.number, 10)
+        // 题数为 0 或非法时直接返回空数组。
+        // 原实现是 while(true) + `slist.length === this.number`，
+        // number=0 时 push 后长度恒为 1、永远不等于 0 → 死循环卡死整个页面。
+        if (!Number.isFinite(target) || target <= 0) {
+            this.__data_list = []
+            return this.__data_list
+        }
+
         const slist = [];
-        while (true) {
+        const seen = new Set();
+        // 条件过严（范围与进位/退位/余数互斥）时可能永远凑不满 target，
+        // 用尝试上限兜底，避免又一次死循环。
+        const maxAttempts = Math.max(target * 200, 2000)
+        let attempts = 0
+        while (slist.length < target && attempts < maxAttempts) {
+            attempts++
             const formula = this.__getformula();  // 生成一道算式题
-            if (formula) {
-                slist.push(formula);
-            }
-            if (slist.length === this.number) {
-                break;
+            if (!formula) continue
+            // 去重：同一道算式不重复出现（原先直接 push，手动出题会出现重复题）
+            if (seen.has(formula)) continue
+            seen.add(formula)
+            slist.push(formula);
+        }
+        // 题池小于要求的题数（如 1~5 的加法只有 20 种组合却要 30 题）：
+        // 允许重复补齐，保证题数达标，但要提示
+        if (slist.length < target) {
+            console.warn(`[psm] 去重后不足：期望 ${target}，唯一题 ${slist.length}，剩余用重复题补齐`)
+            const pool = slist.slice()
+            let i = 0
+            while (slist.length < target && pool.length) {
+                slist.push(pool[i % pool.length])
+                i++
             }
         }
 
         slist.sort(() => Math.random() - 0.5);  // 洗牌，先打乱list中的排序
-        this.__data_list = slist.slice(0, this.number);  // 随机取需要的口算题量。
+        this.__data_list = slist.slice(0, target);  // 随机取需要的口算题量。
         return this.__data_list;
     }
 }

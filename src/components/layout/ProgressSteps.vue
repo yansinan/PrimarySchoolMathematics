@@ -31,14 +31,14 @@
     </el-steps>
     
     <div class="stats-text">
-      <span class="correct-count">✅ {{ correctCount }}</span>
+      <span class="correct-count">✅ {{ correctCountRounded }}</span>
       <span class="total-count">/ {{ total }}</span>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
   total: Number,
@@ -50,11 +50,30 @@ const props = defineProps({
 /** 用 getter（userAnswer===solution）判断对错，不依赖 stored isCorrect 字段 */
 const isCorrect = (a) => a ? Number(a.userAnswer) === Number(a.solution) : false
 
-// 简单移动端检测
-const isMobile = computed(() => {
-    return true;
-  return window.innerWidth <= 768
+/**
+ * 显示的「答对题数」。
+ * 不能用 correctCount（那是 Answer.sumScores() 的掌握分：一次答对=1，错两次再对=0.333），
+ * 直接显示会出现 "✅ 4.667 / 8" 或四舍五入成 0。这里按当前组答案逐题判对错。
+ */
+const correctCountRounded = computed(() => {
+  const arr = Array.isArray(props.answers) ? props.answers : []
+  return arr.filter(a => isCorrect(a)).length
 })
+
+// 响应式断点：窄屏用圆点进度，宽屏用 el-steps。
+// 原实现是 `return true; return window.innerWidth <= 768`（硬编码 true，
+// 第二行永不执行），导致 PC 上永远显示圆点条。
+const viewportWidth = ref(typeof window === 'undefined' ? 1024 : window.innerWidth)
+const onResize = () => { viewportWidth.value = window.innerWidth }
+
+onMounted(() => {
+  viewportWidth.value = window.innerWidth
+  window.addEventListener('resize', onResize, { passive: true })
+})
+
+onUnmounted(() => window.removeEventListener('resize', onResize))
+
+const isMobile = computed(() => viewportWidth.value <= 768)
 
 const getStepStatus = (index) => {
   if (index < props.current) {

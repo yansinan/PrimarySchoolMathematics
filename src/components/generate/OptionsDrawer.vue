@@ -1,5 +1,5 @@
 <template>
-  <el-drawer v-model="currentVisible" size="50%" :before-close="handleClose">
+  <el-drawer v-model="currentVisible" size="50%" class="options-drawer" :before-close="handleClose">
   <template #header>
     <span class="text-base font-semibold">其他程序参数设置</span>
   </template>
@@ -161,9 +161,10 @@ const remainderOptions = computed(() => {
   // 多步运算时不能有余数
   const disabled = formData.value.whereIsResult == '1' || formData.value.step > 1
   return [
-    { key: '1', label: "随机余数", disabled: false },
+    // 除法暂时只支持整除（答题键盘只能输一个数，有余数需要「商+余数」双输入）
+    { key: '1', label: "随机余数（暂不支持）", disabled: true },
     { key: '2', label: "结果整除", disabled: false },
-    { key: '3', label: "结果余数", disabled }
+    { key: '3', label: "结果余数（暂不支持）", disabled: true }
   ]
 })
 
@@ -181,4 +182,41 @@ const handleClose = (done) => {
 }
 </script>
 
-<style lang="scss" scoped></style>
+<style lang="scss">
+/*
+ * 手机端：size="50%" 在窄屏只剩 ~195px，表单全被挤压 → 铺到几乎全宽。
+ * 注意 el-drawer 把传入的 class 加在 .el-drawer 元素本身（不是 overlay），
+ * 且该元素被 teleport，scoped 的 data-v 属性落不到它上面，所以这里必须用
+ * 非 scoped 样式 + `.el-drawer.options-drawer` 双类定位。
+ */
+@media (max-width: 480px) {
+  .el-drawer.options-drawer {
+    width: calc(100vw - 32px) !important;
+  }
+
+  .el-drawer.options-drawer .el-drawer__body {
+    padding: 16px;
+  }
+
+  /*
+   * 「生成的卷子数量 / 口算题列数」用 span=9 / span=8 并排，
+   * 窄屏每列只有 ~120px，前置文字（7 个汉字）就把它撑爆 → 各占整行。
+   * gutter 的负 margin 一并归零，否则整块仍会横向溢出。
+   */
+  .el-drawer.options-drawer .el-row {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  .el-drawer.options-drawer .el-row > .el-col {
+    flex: 0 0 100% !important;
+    max-width: 100%;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  .el-drawer.options-drawer .el-row > .el-col + .el-col {
+    margin-top: 8px;
+  }
+}
+</style>

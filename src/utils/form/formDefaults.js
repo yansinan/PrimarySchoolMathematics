@@ -138,10 +138,47 @@ export const DEFAULT_CONFIG_ROW = {
  *  - Generate.vue: paperDescriptionList computed
  */
 export function buildPaperDescriptionList(paperList) {
+  const OP_TEXT = { 1: '+', 2: '-', 3: '×', 4: '÷' }
   return paperList.map(p => {
-    return p.customFormulaList && p.customFormulaList.length
-      ? `自定义口算题${p.numberOfFormulas}道`
-      : `${p.step}步计算题口算题${p.numberOfFormulas}道`
+    if (p.customFormulaList && p.customFormulaList.length) {
+      return `自定义口算题${p.numberOfFormulas}道`
+    }
+
+    // 运算符从各步的 operators 取（第一步通常是算数项，operators 为 null）
+    const steps = Array.isArray(p.formulaList) ? p.formulaList : []
+    const ops = []
+    steps.forEach(s => {
+      (s.operators || []).forEach(o => {
+        const t = OP_TEXT[o]
+        if (t && !ops.includes(t)) ops.push(t)
+      })
+    })
+
+    // 描述里带上每一步的范围 + 进位/退位/余数/括号，
+    // 否则同范围但"必须进位"与"不进位"的两个题组在列表里长得一模一样，用户无法区分。
+    // 除法要两步（被除数 / 除数），只显示最后一步会丢掉被除数范围。
+    const parts = []
+    if (p.step) parts.push(`${p.step}步`)
+    if (ops.length) parts.push(ops.join('/'))
+    const ranges = steps
+      .filter(s => s.min != null && s.max != null)
+      .map(s => `${s.min}~${s.max}`)
+    if (ranges.length) parts.push(ranges.join('→'))
+    if (ops.includes('+') && p.carry != null) {
+      if (p.carry == 2) parts.push('必须进位')
+      else if (p.carry == 3) parts.push('不进位')
+    }
+    if (ops.includes('-') && p.abdication != null) {
+      if (p.abdication == 2) parts.push('必须退位')
+      else if (p.abdication == 3) parts.push('不退位')
+    }
+    if (ops.includes('÷') && p.remainder != null) {
+      if (p.remainder == 2) parts.push('整除')
+      else if (p.remainder == 3) parts.push('有余数')
+    }
+    if (p.enableBrackets) parts.push('带括号')
+
+    return `${parts.join(' ')} · ${p.numberOfFormulas}题`
   })
 }
 
@@ -162,7 +199,9 @@ export function applyConfigToFormData(formData, config, options = {}) {
   formData.enableBrackets = c.enableBrackets ?? DEFAULT_FORM_DATA.enableBrackets
   formData.carry = c.carry ?? DEFAULT_FORM_DATA.carry
   formData.abdication = c.abdication ?? DEFAULT_FORM_DATA.abdication
-  formData.remainder = c.remainder ?? DEFAULT_FORM_DATA.remainder
+  // 除法当前只支持「结果整除」(2)：随机余数(1) 与结果余数(3) 已禁用，
+  // 旧配置里带 1/3 时回落到 2，否则单选组会全部禁用、看起来没有选中项
+  formData.remainder = ['1', '3'].includes(String(c.remainder)) ? '2' : (c.remainder ?? DEFAULT_FORM_DATA.remainder)
   formData.solution = c.solution ?? DEFAULT_FORM_DATA.solution
   formData.numberOfPapers = c.numberOfPapers ?? DEFAULT_FORM_DATA.numberOfPapers
   formData.numberOfPagerColumns = c.numberOfPagerColumns ?? DEFAULT_FORM_DATA.numberOfPagerColumns

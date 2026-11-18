@@ -28,11 +28,18 @@ export function createFormulasGenerator(options, paperList) {
       step: parseInt(p.step),
       number: parseInt(p.numberOfFormulas),
       is_result: parseInt(p.whereIsResult),
-      is_bracket: options.enableBrackets ? 1 : 0,
-      add: { carry: parseInt(options.carry) },
-      sub: { abdication: parseInt(options.abdication) },
+      // 以下 4 项优先取题组自己的值，缺省回落到全局（向后兼容旧配置）
+      // 这样一次练习里可以混「进位加法组」+「不进位加法组」
+      is_bracket: (p.enableBrackets ?? options.enableBrackets) ? 1 : 0,
+      // 用 || 而不是 ??：旧配置里 p.carry 可能是空字符串，
+      // parseInt('') 得到 NaN 且 '' 不为 null/undefined，?? 兜不住
+      add: { carry: parseInt(p.carry || options.carry) },
+      sub: { abdication: parseInt(p.abdication || options.abdication) },
       mult: {},
-      div: { remainder: parseInt(options.remainder) },
+      // 有余数除法暂不支持：答题键盘只能输一个数，48÷5 会得到小数答案 9.6，孩子无法作答。
+      // 这里统一按「必须整除」(2) 生成，防止旧配置或随机余数(1) 生成除不尽的题。
+      // 等"商+余数"双输入做完再放开。
+      div: { remainder: 2 },
       multistep: multiSteps,
       symbols,
     }

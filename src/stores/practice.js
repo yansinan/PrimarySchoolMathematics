@@ -8,10 +8,32 @@ export const usePracticeStore = defineStore('practice', {
     listPractices: [],
     /** @type {'idle'|'assessment'|'practice'} */
     phase: 'idle',
-    /** 当前自适应组序号（0=无）。>=1 表示诊断评估已完成（assessmentCompleted getter 的计算依据） */
+    /** 当前自适应组序号（0=无）。>=1 表示诊断评估已完成 */
     currentGroupIndex: 0,
+    /**
+     * 是否已完成真实能力评估（诊断）
+     *
+     * 由 DB 画像计算，**不随 phase 变化** —— 手动出题会把 phase 设为 'practice'，
+     * 若用 phase 推导会让「手动出过题」被误判成「评估已完成」。
+     * @see services/abilityProfile.js#hasRealProfile
+     */
+    hasRealProfile: false,
+    /**
+     * 当前题单的来源：'adaptive' | 'manual' | 'diagnostic'
+     *
+     * 为什么要区分：手动出题的题目由用户逐项指定，答题过程中**不能**被自适应引擎
+     * 的 adjustNextQuestion 改写（否则用户会看到自己配的题变成别的题）。
+     * @see composables/useAdaptiveSession.js#afterAnswer
+     */
+    listSource: 'adaptive',
     /** 自适应阶段累计答题（按题号追加，跨组不去重） */
     adaptiveAnswers: [],
+    /**
+     * 等待用户点「开始练习」的准备态。
+     * 有画像进入练习页时不立刻出题，先展示学习情况/本次设置/练习重点。
+     * 手动出题（Generate.vue 生成题单）会把它置 false 直接进题。
+     */
+    readyToStart: false,
     /** 当前难度索引（由 loadProfile 从 DB 计算，-1 表示未加载） */
     currentDifficultyIdx: -1,
     session: {
@@ -74,10 +96,11 @@ export const usePracticeStore = defineStore('practice', {
     },
     /**
      * 诊断评估是否已完成。
-     * phase === 'practice' 表示 completeAssessment 已执行过且进入练习模式。
-     * 不额外存字段，phase 在 completeAssessment 时持久化到 localStorage。
+     *
+     * 数据源是 hasRealProfile（来自 DB 画像），**不再从 phase 推导** ——
+     * 手动出题会把 phase 设为 'practice'，用 phase 推导会让「手动出过题」被误判为已评估。
      */
-    assessmentCompleted: (state) => state.phase === 'practice',
+    assessmentCompleted: (state) => state.hasRealProfile,
   },
   actions: {
     setGenerateDrawerVisible(value) {
@@ -99,6 +122,14 @@ export const usePracticeStore = defineStore('practice', {
     // ── Phase management ──
     setPhase(p) {
       this.phase = p
+    },
+    /** 设置「是否已完成真实能力评估」（由 DB 画像计算结果写入） */
+    setHasRealProfile(value) {
+      this.hasRealProfile = !!value
+    },
+    /** 设置题单来源：'adaptive' | 'manual' | 'diagnostic' */
+    setListSource(source) {
+      this.listSource = source
     },
     /** 启动诊断模式并载入诊断题 */
     startAssessment(questions) {
@@ -162,6 +193,10 @@ export const usePracticeStore = defineStore('practice', {
       this.session.currentAnswer = ''
       this.session.feedbackType = null
       this.session.selectedOption = null
+    },
+
+    setReadyToStart(val) {
+      this.readyToStart = !!val
     },
 
     // ── Timing helpers ──

@@ -43,9 +43,15 @@ import { DB, Question as DBQuestion } from '@/services/databaseInit'
 const _OP_TO_NUM = { '+': 1, '-': 2, '*': 3, '/': 4, '×': 3, '÷': 4, '＋': 1, '－': 2 }
 
 function _parseOperands(equation, operator) {
-  if (!equation || !operator) return [null, null]
+  if (!equation) return [null, null]
   const eq = equation.replace(/=.*$/, '').trim()
-  const idx = eq.indexOf(operator)
+  // operator 缺失时从算式里自动识别。
+  // 自适应批次生成的题目对象常常不带 operator 字段，而 operandMin/operandMax/
+  // isCarry/isBorrow 这几个 getter 都走这里 —— 一旦这里返回 [null,null]，
+  // getter 会给出 0 / false 这些「看起来合法」的假值，导致档位匹配与进位判定全错。
+  const op = operator || eq.match(/[+\-*/×÷＋－]/)?.[0]
+  if (!op) return [null, null]
+  const idx = eq.indexOf(op)
   if (idx === -1) return [null, null]
   const left = parseInt(eq.substring(0, idx).trim())
   const right = parseInt(eq.substring(idx + 1).trim())
@@ -57,6 +63,28 @@ function _isCarry(a, b) { return (a % 10) + (b % 10) >= 10 }
 function _isBorrow(a, b, opNum) { return opNum === 2 && (a % 10) < (b % 10) }
 
 /**
+ * 乘法竖式是否进位（对应三上「笔算乘法(进位/连续进位)」课时）
+ * 模拟竖式逐位相乘：任一位「位积 + 进位」达到 10 即视为有进位
+ */
+function _isMultCarry(a, b) {
+  const big = Math.max(a, b)
+  const small = Math.min(a, b)
+  if (big < 10) return big * small >= 10
+  if (small < 10) {
+    let carry = 0
+    let n = big
+    while (n > 0) {
+      const p = (n % 10) * small + carry
+      if (p >= 10) return true
+      carry = Math.floor(p / 10)
+      n = Math.floor(n / 10)
+    }
+    return carry > 0
+  }
+  return true // 两位数×两位数一律按进位处理
+}
+
+/**
  * 将一道题匹配到 DIFFICULTY_LEVELS 档位
  * @param {object} answer
  * @returns {{ levelIdx: number, label: string } | null}
@@ -66,17 +94,21 @@ function _matchLevel(answer) {
   const opChar = answer.operator || answer.equation.replace(/=.*$/, '').trim().match(/[+\-*/×÷＋－]/)?.[0] || ''
   const opNum = _OP_TO_NUM[opChar]
   if (opNum == null) return null
-  const [a, b] = (answer.operandMin != null && answer.operandMax != null)
+  // 只有在两个操作数都 > 0 时才采信 getter 值。
+  // Question 实例的 operandMin/operandMax getter 在缺 operator 时返回 0（不是 null），
+  // 用 `!= null` 判断会把 0/0 当成有效值，导致所有档位范围校验失败 → 整题匹配为 null
+  // → 自适应引擎认为「这题不属于任何档位」，把组内强项/弱项混合全部压成当前档位。
+  const [a, b] = (answer.operandMin > 0 && answer.operandMax > 0)
     ? [answer.operandMin, answer.operandMax]
     : _parseOperands(answer.equation, opChar)
   if (a == null || b == null) return null
   const operandMin = Math.min(a, b)
   const operandMax = Math.max(a, b)
-  const hasCarry = answer.isCarry ?? _isCarry(a, b)
+  const hasCarry = answer.isCarry ?? (opNum === 3 ? _isMultCarry(a, b) : _isCarry(a, b))
   const hasBorrow = answer.isBorrow ?? _isBorrow(a, b, opNum)
   for (let i = 0; i < DIFFICULTY_LEVELS.length; i++) {
     const level = DIFFICULTY_LEVELS[i]
-    if (opNum === 1) {
+    if (opNum === 1 || opNum === 3) {
       if (level.carry === '2' && !hasCarry) continue
       if (level.carry === '3' && hasCarry) continue
     }
@@ -88,6 +120,13 @@ function _matchLevel(answer) {
       const specific = level.formulaList.find(f => {
         if (operandMax > f.max) return false
         if (!(operandMin >= f.min || operandMax >= f.min)) return false
+        // 乘除档位：约束「较小操作数」的位数（乘法的一位因数 / 除法的除数）
+        if (f.opMax != null && operandMin > f.opMax) return false
+        if (f.opMin != null && operandMin < f.opMin) return false
+        // 除法档位：约束商的上限（表内除法要求商落在口诀范围内，排除 24÷2=12 这类）
+        if (f.quotMax != null && operandMax / operandMin > f.quotMax) return false
+        // 除法档位：约束商的下限（两位数÷一位数要求商为两位数，排除 21÷7=3 这类表内题）
+        if (f.quotMin != null && operandMax / operandMin < f.quotMin) return false
         return f.operators != null && f.operators.includes(opNum)
       })
       if (specific) return true
@@ -256,6 +295,7 @@ export class Question extends DBQuestion {
     return {
       id: this.id, equation: this.equation, solution: this.solution,
       operator: this.operator,
+      inputMode: this.inputMode, blankMode: this.blankMode,
       createdAt: this.createdAt, synced: this.synced,
     }
   }

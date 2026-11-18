@@ -51,6 +51,64 @@
         </div>
       </el-card>
 
+      <!-- 开始练习界面：有画像进入时先展示学习情况 / 本次设置 / 练习重点 -->
+      <el-card v-else-if="readyToStart" class="practice-card practice-card--start" shadow="never">
+        <div class="start-panel">
+          <div class="start-head">
+            <div class="start-title">准备开始</div>
+            <div class="start-sub">今天也来练一练吧</div>
+          </div>
+
+          <section class="start-section">
+            <div class="start-section__title">目前学习情况</div>
+            <div class="start-metrics">
+              <div class="metric">
+                <div class="metric__value">Lv.{{ startInfo.levelIdx }}</div>
+                <div class="metric__label">
+                  {{ startInfo.levelLabel }}
+                  <span v-if="startInfo.grade" class="metric__grade">{{ startInfo.grade }}</span>
+                </div>
+              </div>
+              <div class="metric">
+                <div class="metric__value">
+                  {{ startInfo.accuracy === null ? '—' : startInfo.accuracy }}<span
+                    v-if="startInfo.accuracy !== null" class="metric__unit">%</span>
+                </div>
+                <div class="metric__label">历史正确率</div>
+              </div>
+              <div class="metric">
+                <div class="metric__value">{{ startInfo.streak || '—' }}<span
+                  v-if="startInfo.streak" class="metric__unit">天</span></div>
+                <div class="metric__label">连续练习</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="start-section">
+            <div class="start-section__title">这次练什么</div>
+            <div class="start-chips">
+              <span class="chip">{{ startInfo.targetMin }}~{{ startInfo.targetMax }} 题</span>
+              <span class="chip">每组 4~10 题</span>
+              <span class="chip chip--level">
+                {{ startInfo.levelLabel }}
+                <span v-if="startInfo.grade" class="chip__grade">{{ startInfo.grade }}</span>
+              </span>
+            </div>
+          </section>
+
+          <section v-if="startInfo.focus.length" class="start-section">
+            <div class="start-section__title">练习重点</div>
+            <div class="start-chips">
+              <span v-for="f in startInfo.focus" :key="f" class="chip chip--focus">{{ f }}</span>
+            </div>
+          </section>
+
+          <el-button type="primary" size="large" class="start-btn" @click="handleStartPractice">
+            开始练习
+          </el-button>
+        </div>
+      </el-card>
+
       <!-- 加载中：诊断题目生成中 -->
       <el-card class="practice-card practice-card--loading" shadow="never" v-else>
         <div class="loading-state">
@@ -130,7 +188,8 @@ const {
   isPractice,
   isIdle,
   phase,
-  assessmentCompleted
+  assessmentCompleted,
+  readyToStart
 } = storeToRefs(practiceStore)
 
 // ── 题目展示策略 composable (PR-4.2 抽离) ──
@@ -235,7 +294,10 @@ const initPractice = () => {
 
   // 重置输入/反馈状态（feedbackType→null、currentAnswer→''、selectedOption→null）
   practiceStore.resetQuestionInputState()
-  practiceStore.session.sessionStartTime = Date.now()
+  // 注意：不要在这里重置 session.sessionStartTime。
+  // 它表示「整轮开始时间」，由 startNewAdaptiveSession 设置一次，汇总弹窗用它算总用时；
+  // 每题重置会让「用时」退化成最后一题的答题时长。
+  // 单题计时走 practiceStore.startQuestionTimer()（session.startTime）。
 
   // 重置 displayStats (PR-4.2 抽到 composable)
   resetDisplayStats()
@@ -401,7 +463,9 @@ const handleNext = () => {
     let fn
     if (isAssessment.value) {
       fn = completeAssessment
-    } else if (adaptiveEngine.value) {
+    } else if (adaptiveEngine.value && practiceStore.listSource !== 'manual') {
+      // 只有自适应题单才走「组完成 → 评估 → 生成下一组」。
+      // 手动出题的题单做完就是结束，不能被自适应引擎接管。
       fn = completeGroup
     } else {
       fn = handlePracticeComplete
@@ -432,9 +496,14 @@ const handlePracticeComplete = async () => {
   const rate = Math.round((correctAns / totalAns) * 100)
 
   // 非自适应练习完成时，传 finalProfileSnapshot（从 adaptiveEngine 或当前 profile 获取）
+  // 注意：adaptiveEngine.profile 可能是 DB 原始行（没有 snapshot()），
+  // 直接调用会抛 TypeError 并中断整个收尾流程（不弹汇总、不跳首页）。
   let finalProfile = null
-  if (adaptiveEngine?.value?.profile) {
-    finalProfile = adaptiveEngine.value.profile.snapshot()
+  const engProfile = adaptiveEngine?.value?.profile
+  if (typeof engProfile?.snapshot === 'function') {
+    finalProfile = engProfile.snapshot()
+  } else if (engProfile) {
+    finalProfile = engProfile
   }
   await saver.saveSessionFinal({ finalProfileSnapshot: finalProfile })
 
@@ -500,8 +569,16 @@ watch(listPractices, (newPracticeList) => {
   //     没有 profile 也不能用 startNewAdaptiveSession → 重新进入 idle + 触发诊断
   // 这样无论用户从哪种模式完成练习，都不会卡在 loading 状态
   if (decision.type === 'COMPLETION') {
+    // 手动题单做完就结束：不自动开始自适应（handlePracticeComplete 已跳首页）
+    if (practiceStore.listSource === 'manual') {
+      practiceStore.setListSource('adaptive')
+      practiceStore.setReadyToStart(false)
+      return
+    }
     if (decision.action.kind === 'START_ADAPTIVE') {
-      startNewAdaptiveSession()
+      // 完成后也回到准备界面，而不是立刻出一组新题
+      practiceStore.setReadyToStart(true)
+      loadStartInfo()
     } else if (decision.action.kind === 'RESTART_DIAGNOSTIC') {
       practiceStore.setPhase('idle')
       startNewDiagnosticSession()
@@ -714,19 +791,84 @@ if (typeof window !== 'undefined') {
 }
 
 /** 页面载入自动触发能力诊断或恢复自适应 */
+// ─────────────────────────────────────────────────────────────
+// 开始练习界面（有画像进入时不立刻出题，先给学生看这轮练什么）
+// ─────────────────────────────────────────────────────────────
+const startInfo = ref({
+  levelIdx: 0, levelLabel: '', accuracy: 0, streak: 0,
+  targetMin: 10, targetMax: 30, focus: []
+})
+
+async function loadStartInfo() {
+  const { Profile } = await import('@/services/abilityProfile')
+  const { DIFFICULTY_LEVELS } = await import('@/constants/difficulty')
+  const { Answer } = await import('@/services/Answer')
+  const profile = await Profile.load()
+  const idx = profile?.difficultyIdx ?? 0
+  const level = DIFFICULTY_LEVELS[idx] || DIFFICULTY_LEVELS[0]
+  // 正确率/连续天数：直接按全部答题记录算。
+  // 不用 getAggregatedStats —— 它按 practiceSessionId 统计，诊断答案没有 sessionId，
+  // 刚做完诊断会显示 0%，与实际不符。
+  let accuracy = null
+  let answered = 0
+  let streak = 0
+  try {
+    const all = await Answer.getAllByStudent()
+    answered = all.length
+    // getAllByStudent 返回的是数据库原始行（没有 isCorrect getter），要用静态方法判对错
+    if (answered) accuracy = Math.round(all.filter(a => Answer.isCorrect(a)).length / answered * 100)
+  } catch { /* 读不到就当无数据 */ }
+  try {
+    const { getAggregatedStats } = await import('@/services/statsAggregator')
+    const agg = await getAggregatedStats()
+    streak = agg?.dailyStreak || 0
+  } catch { /* 统计失败不阻塞 */ }
+  const cfg = practiceStore.session.adaptiveConfig || practiceStore.session.configSnapshot || {}
+  startInfo.value = {
+    levelIdx: idx + 1,
+    levelLabel: level?.label || '起步',
+    grade: level?.grade || '',
+    accuracy,
+    answered,
+    streak,
+    targetMin: cfg.targetMin ?? 10,
+    targetMax: cfg.targetMax ?? 30,
+    focus: (profile?.weakLevelIndices || [])
+      .slice(0, 3)
+      .map(i => DIFFICULTY_LEVELS[i]?.label)
+      .filter(Boolean),
+  }
+}
+
+/** 点「开始练习」才真正出题 */
+async function handleStartPractice() {
+  practiceStore.setReadyToStart(false)
+  practiceStore.setPhase('practice')
+  practiceStore.resetPracticeSession()
+  await startNewAdaptiveSession()
+}
+
+// 诊断完成后 completeAssessment 会把 readyToStart 置 true，
+// 此时刷新准备界面的数据（刚算出的画像/统计）
+watch(readyToStart, (v) => { if (v) loadStartInfo() })
+
 onMounted(async () => {
   if (listPractices.value.length > 0) return  // 已有题目，不干预
-  // 从 DB 实时计算是否有诊断画像
-  const { Profile } = await import('@/services/abilityProfile')
+  // 从 DB 实时计算是否有诊断画像（判定收口到 hasRealProfile，抽屉门禁共用同一判据）
+  const { Profile, hasRealProfile } = await import('@/services/abilityProfile')
   const profile = await Profile.load()
-  const hasAssessment = profile.difficultyIdx > 0 || profile.strongLevelIndices.length > 0
+  const hasAssessment = hasRealProfile(profile)
+  // 同步到 store：抽屉入口以 hasRealProfile 为准（phase 会被手动出题污染，不能用）
+  practiceStore.setHasRealProfile(hasAssessment)
 
   if (hasAssessment) {
+    // 不直接出题：先进准备界面，让学生看清这轮练什么，点「开始练习」再开始
     practiceStore.setPhase('practice')
-    practiceStore.resetPracticeSession()
-    await startNewAdaptiveSession()
+    await loadStartInfo()
+    practiceStore.setReadyToStart(true)
   } else {
     practiceStore.setPhase('idle')
+    practiceStore.setReadyToStart(false)
     startNewDiagnosticSession()
   }
 })
@@ -753,6 +895,142 @@ onMounted(async () => {
   background: rgba(255, 255, 255, 0.86);
   backdrop-filter: blur(12px);
   box-shadow: 0 12px 32px rgba(23, 110, 191, 0.08);
+}
+
+/* ── 开始练习界面 ── */
+.practice-card--start {
+  max-width: 560px;
+}
+
+.start-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 8px 4px 4px;
+}
+
+.start-head {
+  text-align: center;
+}
+
+.start-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: #1e3c5c;
+  line-height: 1.3;
+}
+
+.start-sub {
+  margin-top: 4px;
+  font-size: 14px;
+  color: #9aa7b4;
+}
+
+.start-section__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #7f8c9b;
+  letter-spacing: 0.02em;
+  margin-bottom: 10px;
+}
+
+.start-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.metric {
+  padding: 14px 10px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f4f9ff, #eef5fd);
+  text-align: center;
+}
+
+.metric__value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #176ebf;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+.metric__unit {
+  font-size: 13px;
+  font-weight: 600;
+  margin-left: 1px;
+}
+
+.metric__grade {
+  margin-left: 4px;
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: #e8f1fb;
+  color: #3f7cb8;
+  font-size: 11px;
+}
+.chip__grade {
+  margin-left: 4px;
+  color: #7d97b3;
+  font-size: 11px;
+}
+.metric__label {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #8794a2;
+}
+
+.start-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4a5a68;
+  background: #f2f5f8;
+}
+
+.chip--level {
+  color: #176ebf;
+  background: rgba(23, 110, 191, 0.1);
+}
+
+.chip--focus {
+  color: #d9822b;
+  background: rgba(217, 130, 43, 0.12);
+}
+
+.start-btn {
+  width: 100%;
+  height: 52px;
+  margin-top: 4px;
+  border-radius: 16px;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+@media (max-width: 480px) {
+  .start-panel {
+    gap: 18px;
+  }
+
+  .start-title {
+    font-size: 22px;
+  }
+
+  .metric {
+    padding: 12px 6px;
+  }
+
+  .metric__value {
+    font-size: 20px;
+  }
 }
 
 .practice-card__header {

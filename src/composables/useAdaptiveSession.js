@@ -25,7 +25,7 @@ import { usePracticeSaver } from '@/composables/usePracticeSaver'
 import { generateDiagnosticQuestions, analyzeAbility } from '@/utils/algorithm/diagnostic'
 import { Engine } from '@/services/adaptiveEngine'
 import { generateAdaptiveBatch } from '@/utils/algorithm/adaptiveBatch'
-import { Profile } from '@/services/abilityProfile'
+import { Profile, hasRealProfile } from '@/services/abilityProfile'
 import { getGroupComment, getCommentByRate } from '@/constants/practice'
 import { sumResponseTimes } from '@/utils/score'
 import { TARGET_LIMITS } from '@/utils/form/formDefaults'
@@ -153,6 +153,7 @@ export function useAdaptiveSession(options = {}) {
     // startNewAdaptiveSession 时 groupIndex=1（G1=confidence）
     const plan = engine.generateQuestionPlan(1, size, false)
     const questions = generateAdaptiveBatch(engine, size, plan)
+    practiceStore.setListSource('adaptive')
     practiceStore.setListPractices(questions)
 
     ElMessage({
@@ -188,12 +189,16 @@ export function useAdaptiveSession(options = {}) {
     })
 
     // 先存 store（completeAssessment 保存 profile、写诊断答案到 DB）
-    const targetMin = 10
-    const targetMax = 30
+    // 题量读用户在抽屉里设的自适应练习量，不能硬编码 —— 否则设「最多 10 题」也会按 30 题跑
+    const cfg = practiceStore.session.adaptiveConfig || practiceStore.session.configSnapshot || {}
+    const targetMin = cfg.targetMin ?? 10
+    const targetMax = cfg.targetMax ?? 30
     practiceStore.completeAssessment(profile, snapshot, { targetMin, targetMax })
 
     // 从 DB 加载画像创建引擎（诊断答案已由 savePerQuestion 写入 DB）
     const dbProfile = await Profile.load()
+    // 诊断完成 → 放行抽屉入口（以 DB 画像为准，而不是无条件置 true）
+    practiceStore.setHasRealProfile(hasRealProfile(dbProfile))
     const engine = new Engine({
       difficultyIdx: dbProfile.difficultyIdx,
       strongLevelIndices: dbProfile.strongLevelIndices,
@@ -209,11 +214,11 @@ export function useAdaptiveSession(options = {}) {
     adaptiveGroupIndex.value = 1
     practiceStore.currentDifficultyIdx = dbProfile.difficultyIdx
 
-    const size = engine.getGroupSize()
-    // P5: 生成排列方案 → 按方案出题
-    const plan = engine.generateQuestionPlan(1, size, false)
-    const firstQuestions = generateAdaptiveBatch(engine, size, plan)
-    practiceStore.setListPractices(firstQuestions)
+    // 诊断完成后不立刻出题：回到准备界面，让学生看清这轮练什么再点「开始练习」。
+    // 引擎已就绪，startNewAdaptiveSession 会在点开始时重建一套干净的会话。
+    practiceStore.setReadyToStart(true)
+    // 清空诊断题单，否则 currentQuestion 仍是最后一道诊断题，模板会继续显示答题卡
+    practiceStore.setListPractices([])
   }
 
   /**
@@ -238,8 +243,12 @@ export function useAdaptiveSession(options = {}) {
     const allAnswers = [...session.value.answers]
     const instances = allAnswers.map(a => a instanceof Answer ? a : new Answer(a))
     const engine = adaptiveEngine.value
+    // 手动题单：这一轮的全部答案就是这一组，不能按自适应组大小切
+    //（原实现一律用 engine.lastGroupSize，手动出 6 题、上次自适应组是 4 题时，
+    //  只评了后 4 题 → 弹窗显示 4/4，且 evaluateGroup 拿到残缺数据）
+    const isManualList = practiceStore.listSource === 'manual'
     // 用持久化的 lastGroupSize，不重新调 getGroupSize（防随机抖动导致切片错位）
-    const size = engine.lastGroupSize || engine.getGroupSize()
+    const size = isManualList ? allAnswers.length : (engine.lastGroupSize || engine.getGroupSize())
     const groupAnswers = instances.slice(-size)
     const groupCorrect = groupAnswers.filter(a => a.isCorrect).length
     const groupTime = sumResponseTimes(groupAnswers)
@@ -289,7 +298,10 @@ export function useAdaptiveSession(options = {}) {
       // ── 全部完成 → 弹汇总弹窗 ──
       const finalAnswers = allAnswers
       const totalCorrect = Math.round(Answer.sumScores(finalAnswers))
-      const totalTime = sumResponseTimes(finalAnswers)
+      // 用时用「整轮开始时间 → 现在」的墙上时间，而不是逐题 responseTime 之和。
+      // 后者不含组间自我评价弹窗、页面生成等待，家长看到的数比真实耗时要短。
+      const startedAt = practiceStore.session.sessionStartTime
+      const totalTime = startedAt ? (Date.now() - startedAt) : sumResponseTimes(finalAnswers)
       const totalRate = Math.round((totalCorrect / finalAnswers.length) * 100)
       const { emoji, comment, color: rateColor2 } = getCommentByRate(totalRate)
 
@@ -302,7 +314,7 @@ export function useAdaptiveSession(options = {}) {
           correctAnswers: totalCorrect,
           rate: totalRate,
           rateColor: rateColor2,
-          totalTime: formatDuration(totalTime),
+          totalTime: formatDuration(totalTime, { roundSeconds: true }),
           confirmText: '开始新一轮',
           cancelText: '📊 分析',
         })
@@ -355,6 +367,7 @@ export function useAdaptiveSession(options = {}) {
     groupAnswerOffset.value = allAnswers.length
     session.value.answers = [...allAnswers]
     practiceStore.resetCurrentIndex()
+    practiceStore.setListSource('adaptive')
     practiceStore.setListPractices(nextQuestions)
     return 'continue'
   }
@@ -364,6 +377,9 @@ export function useAdaptiveSession(options = {}) {
    * 由 Practice.vue handleNext 中调用
    */
   async function afterAnswer() {
+    // 手动出题的题单不做「动态微调」：用户逐项指定的题目必须原样保留，
+    // 只有自适应题单才允许 adjustNextQuestion 改写下一题。
+    if (practiceStore.listSource !== 'adaptive') return
     if (!adaptiveEngine.value) return
     const eng = adaptiveEngine.value
     const profile = _profileForSaver || eng.profile

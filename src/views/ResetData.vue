@@ -30,14 +30,19 @@ import { useRouter } from 'vue-router'
 import { ElCard, ElCheckbox, ElButton, ElResult, ElIcon } from 'element-plus'
 import { Delete } from '@element-plus/icons-vue'
 import { clearAllData } from '@/services/databaseInit'
+import { usePracticeStore } from '@/stores/practice'
 
 const router = useRouter()
+const practiceStore = usePracticeStore()
 const confirmed = ref(false)
 const done = ref(false)
 
 const handleReset = async () => {
   try {
     await clearAllData()
+    // 数据库已清空 → 画像不存在了，必须同步重置内存态
+    // 否则抽屉门禁仍认为「已评估完成」，且残留题目会继续显示
+    practiceStore.$reset()
     done.value = true
   } catch (e) {
     console.error('清空数据失败', e)

@@ -83,6 +83,8 @@ export function generateOneQuestion(levelIdx, engine, seen, type) {
     formulaList: level.formulaList,
     carry: level.carry,
     abdication: level.abdication,
+    // 档位可覆盖除法余数策略（'2'=整除 '3'=必须有余数），默认沿用 baseConfig
+    remainder: level.remainder ?? engine.baseConfig.remainder,
     resultMinValue: 1,
     resultMaxValue: level.resultMax,
   }

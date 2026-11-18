@@ -210,6 +210,25 @@ export class Answer extends Question {
       }
     }
 
+    // 同一题的重试不应新增一行：practiceSessionId + questionIndex 视为同一个答题槽位。
+    // 原实现在答错重试时每次都 insert，导致 DB 里一题多行（如某槽位 4 行 attemptCount 1..4），
+    // 于是 DB 侧准确率（按行统计）与 UI（按题去重）不一致，画像被重试记录污染。
+    if (plain.id == null && plain.questionIndex != null) {
+      try {
+        const existing = plain.practiceSessionId
+          ? await DB.answers
+            .where('practiceSessionId').equals(plain.practiceSessionId)
+            .filter(r => r.questionIndex === plain.questionIndex)
+            .first()
+          : await DB.answers
+            .filter(r => !r.practiceSessionId && r.questionIndex === plain.questionIndex)
+            .first()
+        if (existing?.id) plain.id = existing.id
+      } catch {
+        // 查询失败就按新增处理，不阻塞答题
+      }
+    }
+
     return await DB.answers.put(plain)
   }
 

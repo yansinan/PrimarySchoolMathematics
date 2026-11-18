@@ -1,5 +1,5 @@
 <template>
-    <!-- 生成测试菜单 -->
+    <!-- 生成测试菜单：常显（出题/打印不依赖能力评估，只有「开始练习」需要画像） -->
     <el-tooltip
         class="box-item"
         content="生成测试"
@@ -64,10 +64,12 @@
             @click="generate" class="action-btn">
             <el-icon><Document /></el-icon> 生成卷子
           </el-button>
-          <el-button :disabled="!paperList.length || !formValid" type="primary" size="large" :loading="buttonLoading"
+          <!-- 开始练习需要能力评估画像；做题/打印卷子不受此限制 -->
+          <el-button v-if="practiceStore.hasRealProfile" :disabled="!paperList.length || !formValid" type="primary" size="large" :loading="buttonLoading"
             @click="generateFormulas" class="action-btn action-btn--primary">
             <el-icon><CaretRight /></el-icon> 开始练习
           </el-button>
+          <span v-else class="practice-locked-hint">先做完能力评估才能这里开练（出题和打印卷子可以直接用）</span>
         </div>
       </div>
     </el-drawer>
@@ -186,11 +188,28 @@ const generateFormulas = () => {
     return
   }
 
+  // 守卫：题数为 0 会让生成器空转（psm.js generate 里曾是 while(true)），直接挡在入口
+  if (!(numberOfFormulas >= 1)) {
+    proxy.$message.error('请先添加至少 1 道口算题')
+    return
+  }
+  if (paperList.value.some(p => !(parseInt(p.numberOfFormulas, 10) >= 1))) {
+    proxy.$message.error('存在题数为 0 的题组，请修改后再开始练习')
+    return
+  }
+
   const papers = createFormulasGenerator(toRaw(unref(formData)), toRaw(unref(paperList)))
   const listFormulas = papers.reduce((prev, cur) => {
     prev.push(...cur.formulas)
     return prev
   }, []);
+
+  // 配置合法但生成不出题（范围与进位/退位要求互斥）：必须明确报错，
+  // 否则题单为空 → 页面停在「正在生成…」加载态，用户完全不知道发生了什么
+  if (listFormulas.length === 0) {
+    proxy.$message.error('当前设置有冲突，一题也生成不出来。请放宽数字范围，或改掉「必须进位/必须退位」这类限制')
+    return
+  }
   
   // 测试计算结果
   const listResult = listFormulas.reduce((prev, cur) => {
@@ -207,6 +226,10 @@ const generateFormulas = () => {
 
   // Manual generation → switch to practice mode
   practiceStore.setPhase('practice')
+  // 标记题单来源：手动题单在答题过程中不允许被自适应引擎改写
+  practiceStore.setListSource('manual')
+  // 手动出题直接进题，不展示「准备开始」界面
+  practiceStore.setReadyToStart(false)
 
   practiceStore.setGenerateDrawerVisible(false);
   practiceStore.setListPractices(listResult);
@@ -297,6 +320,13 @@ const handleClose = (done) => {
       font-weight: 600;
     }
   }
+
+  .practice-locked-hint {
+    align-self: center;
+    font-size: 13px;
+    line-height: 1.4;
+    color: #909399;
+  }
 }
 
 // ── Paper tags ──
@@ -312,8 +342,24 @@ const handleClose = (done) => {
 
 // ── Responsive ──
 @media (max-width: 480px) {
+  // 手机：按钮竖排并吸底，不必滚到底部才能点到「生成卷子」
   .drawer-actions {
     flex-direction: column;
+    position: sticky;
+    bottom: 0;
+    padding: 8px 0 0;
+    background: var(--el-bg-color, #fff);
+  }
+
+  // 屏幕窄，收一点内边距把宽度还给内容
+  :deep(.generate-drawer) {
+    .el-drawer__body {
+      padding: 16px;
+    }
+
+    .el-drawer__close-btn {
+      padding: 8px;
+    }
   }
 }
 </style>

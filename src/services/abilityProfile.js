@@ -30,6 +30,25 @@ import { STRONG_THRESHOLD, WEAK_THRESHOLD } from '@/constants/practice'
  * @see services/adaptiveEngine.js — Engine 类（持 Profile 实例）
  * @see utils/algorithm/adaptiveEngine.js — computeDifficultyIdx（原 U 层函数已 inline）
  */
+/**
+ * 判断一个 profile 是否代表「已完成真实能力评估」
+ *
+ * 为什么不能用 practiceStore.phase === 'practice' 判断：
+ *   手动出题（Generate.vue#generateFormulas）也会把 phase 设为 'practice'，
+ *   于是从没做过诊断的用户也会被当成「评估已完成」。
+ *
+ * 判据与 Practice.vue onMounted 一致：有难度索引 / 有强项 / 有弱项，三者任一即为真。
+ *
+ * @param {Profile|null|undefined} profile
+ * @returns {boolean}
+ */
+export function hasRealProfile(profile) {
+  if (!profile) return false
+  return (profile.difficultyIdx > 0)
+    || ((profile.strongLevelIndices?.length ?? 0) > 0)
+    || ((profile.weakLevelIndices?.length ?? 0) > 0)
+}
+
 export class Profile {
   /** @param {{ difficultyIdx: number, strongLevelIndices: number[], weakLevelIndices: number[], _rawAnswers?: Array, masteryMap?: Map }} data */
   constructor(data = {}) {
