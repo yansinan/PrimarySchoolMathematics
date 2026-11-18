@@ -8,6 +8,7 @@
  *  - 评语分级：COMMENT_THRESHOLDS
  *  - 自适应速度：SPEED_THRESHOLDS
  *  - 自适应正确率：ACCURACY_THRESHOLDS
+ *  - 连续触发阈值：MIN_CONSECUTIVE_FOR_TRANSITION
  *  - 小组最小组数：MIN_GROUPS_PER_DIMENSION
  *
  * 调用方：Practice.vue、adaptiveEngine.js、useAdaptiveSession.js 等
@@ -84,8 +85,8 @@ export const ASSESSMENT_ABORT_WRONG_STREAK = 2
 // 2026-06-06：从 6 降到 5（配合画像出题策略 G1/G2/G3/G4/GN 五组节奏）
 export const MIN_GROUPS_PER_DIMENSION = 5
 
-// 自适应引擎：连续答好多组才升阶
-export const CONSECUTIVE_GOOD_TO_ADVANCE = 3
+// 自适应引擎：连续 N 组成绩稳定（好或差）才触发难度变更
+export const MIN_CONSECUTIVE_FOR_TRANSITION = 3
 
 /* ============================================================
    小组评语（自适应）

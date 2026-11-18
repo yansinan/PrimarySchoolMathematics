@@ -76,7 +76,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, unref, toRaw, getCurrentInstance, computed } from 'vue';
+import { ref, onMounted, unref, toRaw, getCurrentInstance, computed, watch } from 'vue';
 import { useRouter } from "vue-router";
 import { CustomFormulas, AutoGenerateFormulas, ConfigurationList } from "@/components/generate";
 import ConfigStorage from "@/utils/store/configStorage";
@@ -85,6 +85,7 @@ import { usePracticeStore } from '@/stores/practice';
 import { createFormulasGenerator } from '@/utils/paperGenerator';
 // 表单默认值（17 字段统一来源）
 import { DEFAULT_FORM_DATA, applyConfigToFormData, buildPaperDescriptionList } from '@/utils/form/formDefaults';
+import { loadFormState, saveFormState } from '@/utils/store/formPersistence';
 // 解算式
 import { EquationSolver } from '@/utils/algorithm/EquationSolver';
 const { proxy } = getCurrentInstance()
@@ -105,7 +106,12 @@ const formValid = ref(true)
 
 const refForm = ref(null)
 
-const formData = ref({ ...DEFAULT_FORM_DATA })
+// 上次保存的出题设置（题数、练习量、进位/退位、题型…）
+const savedFormState = loadFormState()
+
+const formData = ref(savedFormState
+  ? { ...DEFAULT_FORM_DATA, ...savedFormState.formData }
+  : { ...DEFAULT_FORM_DATA })
 
 const configurations = ref([])
 
@@ -114,14 +120,33 @@ onMounted(async () => {
   document.title = '小学数学口算题 | Primary School Mathematics'
 
   refreshConfiguration()
-  const { data: config } = configurations.value[0] // todo
 
-  // 用 applyConfigToFormData 替代 19 行手写赋值（含 targetMin/Max）
-  applyConfigToFormData(formData.value, config, { includeAdaptive: true })
+  // 只在「没有保存过设置」时才套用默认配置行。
+  // 否则会把用户上次改的题数/练习量覆盖回默认值 —— 这正是「设置没保存」的直接原因。
+  if (!savedFormState) {
+    const { data: config } = configurations.value[0] // todo
+    // 用 applyConfigToFormData 替代 19 行手写赋值（含 targetMin/Max）
+    applyConfigToFormData(formData.value, config, { includeAdaptive: true })
+  }
 })
 
-const paperList = ref([])
+// 题组里每组的题数存在 paperList 里，只存 formData 修不好「题组题数不保存」
+const paperList = ref(
+  savedFormState?.paperList?.length
+    ? savedFormState.paperList.map(p => ({ ...p }))
+    : []
+)
 const paperDescriptionList = computed(() => buildPaperDescriptionList(paperList.value))
+
+/**
+ * 表单任何改动都自动落盘（debounce 在 saveFormState 内部）。
+ * 用户改完设置不需要点「保存配置」，刷新/重开浏览器后仍是他自己的设置。
+ */
+watch(
+  [formData, paperList],
+  () => saveFormState(toRaw(unref(formData)), toRaw(unref(paperList))),
+  { deep: true }
+)
 
 const activeConfigurationId = ref('1')
 const refreshConfiguration = () => {

@@ -60,6 +60,7 @@
 
 <script setup>
 import { Back } from '@element-plus/icons-vue'
+import { playSfx } from '@/utils/sound/sfx'
 
 const props = defineProps({
   currentValue: {
@@ -80,11 +81,13 @@ const props = defineProps({
 const emit = defineEmits(['input', 'backspace', 'submit'])
 
 const handleNumber = (num) => {
+  playSfx('tap')
   emit('input', (props.currentValue || '') + num)
 }
 
 const handleBackspace = () => {
   if (props.currentValue) {
+    playSfx('tap')
     emit('backspace')
     emit('input', props.currentValue.slice(0, -1))
   }

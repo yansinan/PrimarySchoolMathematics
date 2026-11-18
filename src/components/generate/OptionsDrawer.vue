@@ -85,6 +85,53 @@
           <template #prepend>卷子副标题</template>
         </el-input>
       </el-form-item>
+
+      <!-- 档位配比：默认全不配置 = 与原有选题权重完全一致 -->
+      <el-form-item>
+        <el-collapse v-model="ratioOpen" class="level-ratio">
+          <el-collapse-item name="ratio">
+            <template #title>
+              <span class="level-ratio__title">
+                档位配比
+                <el-tag v-if="customCount" size="small" type="warning" effect="plain">
+                  {{ customCount }} 档已自定义
+                </el-tag>
+              </span>
+            </template>
+            <p class="level-ratio__hint">
+              不配置 = 按原有权重出题（默认）；0 = 该档不出；大于 1 = 提高占比。
+              只影响自适应练习里各档的出现比例，不改难度判定与升降级。
+            </p>
+            <div v-for="group in groupedLevels" :key="group.grade" class="level-ratio__group">
+              <div class="level-ratio__group-title">{{ group.grade }}</div>
+              <div v-for="lv in group.levels" :key="lv.idx" class="level-ratio__row">
+                <span class="level-ratio__label">
+                  <span class="level-ratio__idx">{{ lv.idx + 1 }}</span>{{ lv.label }}
+                </span>
+                <el-input-number
+                  :model-value="coefOf(lv.idx)"
+                  :min="0"
+                  :max="3"
+                  :step="0.1"
+                  :precision="1"
+                  size="small"
+                  controls-position="right"
+                  class="level-ratio__input"
+                  @update:model-value="(v) => setCoef(lv.idx, v)"
+                />
+              </div>
+            </div>
+            <el-button
+              v-if="customCount"
+              link
+              type="danger"
+              size="small"
+              class="level-ratio__reset"
+              @click="resetCoef"
+            >恢复全部默认</el-button>
+          </el-collapse-item>
+        </el-collapse>
+      </el-form-item>
     </ElForm>
   </el-drawer>
 </template>
@@ -92,6 +139,14 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { fileNameGeneratedRuleEnum } from '@/utils/enum.js';
+import { DIFFICULTY_LEVELS } from '@/constants/difficulty';
+import {
+  loadLevelCoefficients,
+  saveLevelCoefficients,
+  clearLevelCoefficients,
+  COEF_MIN,
+  COEF_MAX,
+} from '@/utils/store/levelCoefficients';
 
 const fileNameGeneratedRuleOptions = computed(() => {
   return Object.entries(fileNameGeneratedRuleEnum).map(([, { key, text }]) => {
@@ -168,6 +223,47 @@ const remainderOptions = computed(() => {
   ]
 })
 
+/* ─── 档位配比 ───────────────────────────────────────────────
+ * 系数表只存「非 1」的项，未配置的档位沿用引擎里的基准权重
+ * (Math.pow(1.5, i))，所以默认空表时选题行为与改动前一致。
+ */
+const coefficients = ref(loadLevelCoefficients())
+const ratioOpen = ref([])           // 默认收起，24 行不占屏
+
+const groupedLevels = computed(() => {
+  const groups = []
+  DIFFICULTY_LEVELS.forEach((lv, idx) => {
+    const grade = lv.grade || '未分组'
+    let g = groups.find(x => x.grade === grade)
+    if (!g) { g = { grade, levels: [] }; groups.push(g) }
+    g.levels.push({ idx, label: lv.label })
+  })
+  return groups
+})
+
+const customCount = computed(() => Object.keys(coefficients.value).length)
+
+/** 展示值：未配置显示 1.0 */
+const coefOf = (idx) => {
+  const v = coefficients.value[idx]
+  return typeof v === 'number' ? v : 1
+}
+
+function setCoef(idx, val) {
+  const num = Number(val)
+  const next = { ...coefficients.value }
+  if (!Number.isFinite(num)) return
+  if (num === 1) delete next[idx]              // 回到默认 → 不留条目
+  else next[idx] = Math.min(COEF_MAX, Math.max(COEF_MIN, num))
+  coefficients.value = next
+  saveLevelCoefficients(next)
+}
+
+function resetCoef() {
+  clearLevelCoefficients()
+  coefficients.value = {}
+}
+
 /**
  * 
  * @param {Function} done 
@@ -189,6 +285,79 @@ const handleClose = (done) => {
  * 且该元素被 teleport，scoped 的 data-v 属性落不到它上面，所以这里必须用
  * 非 scoped 样式 + `.el-drawer.options-drawer` 双类定位。
  */
+/* ─── 档位配比 ─────────────────────────────────── */
+.level-ratio {
+  width: 100%;
+  border-top: none;
+}
+
+.level-ratio__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #303133;
+}
+
+.level-ratio__hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #909399;
+}
+
+.level-ratio__group {
+  margin-bottom: 10px;
+}
+
+.level-ratio__group-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #176ebf;
+  margin-bottom: 4px;
+}
+
+.level-ratio__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.level-ratio__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #4b5563;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.level-ratio__idx {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: #eef4fb;
+  color: #7f8c9b;
+  font-size: 11px;
+  flex: 0 0 auto;
+}
+
+.level-ratio__input {
+  flex: 0 0 96px;
+  width: 96px;
+}
+
+.level-ratio__reset {
+  margin-top: 4px;
+}
+
 @media (max-width: 480px) {
   .el-drawer.options-drawer {
     width: calc(100vw - 32px) !important;

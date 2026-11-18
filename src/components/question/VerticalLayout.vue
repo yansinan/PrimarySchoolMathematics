@@ -22,7 +22,7 @@
 
       <div class="eq-row second-row">
         <div class="op-cell">
-          <span class="math-operator">{{ parsedEquation.operator }}</span>
+          <span class="math-operator">{{ parsedEquation.displayOperator }}</span>
         </div>
         <div class="digits-cell">
           <DigitInput

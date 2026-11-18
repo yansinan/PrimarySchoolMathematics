@@ -22,7 +22,7 @@ import {
   ASSIST_LEVELS,
   MAX_NORMAL_ASSIST_LEVEL,
   MASTERY_CHECK_CONFIG,
-  CONSECUTIVE_GOOD_TO_ADVANCE,
+  MIN_CONSECUTIVE_FOR_TRANSITION,
   MIN_GROUPS_PER_DIMENSION,
   PROFILE_RATIOS,
   STRONG_THRESHOLD,
@@ -32,6 +32,7 @@ import {
 import { DIFFICULTY_LEVELS } from '@/constants/difficulty'
 import { Question, Answer, WrongAnswer } from '@/services'
 import { generateOneQuestion } from '@/utils/algorithm/adaptiveBatch'
+import { loadLevelCoefficients, COEF_DEFAULT } from '@/utils/store/levelCoefficients'
 
 // 小组题量阶梯（每个速度级别对应一个基数）
 const GROUP_SIZES = [6, 10, 14, 18, 22]
@@ -186,6 +187,7 @@ export class Engine {
       formulaList: level.formulaList,
       carry: level.carry,
       abdication: level.abdication,
+      remainder: level.remainder ?? this.baseConfig.remainder,
       resultMinValue: 1,
       resultMaxValue: level.resultMax,
     }
@@ -202,7 +204,9 @@ export class Engine {
 
   diversifyBatch(baseEquations) {
     return baseEquations.map(q => {
-      const modeKey = pickInputMode(this)
+      let modeKey = pickInputMode(this)
+      // 乘除法没有竖式布局（VerticalLayout 仅支持三行加减式），一律走横式键盘
+      if (modeKey === 'vertical_keypad' && /[×÷]/.test(q.equation)) modeKey = 'horizontal_keypad'
       const modeConfig = ASSIST_LEVELS.find(m => m.key === modeKey) || ASSIST_LEVELS[0]
       let equation = q.equation
       let solution = q.solution
@@ -268,7 +272,7 @@ export class Engine {
     }
     const maxLevel = DIFFICULTY_LEVELS.length - 1
 
-    if (!done && engine.consecutiveGood >= CONSECUTIVE_GOOD_TO_ADVANCE && engine.groupsAtThisLevel >= MIN_GROUPS_PER_DIMENSION) {
+    if (!done && engine.consecutiveGood >= MIN_CONSECUTIVE_FOR_TRANSITION && engine.groupsAtThisLevel >= MIN_GROUPS_PER_DIMENSION) {
       if (engine.difficultyIdx < maxLevel) {
         engine.difficultyIdx = Math.min(maxLevel, engine.difficultyIdx + 1)
         engine.assistLevel = Math.min(MAX_NORMAL_ASSIST_LEVEL, engine.assistLevel + 1)
@@ -277,7 +281,7 @@ export class Engine {
         const remaining = engine.targetMax - engine.totalAnswered
         if (remaining > 0) nextSize = Math.min(nextSize, remaining)
       } else { done = true }
-    } else if (!done && engine.consecutiveBad >= CONSECUTIVE_GOOD_TO_ADVANCE && engine.groupsAtThisLevel >= MIN_GROUPS_PER_DIMENSION) {
+    } else if (!done && engine.consecutiveBad >= MIN_CONSECUTIVE_FOR_TRANSITION && engine.groupsAtThisLevel >= MIN_GROUPS_PER_DIMENSION) {
       if (engine.difficultyIdx > 0) {
         engine.difficultyIdx = Math.max(0, engine.difficultyIdx - 1)
         engine.assistLevel = 0; engine.groupsAtThisLevel = 0; engine.consecutiveBad = 0
@@ -447,21 +451,53 @@ export class Engine {
     }
   }
 
+  /**
+   * 选强项档位。
+   *
+   * 基准权重是 Math.pow(1.5, i)：filtered 升序，下标越靠后（档位越高）权重越大。
+   * 这正是「多位数加减法一次出太多」的来源 —— 强项若集中在高位档，
+   * 最高档独占 1.5^(n-1)，每组 40~60% 的 strong 题都落在那里。
+   *
+   * 档位配比系数（utils/store/levelCoefficients）在这里缩放各档权重：
+   *   - 未配置的档位 → 仍是 Math.pow(1.5, i)，与改动前逐位一致
+   *   - 配置了系数的档位 → 基准 × 系数；系数 0 即不出现
+   *   - 只配置了不在强项里的档位 → 该档被拉进候选池（想补低档复习时用）
+   * 系数表为空时，candidates === strongLevelIndices.filter(...)，行为不变。
+   */
   pickStrongLevel() {
     const indices = this.strongLevelIndices
     if (!indices.length) return null
     const MAX_ADVANCE = 2
-    const filtered = indices.filter(i => i <= this.difficultyIdx + MAX_ADVANCE)
-    if (!filtered.length) return this.difficultyIdx
-    const n = filtered.length
-    const weights = Array.from({ length: n }, (_, i) => Math.pow(1.5, i))
-    return weightedRandom(filtered, weights)
+    const top = this.difficultyIdx + MAX_ADVANCE
+    // 实例上的 levelCoefficients 优先（测试/外部注入），否则实时读存储
+    const coeffs = this.levelCoefficients ?? loadLevelCoefficients()
+    const inPool = indices.filter(i => i <= top)
+    // 显式配置过系数的档位也纳入候选（未配置时 extras 恒空 → 候选池不变）
+    const extras = Object.keys(coeffs)
+      .map(Number)
+      .filter(i => !inPool.includes(i) && i >= 0 && i < DIFFICULTY_LEVELS.length && i <= top)
+    const candidates = [...new Set([...inPool, ...extras])].sort((a, b) => a - b)
+    if (!candidates.length) return this.difficultyIdx
+    const weights = candidates.map((levelIdx, i) => {
+      const base = Math.pow(1.5, i)
+      const coef = coeffs[levelIdx]
+      return typeof coef === 'number' ? base * coef : base
+    })
+    // 全部系数被调成 0 → 退回当前档，避免 weightedRandom 拿到全 0 权重
+    if (!(weights.reduce((s, w) => s + w, 0) > 0)) return this.difficultyIdx
+    return weightedRandom(candidates, weights)
   }
 
   pickWeakLevel() {
     const indices = this.weakLevelIndices
     if (!indices.length) return null
-    // 从最低难度弱项开始练（indices 天然升序）
-    return indices[0]
+    // 从最低难度弱项开始练（indices 天然升序）；
+    // 被配比系数调成 0 的档位跳过（默认空表 → 仍取 indices[0]，行为不变）
+    const coeffs = this.levelCoefficients ?? loadLevelCoefficients()
+    const allowed = indices.filter(i => {
+      const c = coeffs[i]
+      return typeof c !== 'number' || c > 0
+    })
+    return (allowed.length ? allowed : indices)[0]
   }
 }

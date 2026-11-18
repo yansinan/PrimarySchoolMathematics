@@ -112,7 +112,7 @@
           :class="{ 'ability-card__wrong-item--resolved': item.isResolved }"
         >
           <span class="ability-card__wrong-rank">{{ idx + 1 }}</span>
-          <span class="ability-card__wrong-equation">{{ item.equation }}</span>
+          <span class="ability-card__wrong-equation">{{ toDisplaySymbols(item.equation) }}</span>
           <span class="ability-card__wrong-meta">
             错 {{ item.wrongCount }} 次 · P{{ item.priority }}
             <span v-if="item.isResolved" class="ability-card__wrong-resolved">已改正</span>
@@ -140,6 +140,7 @@
 import WeaknessV2Card from './WeaknessV2Card.vue'
 import StrengthV2Card from './StrengthV2Card.vue'
 import { useAbilityProfile } from '@/composables/useAbilityProfile'
+import { toDisplaySymbols } from '@/utils/algorithm/equationCore'
 
 // 定义组件 props（arch-v2.3-5.4 清理误删，v2.3 烟测补回）
 const { compact } = defineProps({ compact: Boolean })

@@ -59,7 +59,15 @@ export const usePracticeStore = defineStore('practice', {
       startTime: null,           // current question start time (ms)
       sessionStartTime: null,    // entire session start time (ms)
       configSnapshot: null,      // config snapshot from Generate.vue，仅用于数据库统计
-      adaptiveConfig: null       // 自适应引擎专用配置，只在诊断完成时设置，不受 Generate.vue 污染
+      adaptiveConfig: null,      // 自适应引擎专用配置，只在诊断完成时设置，不受 Generate.vue 污染
+      /**
+       * 用户当前在抽屉里设置的自适应练习量（实时）。
+       * adaptiveConfig 是「诊断完成那一刻的快照」，改抽屉不会更新它 ——
+       * 于是开始界面和引擎都还在用旧值，表现为「改了配置没反应」。
+       * 这里单独存用户的最新设置，读取优先级：
+       *   adaptiveTarget（实时设置） > adaptiveConfig（诊断快照） > 默认 10/30
+       */
+      adaptiveTarget: null
     }
   }),
   getters: {
@@ -197,6 +205,22 @@ export const usePracticeStore = defineStore('practice', {
 
     setReadyToStart(val) {
       this.readyToStart = !!val
+    },
+
+    /**
+     * 记录用户当前设置的自适应练习量（抽屉里一改就调）
+     * @param {number} min 最少题数
+     * @param {number} max 最多题数
+     */
+    setAdaptiveTarget(min, max) {
+      const lo = Number(min)
+      const hi = Number(max)
+      if (!Number.isFinite(lo) || !Number.isFinite(hi)) return
+      if (lo < 1 || hi < 1) return
+      this.session.adaptiveTarget = {
+        targetMin: Math.floor(lo),
+        targetMax: Math.floor(hi),
+      }
     },
 
     // ── Timing helpers ──

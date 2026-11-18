@@ -166,11 +166,28 @@ export class Profile {
     groups.sort((a, b) => a.levelIdx - b.levelIdx)
     if (groups.every(g => g.accuracy >= STRONG_THRESHOLD)) {
       const highest = groups[groups.length - 1]
-      return Math.min(DIFFICULTY_LEVELS.length - 1, highest.levelIdx + 1)
+      const nextIdx = Math.min(DIFFICULTY_LEVELS.length - 1, highest.levelIdx + 1)
+      // 只在同一运算类型内 +1。
+      // 跨学段推档会造成「诊断 5 题全对 → 直接进乘法」这类跳级：
+      // 两位数加减的最高档（8 进退位巩固）+1 正好是 9（乘法口诀·2~6）。
+      // 真实升档交给引擎的「连续多组成绩稳定」机制，诊断只负责定位起点。
+      if (Profile._opKind(DIFFICULTY_LEVELS[nextIdx]) !== Profile._opKind(DIFFICULTY_LEVELS[highest.levelIdx])) {
+        return highest.levelIdx
+      }
+      return nextIdx
     }
     for (let i = groups.length - 1; i >= 0; i--) {
       if (groups[i].accuracy >= STRONG_THRESHOLD) return groups[i].levelIdx
     }
     return groups[0].levelIdx
+  }
+
+  /** 档位的运算类型：加减统一归为 'as'（它的 operators 可能是 null 或 [1,2]） */
+  static _opKind(level) {
+    const ops = (level?.formulaList || []).flatMap(f => f.operators || [])
+    if (!ops.length) return 'as'
+    if (ops.includes(3) && !ops.includes(4)) return 'mul'
+    if (ops.includes(4) && !ops.includes(3)) return 'div'
+    return 'as'
   }
 }

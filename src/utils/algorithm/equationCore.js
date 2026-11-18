@@ -19,3 +19,17 @@ export const toEvalSymbols = (expr = '') => {
     .replace(/＋/g, '+')
     .replace(/－/g, '-')
 }
+
+/**
+ * 把 * / 换成数学符号 × ÷（显示用，toEvalSymbols 的逆操作）
+ *
+ * 只替换运算符位置上的符号。这里用「数字/右括号/未知数 + 运算符 + 数字」的模式，
+ * 避免误伤负数或其它场景里出现的 /（本项目的算式只有四则运算，不会有别的用法）。
+ * @param {string} [expr='']
+ * @returns {string}
+ */
+export const toDisplaySymbols = (expr = '') => {
+  return String(expr)
+    .replace(/\*/g, '×')
+    .replace(/\//g, '÷')
+}

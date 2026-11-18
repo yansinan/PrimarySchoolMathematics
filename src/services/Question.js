@@ -106,40 +106,48 @@ function _matchLevel(answer) {
   const operandMax = Math.max(a, b)
   const hasCarry = answer.isCarry ?? (opNum === 3 ? _isMultCarry(a, b) : _isCarry(a, b))
   const hasBorrow = answer.isBorrow ?? _isBorrow(a, b, opNum)
-  for (let i = 0; i < DIFFICULTY_LEVELS.length; i++) {
-    const level = DIFFICULTY_LEVELS[i]
-    if (opNum === 1 || opNum === 3) {
-      if (level.carry === '2' && !hasCarry) continue
-      if (level.carry === '3' && hasCarry) continue
+  // 档位的 carry / abdication 三态语义（与 constants/difficulty 一致）：
+  //   '3' = 禁止进退位（硬约束，题目必须确实无进退位）
+  //   '2' = 允许（有或没有都算）
+  //   '1' = 鼓励（生成时倾向有，匹配时不作硬性要求）
+  //
+  // 刻意不把 '2' 当作「必须进退位」——那是旧实现的 bug：
+  // 51+52=（个位 1+2 不进位）会把所有 carry='2' 的两位数档位全部跳过，
+  // 一路掉到「综合挑战」，再被 computeDifficultyIdx 的 +1 推到乘法档。
+  //
+  // 分两遍扫描：先让『禁止进退位』的硬约束档位优先命中（4+3 应落在「起步/两位数入门」，
+  // 而不是被宽松档位抢走），再按顺序接受其余档位。
+  for (const strictPass of [true, false]) {
+    for (let i = 0; i < DIFFICULTY_LEVELS.length; i++) {
+      const level = DIFFICULTY_LEVELS[i]
+      const forbidCarry = opNum === 2 ? level.abdication === '3' : level.carry === '3'
+      if (forbidCarry !== strictPass) continue
+      if (forbidCarry && (opNum === 2 ? hasBorrow : hasCarry)) continue
+      const rangeMatch = (() => {
+        const specific = level.formulaList.find(f => {
+          if (operandMax > f.max) return false
+          if (!(operandMin >= f.min || operandMax >= f.min)) return false
+          // 乘除档位：约束「较小操作数」的位数（乘法的一位因数 / 除法的除数）
+          if (f.opMax != null && operandMin > f.opMax) return false
+          if (f.opMin != null && operandMin < f.opMin) return false
+          // 除法档位：约束商的上限（表内除法要求商落在口诀范围内，排除 24÷2=12 这类）
+          if (f.quotMax != null && operandMax / operandMin > f.quotMax) return false
+          // 除法档位：约束商的下限（两位数÷一位数要求商为两位数，排除 21÷7=3 这类表内题）
+          if (f.quotMin != null && operandMax / operandMin < f.quotMin) return false
+          return f.operators != null && f.operators.includes(opNum)
+        })
+        if (specific) return true
+        const hasExplicitOp = level.formulaList.some(f => f.operators != null)
+        if (hasExplicitOp) return false
+        return level.formulaList.some(f => {
+          if (operandMax > f.max) return false
+          if (!(operandMin >= f.min || operandMax >= f.min)) return false
+          return f.operators == null
+        })
+      })()
+      if (!rangeMatch) continue
+      return { levelIdx: i, label: level.label }
     }
-    if (opNum === 2) {
-      if (level.abdication === '2' && !hasBorrow) continue
-      if (level.abdication === '3' && hasBorrow) continue
-    }
-    const rangeMatch = (() => {
-      const specific = level.formulaList.find(f => {
-        if (operandMax > f.max) return false
-        if (!(operandMin >= f.min || operandMax >= f.min)) return false
-        // 乘除档位：约束「较小操作数」的位数（乘法的一位因数 / 除法的除数）
-        if (f.opMax != null && operandMin > f.opMax) return false
-        if (f.opMin != null && operandMin < f.opMin) return false
-        // 除法档位：约束商的上限（表内除法要求商落在口诀范围内，排除 24÷2=12 这类）
-        if (f.quotMax != null && operandMax / operandMin > f.quotMax) return false
-        // 除法档位：约束商的下限（两位数÷一位数要求商为两位数，排除 21÷7=3 这类表内题）
-        if (f.quotMin != null && operandMax / operandMin < f.quotMin) return false
-        return f.operators != null && f.operators.includes(opNum)
-      })
-      if (specific) return true
-      const hasExplicitOp = level.formulaList.some(f => f.operators != null)
-      if (hasExplicitOp) return false
-      return level.formulaList.some(f => {
-        if (operandMax > f.max) return false
-        if (!(operandMin >= f.min || operandMax >= f.min)) return false
-        return f.operators == null
-      })
-    })()
-    if (!rangeMatch) continue
-    return { levelIdx: i, label: level.label }
   }
   return null
 }

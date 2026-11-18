@@ -8,7 +8,18 @@
       <el-card class="practice-card" shadow="never" v-if="currentQuestion !== null">
         <div class="practice-card__header">
           <div class="stage-badge" :class="{ 'stage-badge--assessment': isAssessment }">{{ currentStage }}</div>
-          <div class="streak-badge" v-if="session.streak > 0">🔥 {{ session.streak }}</div>
+          <div class="header-right">
+            <div class="streak-badge" v-if="session.streak > 0">🔥 {{ session.streak }}</div>
+            <button
+              type="button"
+              class="sfx-toggle"
+              :title="sfxOn ? '关闭音效' : '开启音效'"
+              :aria-label="sfxOn ? '关闭音效' : '开启音效'"
+              @click="toggleSfx"
+            >
+              <el-icon :size="18"><component :is="sfxOn ? Bell : Mute" /></el-icon>
+            </button>
+          </div>
         </div>
 
         <ProgressSteps
@@ -39,12 +50,16 @@
         </div>
 
         <div class="input-area">
+          <div class="keyboard-hint">
+            <span v-if="isKeypad()">0-9 输入 · ⌫ 退格 · Enter 提交</span>
+            <span v-else>← → 选择 · Enter 提交</span>
+          </div>
           <component
             :is="currentInput"
             v-bind="inputProps"
             @input="handleInput"
             @select="handleSelect"
-            @backspace="handleBackspace"
+            @backspace="() => handleBackspace(true)"
             @submit="handleSubmit"
             @next="handleNext"
           />
@@ -146,10 +161,10 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { TrendCharts } from '@element-plus/icons-vue'
+import { TrendCharts, Bell, Mute } from '@element-plus/icons-vue'
 
 import ProgressSteps from '@/components/layout/ProgressSteps.vue'
 import HorizontalLayout from '@/components/question/HorizontalLayout.vue'
@@ -167,6 +182,7 @@ import { decideListPracticesTransition } from '@/utils/listPracticesGuard'
 import { useDisplayStrategy } from '@/composables/useDisplayStrategy'  // 🆕 PR-4.2 抽离 displayStats + applyDisplayModeForCurrentQuestion + generateOptions
 import { FEEDBACK_DELAYS, ASSESSMENT_ABORT_WRONG_STREAK, getCommentByRate, ASSIST_LEVELS, MAX_ATTEMPT_PER_QUESTION } from '@/constants/practice'
 
+import { playSfx, isSfxEnabled, setSfxEnabled } from '@/utils/sound/sfx'
 import { usePracticeStore } from '@/stores/practice'
 import { useStatsStore } from '@/stores/stats'
 import { storeToRefs } from 'pinia'
@@ -278,6 +294,7 @@ const inputProps = computed(() => {
   return {
     ...baseProps,
     options: session.value.currentOptions,
+    focusIndex: optionFocusIdx.value,
     correctAnswer: currentQuestion.value.solution,
     selectedOption: session.value.selectedOption
   }
@@ -346,12 +363,20 @@ const handleInput = (value) => {
   }
 }
 
-const handleBackspace = () => {
+/**
+ * 退格。
+ * @param {boolean} [fromKeypad=false] 是否来自屏幕键盘的「退格」按钮。
+ *   那个按钮会连着 emit('backspace') 和 emit('input', 截断后的值) 两次事件，
+ *   需要用 bsLock 吞掉紧随其后的 input；而物理键盘（Backspace 键）只走这一个入口，
+ *   没有后续 input —— 如果也置锁，锁就会残留到下一次真实按键，
+ *   表现为「退格后要按两次才输入」。
+ */
+const handleBackspace = (fromKeypad = false) => {
   if (!isKeypad()) {
     session.value.currentAnswer = session.value.currentAnswer.slice(0, -1)
     return
   }
-  bsLock = true
+  bsLock = fromKeypad
   if (layoutRef.value?.acceptBackspace) {
     session.value.currentAnswer = layoutRef.value.acceptBackspace()
   }
@@ -378,6 +403,7 @@ const handleSubmit = (answer) => {
   }
 
   if (result.isCorrect) {
+    playSfx('correct')
     session.value.feedbackType = 'correct'
     updateStats(true)
     ElMessage.success({
@@ -391,6 +417,7 @@ const handleSubmit = (answer) => {
   }
 
   // ── 答错 ──
+  playSfx('wrong')
   session.value.feedbackType = 'wrong'
   ElMessage.error({
     message: `✗ 正确答案是 ${currentQuestion.value.solution}`,
@@ -441,6 +468,22 @@ const handleSubmit = (answer) => {
   }
 }
 
+/** 选择题的键盘焦点项下标（← → 移动） */
+const optionFocusIdx = ref(0)
+
+/** 音效开关（存在 localStorage，默认开） */
+const sfxOn = ref(isSfxEnabled())
+
+function toggleSfx() {
+  setSfxEnabled(!sfxOn.value)
+  sfxOn.value = isSfxEnabled()
+  if (sfxOn.value) playSfx('tap')   // 开启时给一声反馈
+}
+
+// 每换一题把焦点回到第一项
+watch(currentQuestion, () => { optionFocusIdx.value = 0 })
+
+/** 进入下一题；当前是最后一题时按阶段收尾 */
 const handleNext = () => {
   if (nextLocked.value) return
   nextLocked.value = true
@@ -507,6 +550,7 @@ const handlePracticeComplete = async () => {
   }
   await saver.saveSessionFinal({ finalProfileSnapshot: finalProfile })
 
+  playSfx('complete')
   // 评语（抽到 constants/practice.getCommentByRate）
   const { emoji, comment, color: rateColor } = getCommentByRate(rate)
   let action = 'close'
@@ -823,6 +867,8 @@ async function loadStartInfo() {
     const agg = await getAggregatedStats()
     streak = agg?.dailyStreak || 0
   } catch { /* 统计失败不阻塞 */ }
+  // 练习量优先级：adaptiveTarget（抽屉里当前设置，实时）> adaptiveConfig（诊断快照）> configSnapshot
+  const liveTarget = practiceStore.session.adaptiveTarget
   const cfg = practiceStore.session.adaptiveConfig || practiceStore.session.configSnapshot || {}
   startInfo.value = {
     levelIdx: idx + 1,
@@ -831,8 +877,8 @@ async function loadStartInfo() {
     accuracy,
     answered,
     streak,
-    targetMin: cfg.targetMin ?? 10,
-    targetMax: cfg.targetMax ?? 30,
+    targetMin: liveTarget?.targetMin ?? cfg.targetMin ?? 10,
+    targetMax: liveTarget?.targetMax ?? cfg.targetMax ?? 30,
     focus: (profile?.weakLevelIndices || [])
       .slice(0, 3)
       .map(i => DIFFICULTY_LEVELS[i]?.label)
@@ -842,6 +888,7 @@ async function loadStartInfo() {
 
 /** 点「开始练习」才真正出题 */
 async function handleStartPractice() {
+  playSfx('start')
   practiceStore.setReadyToStart(false)
   practiceStore.setPhase('practice')
   practiceStore.resetPracticeSession()
@@ -851,6 +898,74 @@ async function handleStartPractice() {
 // 诊断完成后 completeAssessment 会把 readyToStart 置 true，
 // 此时刷新准备界面的数据（刚算出的画像/统计）
 watch(readyToStart, (v) => { if (v) loadStartInfo() })
+
+/**
+ * 抽屉里改「自适应练习量」后，准备界面要跟着变。
+ * 之前只 watch readyToStart，改完配置没有任何反应 ——
+ * 因为练习量是诊断时快照的，界面也就一直显示旧值。
+ */
+watch(
+  () => practiceStore.session.adaptiveTarget,
+  () => { if (readyToStart.value) loadStartInfo() }
+)
+
+/**
+ * 全键盘操作：数字 / 退格 / 回车 / 空格
+ *
+ * 监听放在 V 层而不是 NumberKeypad 内部 —— 答题区可能是数字键区也可能是选择题，
+ * 放在这里才能统一处理「反馈态按回车进下一题」，不用每个输入组件各写一份。
+ * 数字键区输完正确答案会自动提交（handleInput 内的既有逻辑），所以回车主要用作
+ * 选择题提交与反馈态翻页，长答案（如三位数）也能在半途用回车手动提交。
+ */
+function handleKeydown(e) {
+  // 带修饰键的组合交给浏览器（Ctrl+R / Cmd+Tab 等）
+  if (e.ctrlKey || e.altKey || e.metaKey) return
+  const tag = e.target?.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable) return
+
+  // 准备界面：回车 = 点「开始练习」
+  if (readyToStart.value && !currentQuestion.value) {
+    if (e.key === 'Enter') { e.preventDefault(); handleStartPractice() }
+    return
+  }
+  if (!currentQuestion.value) return
+
+  // 已作答进入反馈：回车 / 空格翻到下一题
+  if (session.value.feedbackType !== null) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNext() }
+    return
+  }
+
+  if (isKeypad()) {
+    if (/^[0-9]$/.test(e.key)) { e.preventDefault(); playSfx('tap'); handleInput(e.key); return }
+    if (e.key === 'Backspace') { e.preventDefault(); handleBackspace(); return }
+    if (e.key === 'Enter') { e.preventDefault(); handleSubmit(); return }
+    return
+  }
+
+  // 选择题：← → 移动选中项，回车/空格提交当前项；数字键保留为快捷方式
+  const opts = session.value.currentOptions || []
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    if (!opts.length) return
+    e.preventDefault()
+    const dir = e.key === 'ArrowRight' ? 1 : -1
+    optionFocusIdx.value = (optionFocusIdx.value + dir + opts.length) % opts.length
+    return
+  }
+  if (/^[1-9]$/.test(e.key)) {
+    const idx = Number(e.key) - 1
+    if (idx < opts.length) { e.preventDefault(); optionFocusIdx.value = idx; handleSelect(opts[idx]) }
+    return
+  }
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault()
+    if (opts.length) handleSelect(opts[Math.min(optionFocusIdx.value, opts.length - 1)])
+    else handleSubmit()
+  }
+}
+
+onMounted(() => window.addEventListener('keydown', handleKeydown))
+onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
 
 onMounted(async () => {
   if (listPractices.value.length > 0) return  // 已有题目，不干预
@@ -1058,6 +1173,38 @@ onMounted(async () => {
   background: #e9f4ff;
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sfx-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* 44px：触屏最小可点尺寸 */
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid #dbe7f4;
+  border-radius: 50%;
+  background: #fff;
+  color: #7f8c9b;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.sfx-toggle:hover {
+  color: #176ebf;
+  border-color: #b9d6f2;
+  background: #f4f9ff;
+}
+
+.sfx-toggle:active {
+  transform: scale(0.94);
+}
+
 .stage-badge--assessment {
   color: #7c3aed;
   background: #f3e8ff;
@@ -1110,7 +1257,27 @@ onMounted(async () => {
 .input-area {
   margin-top: 14px;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+/*
+ * 键盘操作提示：只在有实体键盘/精确指针的设备显示。
+ * 触屏上这行没有意义，反而占地方。
+ */
+.keyboard-hint {
+  display: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .keyboard-hint {
+    display: block;
+    font-size: 12px;
+    color: #a7b3c0;
+    letter-spacing: 0.02em;
+    user-select: none;
+  }
 }
 
 .question-area :deep(.math-question-surface),

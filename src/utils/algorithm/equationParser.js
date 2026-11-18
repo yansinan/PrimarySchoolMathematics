@@ -25,8 +25,16 @@ const OPERATOR_SET = ['+', '-', '*', '/', '×', '÷', '＋', '－']
  */
 
 /** @type {ParsedEquation} */
+/** 归一化运算符 → 数学符号（只用于界面显示） */
+const toDisplaySymbol = (op) => {
+  if (op === '*') return '×'
+  if (op === '/') return '÷'
+  return op || ''
+}
+
 export const EMPTY_PARSED_EQUATION = {
   operator: '',
+  displayOperator: '',
   leftOperand: '',
   rightOperand: '',
   resultValue: '',
@@ -41,6 +49,10 @@ export const EMPTY_PARSED_EQUATION = {
  */
 export const parseEquation = (equation = '') => {
   const normalizedEquation = toEvalSymbols(equation)
+  // operator 走归一化（* /），供内部逻辑与写库使用；
+  // displayOperator 取原串符号并转成 × ÷，只给模板显示 ——
+  // 否则 toEvalSymbols 会把 × ÷ 归一化成 * /，孩子看到的就是 * 和 /。
+  const rawOperator = (equation.match(/[+\-*/×÷＋－]/) || [])[0] || ''
   let operator = ''
 
   for (let i = 0; i < normalizedEquation.length; i++) {
@@ -90,6 +102,7 @@ export const parseEquation = (equation = '') => {
 
   return {
     operator,
+    displayOperator: toDisplaySymbol(rawOperator || operator),
     leftOperand,
     rightOperand,
     resultValue,

@@ -69,7 +69,7 @@
 
     <ElFormItem label="自适应练习量" :error="targetRangeError" class="practice-amount-row">
       <ElRow :gutter="12">
-        <ElCol :xs="12" :sm="8">
+        <ElCol :xs="12" :sm="12">
           <ElFormItem
             prop="targetMin"
             :rules="targetMinRule"
@@ -87,7 +87,7 @@
             </ElInput>
           </ElFormItem>
         </ElCol>
-        <ElCol :xs="12" :sm="8">
+        <ElCol :xs="12" :sm="12">
           <ElFormItem
             prop="targetMax"
             :rules="targetMaxRule"
@@ -105,7 +105,7 @@
             </ElInput>
           </ElFormItem>
         </ElCol>
-        <ElCol :xs="24" :sm="8" class="target-hint-col">
+        <ElCol :xs="24" :sm="24" class="target-hint-col">
           <span class="target-hint" :class="{ 'target-hint--error': !!targetRangeError }">
             {{ targetRangeError || '答好可提前结束' }}
           </span>
@@ -130,8 +130,24 @@ import { cloneDeep } from "lodash";
 import ConfigStorage from '@/utils/store/configStorage';
 import { OptionsDrawer } from "@/components/generate";
 import { validateTargetRange, TARGET_LIMITS } from '@/utils/form/formDefaults';
+import { usePracticeStore } from '@/stores/practice';
 
 const { proxy } = getCurrentInstance()
+const practiceStore = usePracticeStore()
+
+/**
+ * 自适应练习量一改就同步到 store。
+ * 原来这个值只在诊断完成那一刻被 configSnapshot 快照一次，
+ * 之后在抽屉里改了完全不生效（开始界面和引擎都还用旧值）。
+ * 这里做成实时同步，开始界面 watch 到变化会立刻刷新。
+ */
+watch(
+  () => [props.formulasFormData?.targetMin, props.formulasFormData?.targetMax],
+  ([min, max]) => {
+    practiceStore.setAdaptiveTarget(min, max)
+  },
+  { immediate: true }
+)
 
 const props = defineProps({
   formulasFormData: {

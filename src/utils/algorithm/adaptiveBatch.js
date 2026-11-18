@@ -21,6 +21,7 @@ import { createFormulasGenerator } from '../paperGenerator'
 import { EquationSolver } from './EquationSolver'
 import { DIFFICULTY_LEVELS } from '../../constants/difficulty'
 import { Question } from '@/services'
+import { getLevelCoefficient } from '@/utils/store/levelCoefficients'
 
 /**
  * 根据自适应引擎和排列方案生成一组题（仅主题库，不含 reserve）
@@ -58,8 +59,13 @@ function pickLevelForSlot(engine, slotType) {
     const idx = engine.pickWeakLevel()
     return idx == null ? engine.difficultyIdx : idx
   }
-  // challenge: 当前难度 + 1
-  return Math.min(engine.difficultyIdx + 1, DIFFICULTY_LEVELS.length - 1)
+  // challenge: 当前难度 + 1；该档配比系数为 0 时退回当前档（默认未配置 → 恒定 +1）
+  const target = Math.min(engine.difficultyIdx + 1, DIFFICULTY_LEVELS.length - 1)
+  const coef = engine.levelCoefficients
+    ? (engine.levelCoefficients[target] ?? 1)
+    : getLevelCoefficient(target)
+  if (coef <= 0) return engine.difficultyIdx
+  return target
 }
 
 /**

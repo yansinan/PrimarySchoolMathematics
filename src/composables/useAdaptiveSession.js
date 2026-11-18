@@ -26,6 +26,7 @@ import { generateDiagnosticQuestions, analyzeAbility } from '@/utils/algorithm/d
 import { Engine } from '@/services/adaptiveEngine'
 import { generateAdaptiveBatch } from '@/utils/algorithm/adaptiveBatch'
 import { Profile, hasRealProfile } from '@/services/abilityProfile'
+import { playSfx } from '@/utils/sound/sfx'
 import { getGroupComment, getCommentByRate } from '@/constants/practice'
 import { sumResponseTimes } from '@/utils/score'
 import { TARGET_LIMITS } from '@/utils/form/formDefaults'
@@ -120,10 +121,12 @@ export function useAdaptiveSession(options = {}) {
     }
 
     // 基于已有画像生成新一轮练习
+    // 练习量优先级：adaptiveTarget（抽屉里当前设置，实时）> adaptiveConfig（诊断快照）> configSnapshot > 默认
+    const liveTarget = practiceStore.session.adaptiveTarget
     const adaptiveConfig = practiceStore.session.adaptiveConfig || {}
     const fallbackConfig = practiceStore.session.configSnapshot || {}
-    const targetMin = adaptiveConfig.targetMin ?? fallbackConfig.targetMin ?? 10
-    const targetMax = adaptiveConfig.targetMax ?? fallbackConfig.targetMax ?? 30
+    const targetMin = liveTarget?.targetMin ?? adaptiveConfig.targetMin ?? fallbackConfig.targetMin ?? 10
+    const targetMax = liveTarget?.targetMax ?? adaptiveConfig.targetMax ?? fallbackConfig.targetMax ?? 30
 
     // 从 DB 加载画像作为唯一事实源
     const dbProfile = await Profile.load()
@@ -190,9 +193,11 @@ export function useAdaptiveSession(options = {}) {
 
     // 先存 store（completeAssessment 保存 profile、写诊断答案到 DB）
     // 题量读用户在抽屉里设的自适应练习量，不能硬编码 —— 否则设「最多 10 题」也会按 30 题跑
+    // 诊断完成时也以用户当前设置为准（否则刚改完设置去做诊断又会被旧值覆盖）
+    const liveTarget = practiceStore.session.adaptiveTarget
     const cfg = practiceStore.session.adaptiveConfig || practiceStore.session.configSnapshot || {}
-    const targetMin = cfg.targetMin ?? 10
-    const targetMax = cfg.targetMax ?? 30
+    const targetMin = liveTarget?.targetMin ?? cfg.targetMin ?? 10
+    const targetMax = liveTarget?.targetMax ?? cfg.targetMax ?? 30
     practiceStore.completeAssessment(profile, snapshot, { targetMin, targetMax })
 
     // 从 DB 加载画像创建引擎（诊断答案已由 savePerQuestion 写入 DB）
@@ -262,7 +267,8 @@ export function useAdaptiveSession(options = {}) {
     // ── 强化小组反馈: 弹出自我评价对话框 ──
     let evaluationScore = 3  // 默认 3 = 刚刚好
     try {
-      evaluationScore = await dialogs.showSelfEvaluationDialog({
+      playSfx('group')
+      const score = await dialogs.showSelfEvaluationDialog({
         groupIndex: groupIdx,
         correctCount: groupCorrect,
         totalCount: groupAnswers.length,

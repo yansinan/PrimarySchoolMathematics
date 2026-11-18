@@ -12,7 +12,8 @@
         class="option-btn"
         :class="{
           'correct-option': showResult && option === correctAnswer,
-          'wrong-option': showResult && selectedOption === option && option !== correctAnswer
+          'wrong-option': showResult && selectedOption === option && option !== correctAnswer,
+          'option-btn--focus': !showResult && index === focusIndex
         }"
       >
         {{ option }}
@@ -35,13 +36,19 @@
 
 <script setup>
 import { computed } from 'vue'
+import { playSfx } from '@/utils/sound/sfx'
 
 const props = defineProps({
   options: Array,
   correctAnswer: Number,
   disabled: Boolean,
   showResult: Boolean,
-  selectedOption: Number
+  selectedOption: Number,
+  /**
+   * 键盘焦点项下标（← → 移动，回车提交）。
+   * 触屏点击时由 click 直接提交，不依赖此值；-1 表示当前无键盘焦点。
+   */
+  focusIndex: { type: Number, default: -1 }
 })
 
 const emit = defineEmits(['select', 'next'])
@@ -57,6 +64,7 @@ const getButtonType = (option) => {
 
 const handleSelect = (option) => {
   if (props.disabled || props.showResult) return
+  playSfx('tap')
   emit('select', option)
 }
 </script>
@@ -92,6 +100,14 @@ const handleSelect = (option) => {
 .option-btn:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 10px 22px rgba(28, 176, 246, 0.2);
+}
+
+/* 键盘焦点：用明显的描边 + 轻微放大，让孩子一眼看到当前选中项 */
+.option-btn--focus {
+  outline: 4px solid #176ebf !important;
+  outline-offset: 2px;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 22px rgba(23, 110, 191, 0.28);
 }
 
 .correct-option {

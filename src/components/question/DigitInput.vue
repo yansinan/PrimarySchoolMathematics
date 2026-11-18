@@ -50,6 +50,27 @@ watch(() => props.activeSlot, (val) => {
   }
 })
 
+/**
+ * 题目切换时重置输入方向。
+ * DigitInput 在多题之间会被复用（同一个 v-if 位置），onMounted 只跑一次，
+ * 于是 focusSlot 会残留上一题的焦点：上一题是乘法「从左」，
+ * 切到三位数加法后仍然从左边填 —— 表现为「横式有时左边有时右边」。
+ * 输入被清空（换题 / 答完重置）时回到本体的初始方向。
+ */
+watch(() => props.modelValue, (v) => {
+  if (!String(v || '').replace(/_/g, '')) {
+    focusSlot.value = props.initialFocus
+    if (props.initialFocus >= 0) emit('focus', props.initialFocus)
+  }
+})
+
+// 同一道题内方向也可能变（例如填空题位置变化），跟着 initialFocus 走
+watch(() => props.initialFocus, (v) => {
+  if (!String(props.modelValue || '').replace(/_/g, '')) {
+    focusSlot.value = v
+  }
+})
+
 /* ============================================================
    工具函数
    ============================================================ */
@@ -77,7 +98,14 @@ const digitCount = computed(() => Math.max(1, props.maxDigits))
 /* ============================================================
    显示
    ============================================================ */
-const slots = computed(() => toSlots(props.modelValue, digitCount.value))
+const slots = computed(() => {
+  // 自由模式（activeSlot=-1）用右对齐：计算从个位开始，输 '7' 应显示在最后一位
+  // 点击模式因为可能点了中间格（'_3_'），必须保持原有空格位置，用左补 fullPad
+  const padded = focusSlot.value >= 0
+    ? fullPad(props.modelValue, digitCount.value)
+    : rightPad(props.modelValue, digitCount.value)
+  return toSlots(padded, digitCount.value)
+})
 
 const realActiveIdx = computed(() => {
   if (focusSlot.value >= 0 && focusSlot.value < digitCount.value) return focusSlot.value
@@ -132,7 +160,8 @@ function acceptDigit(digit) {
   emit('focus', -1)
   const oldValue = String(props.modelValue || '')
   const newDigit = String(digit)
-  const cur = fullPad(oldValue, maxD)
+  // 必须右对齐补位：'7' 要当成 '__7'（个位），否则会变成 '7__' 从左边开始填
+  const cur = rightPad(oldValue, maxD)
   const s = toSlots(cur, maxD)
   // 有空格 → 填最右空格；无空格 → calculator 式右对齐（放弃最左一位）
   let filled = false
@@ -156,7 +185,10 @@ function acceptDigit(digit) {
  */
 function acceptBackspace() {
   const maxD = digitCount.value
-  const cur = fullPad(props.modelValue, maxD)
+  // 自由模式右对齐（'37' → '_37'），否则退格会从高位删起
+  const cur = focusSlot.value >= 0
+    ? fullPad(props.modelValue, maxD)
+    : rightPad(props.modelValue, maxD)
   const s = toSlots(cur, maxD)
 
   // 确定要清除的格子
@@ -215,10 +247,13 @@ const digitInputStyle = computed(() => ({ '--box-count': digitCount.value }))
 <style scoped>
 .digit-input {
   display: inline-flex;
-  gap: 4px;
+  /* 允许在算式行里收缩：3~4 位数 + 窄屏时靠缩格子而不是把整行撑出容器 */
+  min-width: 0;
+  gap: 0.06em;
   direction: ltr;
   align-items: center;
-  font-size: clamp(1.7rem, 5.5vw, 6rem);
+  /* 横式算式会用 --math-font 统一缩放（含数字格）；竖式没有该变量时回落原字号 */
+  font-size: var(--math-font, clamp(1.7rem, 5.5vw, 6rem));
 }
 
 .digit-box {
@@ -226,7 +261,9 @@ const digitInputStyle = computed(() => ({ '--box-count': digitCount.value }))
   align-items: center;
   justify-content: center;
   position: relative;
+  flex: 0 1 1.05em;
   width: 1.05em;
+  min-width: 0.78em;
   height: 1.2em;
   /* font-family: 'Courier New', monospace; */
   font-weight: 700;

@@ -611,7 +611,12 @@ export default class FormulasGenerator {
         }
 
         slist.sort(() => Math.random() - 0.5);  // 洗牌，先打乱list中的排序
-        this.__data_list = slist.slice(0, target);  // 随机取需要的口算题量。
+        // 输出前把 * / 换成数学符号 × ÷（repSymStr 一直存在但从未被调用过）。
+        // 放在最后统一替换：上面所有校验（validator / is_addcarry / getXStepstr 等）
+        // 都依赖 * / 写法，提前替换会让这些判断全部失效。
+        // 下游 EquationSolver / parseEquation / Question._parseOperands 都先过
+        // toEvalSymbols 归一化成 * /，所以显示用 × ÷ 不影响计算与档位匹配。
+        this.__data_list = slist.slice(0, target).map(repSymStr);  // 随机取需要的口算题量。
         return this.__data_list;
     }
 }
