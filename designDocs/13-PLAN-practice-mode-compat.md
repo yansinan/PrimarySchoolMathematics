@@ -790,3 +790,69 @@ displayOperator: toDisplaySymbol(...),  // '×' '÷' —— 只给模板
 `displayOperator` 给 × ÷ 而 `operator` 仍是归一化、老数据纯 `*` `/` 也能显示成数学符号。
 
 单测 **206 通过（15 文件）**。
+
+---
+
+## 十六、设置不保存（题目数量 / 练习量刷新后丢失）
+
+### 现状
+
+`Generate.vue` 的初始化是：
+
+```js
+const formData = ref({ ...DEFAULT_FORM_DATA })     // 每次都是默认值
+onMounted(() => {
+  applyConfigToFormData(formData.value, configurations.value[0].data)  // 只从「默认配置行」抄一次
+})
+```
+
+恢复来源是 `ConfigStorage`（localStorage `customer-config`）里的默认配置行，
+而**用户改表单时从不会写回那里** —— 只有手动点「保存配置」才会 `ConfigStorage.save()`。
+
+所以：改题数、改练习量 → 不落任何地方 → 刷新就回默认值。
+
+上一轮做的 `adaptiveTarget`（实时同步到开始界面）也只存在 Pinia store 内存里，
+刷新同样丢。
+
+### 改动
+
+新增 `src/utils/store/formPersistence.js`（localStorage 键 `psm_form_state`）：
+
+- 存 **formData + paperList** 两份 —— 题组里每组的题数在 `paperList` 里，
+  只存 formData 修不好「题组题数不保存」
+- 带 `version`，结构校验不过（缺 `numberOfFormulas` / `step`）就当没存过，回落原逻辑
+- 写入 debounce 400ms（deep watch 在连续输入时会高频触发）
+- **不动** `ConfigStorage` 的语义：「保存配置 / 选中配置」那套手动流程照旧可用
+
+`Generate.vue` 三处：
+
+```js
+const savedFormState = loadFormState()
+const formData = ref(savedFormState ? { ...DEFAULT_FORM_DATA, ...savedFormState.formData } : { ...DEFAULT_FORM_DATA })
+const paperList = ref(savedFormState?.paperList?.length ? savedFormState.paperList.map(p => ({ ...p })) : [])
+
+onMounted(() => {
+  refreshConfiguration()
+  if (!savedFormState) {                    // ← 关键：有保存值时不再套用默认配置行
+    applyConfigToFormData(formData.value, configurations.value[0].data, { includeAdaptive: true })
+  }
+})
+
+watch([formData, paperList], () => saveFormState(toRaw(formData.value), toRaw(paperList.value)), { deep: true })
+```
+
+`databaseInit.clearAllData()` 里补了 `clearFormState()` 和 `clearLevelCoefficients()`：
+「重置数据」应该回到出厂默认，否则会残留上一次的出题设置和档位配比。
+
+### 实测
+
+```
+改之前            口算题数量 30   练习量 10/30
+改成              口算题数量 7    练习量 5/13
+落盘 psm_form_state  {n:7, min:5, max:13}
+
+刷新后            口算题数量 7    练习量 5/13      PASS
+开始界面显示      5~13 题                          PASS
+```
+
+单测 **206 通过（15 文件）**，console 零错误。
