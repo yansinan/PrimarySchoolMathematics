@@ -120,7 +120,7 @@ const closed = () => {
 }
 
 window.onafterprint = (event) => {
-  console.log('After print');
+  if (import.meta.env.DEV) console.log('After print');
 }
 
 const isPrint = ref(false)

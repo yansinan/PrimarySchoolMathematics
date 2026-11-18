@@ -54,8 +54,8 @@ export class EquationSolver {
 
         // 分离等式两边
         if (!expr.includes('=')) {
-            console.log('原始方程:', equation);
-            console.log('标准化:', expr);
+            if (import.meta.env.DEV) console.log('原始方程:', equation);
+            if (import.meta.env.DEV) console.log('标准化:', expr);
             throw new Error('方程必须包含等号');
         }
 
@@ -394,41 +394,6 @@ export class EquationSolver {
         }
     }
 }
-
-// ============ 测试用例 ============
-function runTests() {
-    const solver = EquationSolver;
-    
-    const testCases = [
-        { input: "10-__-10=6", expected: -6 },
-        { input: "3+5×__=18", expected: 3 },
-        { input: "__+5-3=10", expected: 8 },
-        { input: "20-__×2=10", expected: 5 },
-        { input: "15÷__+5=10", expected: 3 },
-        { input: "(__+5)×2=20", expected: 5 },
-        { input: "24÷(__-2)=6", expected: 6 },
-        { input: "10-__=6", expected: 4 },
-        { input: "__+5=12", expected: 7 },
-        { input: "__-3=7", expected: 10 },
-        { input: "5×__=30", expected: 6 },
-        { input: "24÷__=6", expected: 4 },
-        { input: "3+4=", expected: 7 },
-        { input: "5×6=", expected: 30 },
-        { input: "15÷3=", expected: 5 },
-    ];
-    
-    console.log('======== 测试开始 ========');
-    testCases.forEach((test, index) => {
-        console.log(`\\n测试 ${index + 1}: ${test.input}`);
-        
-        // 先用解析法
-        let result = solver.solve(test.input);
-        console.log(`解析法结果: ${result} (期望: ${test.expected})`);
-    });
-}
-
-// 运行测试
-//runTests();
 
 // 导出模块（支持 CommonJS 和 ES6）
 if (typeof module !== 'undefined' && module.exports) {

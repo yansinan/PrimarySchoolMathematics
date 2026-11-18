@@ -1,4 +1,4 @@
-// filepath: src/utils/services/analysis.js
+// filepath: src/services/analysis.js
 /**
  * 能力分析服务层（v2 P2 阶段 2）
  *
