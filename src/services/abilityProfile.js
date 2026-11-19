@@ -14,8 +14,14 @@
  */
 
 import { Answer, Question } from '@/services'
+import { PracticeSession } from './PracticeSession'
 import { DIFFICULTY_LEVELS } from '@/constants/difficulty'
-import { STRONG_THRESHOLD, WEAK_THRESHOLD } from '@/constants/practice'
+import {
+  STRONG_THRESHOLD,
+  WEAK_THRESHOLD,
+  ACCURACY_THRESHOLDS,
+  LEVEL_EVIDENCE_MIN,
+} from '@/constants/practice'
 
 /**
  * 用户能力画像（不可变数据类）
@@ -137,8 +143,9 @@ export class Profile {
     const answers = rows.map(r => Answer.fromJSON(r))
     const groups = Question.groupAnswersByLevel(answers)
     const masteryMap = Answer.computeMastery(answers)
+    const sessionLevels = await Profile.loadSessionLevels(studentId)
     return new Profile({
-      difficultyIdx: Profile.computeDifficultyIdx(answers),
+      difficultyIdx: Profile.computeDifficultyIdx(answers, sessionLevels),
       strongLevelIndices: groups.filter(g => g.accuracy >= STRONG_THRESHOLD).map(g => g.levelIdx),
       weakLevelIndices: groups.filter(g => g.accuracy < WEAK_THRESHOLD).map(g => g.levelIdx),
       masteryMap,
@@ -147,23 +154,106 @@ export class Profile {
   }
 
   /**
+   * 读取「每轮练习的起始档位」—— 升档阶梯的唯一依据
+   *
+   * 为什么需要它：一档位里混着三种题（强项 / 弱项 / 挑战），只有「这一轮就是以该档
+   * 起练」才算真练过该档。若用「答题命中的档位」统计，挑战题（每轮 3~6 道、档位 +1）
+   * 答对 100% 就会被认成该档强项 → 下一轮整体跳档（口诀没练完就窜到多位数乘法）。
+   *
+   * 数据源：practiceSessions 记录里 profileSnapshot.difficultyIdx（每题写入时一并落库）。
+   * 同一 practiceSessionId 有多条记录（首题空壳 / 组 checkpoint / 最终结算），
+   * 只取第一条带快照的 —— 即「本轮开始时」的档位。
+   *
+   * @param {string} [studentId='default']
+   * @returns {Promise<Map<string, number>>} practiceSessionId → 起始档位索引
+   */
+  static async loadSessionLevels(studentId = 'default') {
+    const levels = new Map()
+    try {
+      const rows = await PracticeSession.findAllByStudent(studentId)
+      for (const row of rows) {
+        const pid = row.practiceSessionId
+        if (!pid || levels.has(pid)) continue
+        const snapshot = row.profileSnapshot || row.finalProfileSnapshot
+        const levelIdx = snapshot?.difficultyIdx
+        if (typeof levelIdx === 'number') levels.set(pid, levelIdx)
+      }
+    } catch { /* 读不到会话记录 → 退化为「诊断定位起点」逻辑 */ }
+    return levels
+  }
+
+  /**
    * 从答题历史计算用户当前最适合的难度等级
    *
-   * 原则：基于已有强弱项，不强推未探索的难度
-   * - 从高到低取 accuracy ≥ STRONG_THRESHOLD（强项）的最高档作为 difficultyIdx
-   * - 全部强项 → 最高有过数据的档位
-   * - 无强项 → 最低有过数据的档位
-   * - 无数据 → 0（起步）
+   * 两套规则，按数据条件自动选择：
+   *
+   * A. 有「每轮起始档位」记录（正常使用后）→ 走阶梯：
+   *    从最早的起始档位往上逐档检查，每一档必须
+   *      - 有本轮记录（不是被跳过的空档）
+   *      - 题量 ≥ LEVEL_EVIDENCE_MIN（不是中途退出 / 少量探针）
+   *      - 正确率 ≥ ACCURACY_THRESHOLDS.good（算掌握）
+   *    第一个不满足的档位就是当前档位 → 每轮最多升一档，跳过的档位自动回填重练。
+   *
+   * B. 没有轮次记录（首次诊断 / 手动出题历史 / 旧版数据）→ 沿用诊断定位逻辑：
+   *    诊断 5 题只用来定位起点，+1 不跨运算类型（避免「诊断全对直接进乘法」）。
    *
    * @param {Array} answers - Answer 实例或 plain object
+   * @param {Map<string, number>} [sessionLevels] - practiceSessionId → 起始档位
    * @returns {number} DIFFICULTY_LEVELS 索引
    */
-  static computeDifficultyIdx(answers) {
+  static computeDifficultyIdx(answers, sessionLevels = null) {
     if (!answers?.length) return 0
     const wrapped = answers.map(a => (a instanceof Answer ? a : new Answer(a)))
     const groups = Question.groupAnswersByLevel(wrapped)
     if (!groups.length) return 0
     groups.sort((a, b) => a.levelIdx - b.levelIdx)
+
+    const rungs = sessionLevels?.size
+      ? [...new Set(sessionLevels.values())].sort((a, b) => a - b)
+      : []
+    if (!rungs.length) return Profile._diagnosisDifficultyIdx(groups)
+
+    const byLevel = Profile._answersBySessionLevel(wrapped, sessionLevels)
+    for (let i = rungs[0]; i <= DIFFICULTY_LEVELS.length - 1; i++) {
+      const rungAnswers = byLevel.get(i) || []
+      // 断档（从没以该档起练过）或题量不足 → 就停在这一档
+      if (!rungs.includes(i) || rungAnswers.length < LEVEL_EVIDENCE_MIN) return i
+      const rate = rungAnswers.filter(a => a.isCorrect).length / rungAnswers.length
+      // 没掌握 → 继续练这一档，不升
+      if (rate < ACCURACY_THRESHOLDS.good) return i
+    }
+    return DIFFICULTY_LEVELS.length - 1
+  }
+
+  /**
+   * 按「本轮起始档位」给答案分组（挑战题自动归到它所属的那一轮，不单独成档）
+   * @param {Array} answers - Answer 实例
+   * @param {Map<string, number>} sessionLevels
+   * @returns {Map<number, Array>} 起始档位 → 该轮答案
+   */
+  static _answersBySessionLevel(answers, sessionLevels) {
+    const byLevel = new Map()
+    for (const a of answers) {
+      const levelIdx = sessionLevels.get(a.practiceSessionId)
+      if (typeof levelIdx !== 'number') continue
+      if (!byLevel.has(levelIdx)) byLevel.set(levelIdx, [])
+      byLevel.get(levelIdx).push(a)
+    }
+    return byLevel
+  }
+
+  /**
+   * 诊断定位起点（无轮次记录时使用）
+   *
+   * 原则：基于已有强弱项，不强推未探索的难度
+   * - 从高到低取 accuracy ≥ STRONG_THRESHOLD（强项）的最高档作为 difficultyIdx
+   * - 全部强项 → 最高有过数据的档位（+1 且不跨运算类型）
+   * - 无强项 → 最低有过数据的档位
+   *
+   * @param {Array<{levelIdx:number, label:string, total:number, accuracy:number}>} groups
+   * @returns {number} DIFFICULTY_LEVELS 索引
+   */
+  static _diagnosisDifficultyIdx(groups) {
     if (groups.every(g => g.accuracy >= STRONG_THRESHOLD)) {
       const highest = groups[groups.length - 1]
       const nextIdx = Math.min(DIFFICULTY_LEVELS.length - 1, highest.levelIdx + 1)

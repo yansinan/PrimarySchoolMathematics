@@ -25,10 +25,13 @@
  *
  * ⚠️ 顺序即进度：数组下标就是 difficultyIdx。
  * 调整顺序不会破坏已有画像 —— difficultyIdx 每次都由
- * Profile.computeDifficultyIdx(answers) 按本表重新匹配计算，不落库依赖。
+ * Profile.computeDifficultyIdx(answers, sessionLevels) 重新计算：
+ *   - 有「每轮起始档位」记录（practiceSessions.profileSnapshot）→ 按阶梯逐档推进
+ *   - 只有答题史（首次诊断 / 旧版数据）→ 按本表重新匹配定位起点
+ * 落库的只是「每轮从哪一档起练」这个轮次标记，档位本身仍随时按本表重算。
  *
  * @see ../services/adaptiveEngine.js — 引擎用此表决定升降级
- * @see ../services/abilityProfile.js — computeDifficultyIdx 从答题史重算档位
+ * @see ../services/abilityProfile.js — computeDifficultyIdx 从答题史 + 轮次记录算档位
  */
 
 export const DIFFICULTY_LEVELS = [

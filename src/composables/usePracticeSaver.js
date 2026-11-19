@@ -65,7 +65,11 @@ export function usePracticeSaver(profileRef = null) {
       let sessionDbId = practiceStore.session.sessionDbId
       // 第一题写入时创建 session（避免空壳，仅练习阶段）
       if (!sessionDbId && pid && practiceStore.phase !== 'assessment') {
-        const snapshot = practiceStore.session._pendingProfileSnapshot
+        // 只有自适应题单才写「本轮起始档位」快照：手动出题不参与档位阶梯
+        // （Generate 手动出题会把 listSource 置为 'manual'，见 stores/practice.js）
+        const snapshot = practiceStore.listSource === 'adaptive'
+          ? practiceStore.session._pendingProfileSnapshot
+          : null
         sessionDbId = await PracticeSession.create({
           practiceSessionId: pid,
           configSnapshot: practiceStore.session.configSnapshot,
