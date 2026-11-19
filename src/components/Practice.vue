@@ -879,10 +879,8 @@ async function loadStartInfo() {
     streak,
     targetMin: liveTarget?.targetMin ?? cfg.targetMin ?? 10,
     targetMax: liveTarget?.targetMax ?? cfg.targetMax ?? 30,
-    focus: (profile?.weakLevelIndices || [])
-      .slice(0, 3)
-      .map(i => DIFFICULTY_LEVELS[i]?.label)
-      .filter(Boolean),
+    // 练习重点只列当前档位及以下的弱项：更高档位这轮不会出题（见 Profile#getFocusLevels）
+    focus: profile?.getFocusLevels ? profile.getFocusLevels() : [],
   }
 }
 

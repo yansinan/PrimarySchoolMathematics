@@ -178,6 +178,32 @@ describe('档位阶梯 — 家长手动指定起点档位（设置 → 练习档
   })
 })
 
+describe('练习重点 — 只列当前档位及以下的弱项', () => {
+  const mkProfile = (difficultyIdx, weakLevelIndices) =>
+    new Profile({ difficultyIdx, weakLevelIndices })
+
+  it('起点改到口诀·2~6 → 不再把多位数乘除的弱项当练习重点', () => {
+    const profile = mkProfile(L['乘法口诀·2~6'], [
+      L['两位数×两位数'], L['三位数×一位数'], L['进退位巩固'],
+    ])
+    expect(profile.getFocusLevels()).toEqual(['进退位巩固'])
+  })
+
+  it('弱项全在当前档位之上 → 返回空列表（界面隐藏该区块）', () => {
+    const profile = mkProfile(L['乘法口诀·2~6'], [
+      L['两位数×一位数'], L['两位数×两位数'],
+    ])
+    expect(profile.getFocusLevels()).toEqual([])
+  })
+
+  it('最多 3 个且保持升序', () => {
+    const profile = mkProfile(L['综合挑战'], [
+      L['进退位入门'], L['两位数入门'], L['混合进退位①'], L['起步'],
+    ])
+    expect(profile.getFocusLevels()).toEqual(['起步', '混合进退位①', '两位数入门'])
+  })
+})
+
 describe('档位阶梯 — 记录解析不到档位时仍按轮次走', () => {
   it('答题记录一条都匹配不到档位 → 不直接掉回 0 起步，仍按轮次阶梯推进', () => {
     // 造 30 条无法解析运算符的脏记录（matchLevel 返回 null）

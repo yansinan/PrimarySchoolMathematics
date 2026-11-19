@@ -85,6 +85,25 @@ export class Profile {
   isWeak(levelIdx) { return this.weakLevelIndices.includes(levelIdx) }
 
   /**
+   * 练习重点（准备开始界面展示）
+   *
+   * 只取**当前档位及以下**的弱项：更高的档位这轮根本不会出题
+   * （出题上限是 difficultyIdx + 2 的强项池 + 挑战题），把它们当「练习重点」展示
+   * 会让孩子看着「多位数×多位数」，实际却在练口诀 —— 手动改过起点档位后尤其明显。
+   *
+   * @param {number} [limit=3] 最多返回几个
+   * @returns {string[]} 档位名称
+   */
+  getFocusLevels(limit = 3) {
+    return [...this.weakLevelIndices]
+      .filter(idx => idx <= this.difficultyIdx)
+      .sort((a, b) => a - b)
+      .slice(0, limit)
+      .map(idx => DIFFICULTY_LEVELS[idx]?.label)
+      .filter(Boolean)
+  }
+
+  /**
    * 返回当前用户状态快照（可序列化，用于 session 前后对比）
    * @returns {Object}
    */
