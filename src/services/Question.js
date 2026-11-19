@@ -51,7 +51,13 @@ function _parseOperands(equation, operator) {
   // getter 会给出 0 / false 这些「看起来合法」的假值，导致档位匹配与进位判定全错。
   const op = operator || eq.match(/[+\-*/×÷＋－]/)?.[0]
   if (!op) return [null, null]
-  const idx = eq.indexOf(op)
+  let idx = eq.indexOf(op)
+  if (idx === -1) {
+    // 答题记录里 operator 是归一化后的 ASCII 码（* /），算式本身却是显示符号（× ÷）
+    // —— 只按 ASCII 找不到时按显示符号再找一次，否则整条记录匹配不到档位。
+    const displayOp = { '*': '×', '/': '÷' }[op]
+    if (displayOp) idx = eq.indexOf(displayOp)
+  }
   if (idx === -1) return [null, null]
   const left = parseInt(eq.substring(0, idx).trim())
   const right = parseInt(eq.substring(idx + 1).trim())

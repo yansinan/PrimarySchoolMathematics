@@ -151,6 +151,49 @@ describe('档位阶梯 — 不升档的条件', () => {
   })
 })
 
+describe('档位阶梯 — 家长手动指定起点档位（设置 → 练习档位）', () => {
+  it('还没有新轮次时，直接返回指定档位（不被旧的高档记录拉走）', () => {
+    const oldAnswers = answersAtLevel(L['两位数×一位数'], 30, { pid: 'ps_old' })
+    const sessionLevels = new Map([['ps_old', L['两位数×一位数']]])
+    expect(Profile.computeDifficultyIdx(oldAnswers, sessionLevels, L['乘法口诀·2~6']))
+      .toBe(L['乘法口诀·2~6'])
+  })
+
+  it('指定起点后只认起点之后的新轮次：新轮次掌握 → 升一档', () => {
+    const oldAnswers = answersAtLevel(L['两位数×一位数'], 30, { pid: 'ps_old' })
+    const newAnswers = answersAtLevel(L['乘法口诀·2~6'], 30, { pid: 'ps_new' })
+    // loadSessionLevels(since) 只返回生效后的轮次，旧轮次已被过滤
+    const sessionLevels = new Map([['ps_new', L['乘法口诀·2~6']]])
+    const idx = Profile.computeDifficultyIdx(
+      [...oldAnswers, ...newAnswers], sessionLevels, L['乘法口诀·2~6'],
+    )
+    expect(idx).toBe(L['乘法口诀·7~9'])
+  })
+
+  it('指定起点后新轮次没掌握 → 停在指定档位', () => {
+    const bad = answersAtLevel(L['乘法口诀·2~6'], 30, { pid: 'ps_new', correct: false })
+    const sessionLevels = new Map([['ps_new', L['乘法口诀·2~6']]])
+    expect(Profile.computeDifficultyIdx(bad, sessionLevels, L['乘法口诀·2~6']))
+      .toBe(L['乘法口诀·2~6'])
+  })
+})
+
+describe('档位阶梯 — 记录解析不到档位时仍按轮次走', () => {
+  it('答题记录一条都匹配不到档位 → 不直接掉回 0 起步，仍按轮次阶梯推进', () => {
+    // 造 30 条无法解析运算符的脏记录（matchLevel 返回 null）
+    const dirty = Array.from({ length: 30 }, (_, i) => new Answer({
+      equation: '42=',
+      solution: 42,
+      userAnswer: 42,
+      practiceSessionId: 'ps_dirty',
+      questionIndex: i,
+    }))
+    expect(Question.groupAnswersByLevel(dirty)).toEqual([])
+    const sessionLevels = new Map([['ps_dirty', L['乘法口诀·2~6']]])
+    expect(Profile.computeDifficultyIdx(dirty, sessionLevels)).toBe(L['乘法口诀·7~9'])
+  })
+})
+
 describe('档位阶梯 — 无轮次记录时保持诊断定位逻辑', () => {
   const mk = (pairs) => pairs.map(([equation, solution]) => ({
     equation, solution, userAnswer: solution,

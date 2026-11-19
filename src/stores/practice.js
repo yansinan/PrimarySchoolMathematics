@@ -36,6 +36,13 @@ export const usePracticeStore = defineStore('practice', {
     readyToStart: false,
     /** 当前难度索引（由 loadProfile 从 DB 计算，-1 表示未加载） */
     currentDifficultyIdx: -1,
+    /**
+     * 「练习档位」被手动改动过的版本号。
+     *
+     * 家长在设置里指定/清除起点档位后 +1，练习页 watch 它刷新「准备开始」界面。
+     * 用 store 中转而不是事件总线：页面与设置抽屉不在同一组件树。
+     */
+    levelOverrideRevision: 0,
     session: {
       currentIndex: 0,
       answers: [],
@@ -175,6 +182,11 @@ export const usePracticeStore = defineStore('practice', {
     },
     clearAdaptiveEngine() {
       this.currentGroupIndex = 0
+    },
+
+    /** 设置里改了「起点档位」→ 通知练习页刷新准备界面 */
+    bumpLevelOverride() {
+      this.levelOverrideRevision++
     },
 
     nextQuestion() {

@@ -22,6 +22,7 @@ import {
   ACCURACY_THRESHOLDS,
   LEVEL_EVIDENCE_MIN,
 } from '@/constants/practice'
+import { loadLevelOverride } from '@/utils/store/levelOverride'
 
 /**
  * 用户能力画像（不可变数据类）
@@ -143,9 +144,11 @@ export class Profile {
     const answers = rows.map(r => Answer.fromJSON(r))
     const groups = Question.groupAnswersByLevel(answers)
     const masteryMap = Answer.computeMastery(answers)
-    const sessionLevels = await Profile.loadSessionLevels(studentId)
+    // 家长手动指定的「起点档位」（设置 → 其他设置）：生效后旧轮次不再参与阶梯
+    const override = loadLevelOverride()
+    const sessionLevels = await Profile.loadSessionLevels(studentId, override?.since ?? null)
     return new Profile({
-      difficultyIdx: Profile.computeDifficultyIdx(answers, sessionLevels),
+      difficultyIdx: Profile.computeDifficultyIdx(answers, sessionLevels, override?.levelIdx ?? null),
       strongLevelIndices: groups.filter(g => g.accuracy >= STRONG_THRESHOLD).map(g => g.levelIdx),
       weakLevelIndices: groups.filter(g => g.accuracy < WEAK_THRESHOLD).map(g => g.levelIdx),
       masteryMap,
@@ -165,15 +168,19 @@ export class Profile {
    * 只取第一条带快照的 —— 即「本轮开始时」的档位。
    *
    * @param {string} [studentId='default']
+   * @param {number|null} [since] - 只取该时间点之后创建的轮次（手动指定档位后，旧轮次不再参与阶梯）
    * @returns {Promise<Map<string, number>>} practiceSessionId → 起始档位索引
    */
-  static async loadSessionLevels(studentId = 'default') {
+  static async loadSessionLevels(studentId = 'default', since = null) {
     const levels = new Map()
+    const sinceIso = since ? new Date(since).toISOString() : null
     try {
       const rows = await PracticeSession.findAllByStudent(studentId)
       for (const row of rows) {
         const pid = row.practiceSessionId
         if (!pid || levels.has(pid)) continue
+        // createdAt 是 ISO 字符串，字典序即时间序
+        if (sinceIso && (row.createdAt || '') < sinceIso) continue
         const snapshot = row.profileSnapshot || row.finalProfileSnapshot
         const levelIdx = snapshot?.difficultyIdx
         if (typeof levelIdx === 'number') levels.set(pid, levelIdx)
@@ -197,32 +204,41 @@ export class Profile {
    * B. 没有轮次记录（首次诊断 / 手动出题历史 / 旧版数据）→ 沿用诊断定位逻辑：
    *    诊断 5 题只用来定位起点，+1 不跨运算类型（避免「诊断全对直接进乘法」）。
    *
+   * C. 家长手动指定了起点档位（utils/store/levelOverride）→ 以该档为 baseline，
+   *    只认 baseline 之后新增的轮次；即使还没有新轮次，也直接返回 baseline。
+   *
    * @param {Array} answers - Answer 实例或 plain object
    * @param {Map<string, number>} [sessionLevels] - practiceSessionId → 起始档位
+   * @param {number|null} [baselineLevel] - 手动指定的起点档位索引
    * @returns {number} DIFFICULTY_LEVELS 索引
    */
-  static computeDifficultyIdx(answers, sessionLevels = null) {
+  static computeDifficultyIdx(answers, sessionLevels = null, baselineLevel = null) {
     if (!answers?.length) return 0
     const wrapped = answers.map(a => (a instanceof Answer ? a : new Answer(a)))
     const groups = Question.groupAnswersByLevel(wrapped)
-    if (!groups.length) return 0
     groups.sort((a, b) => a.levelIdx - b.levelIdx)
 
     const rungs = sessionLevels?.size
       ? [...new Set(sessionLevels.values())].sort((a, b) => a - b)
       : []
-    if (!rungs.length) return Profile._diagnosisDifficultyIdx(groups)
+    const maxLevel = DIFFICULTY_LEVELS.length - 1
+    const startLevel = baselineLevel != null
+      ? Math.min(maxLevel, Math.max(0, baselineLevel))
+      : (rungs.length ? rungs[0] : null)
+    // 无轮次记录、也没手动指定 → 只能靠诊断答题史定位起点
+    if (startLevel == null) return groups.length ? Profile._diagnosisDifficultyIdx(groups) : 0
 
-    const byLevel = Profile._answersBySessionLevel(wrapped, sessionLevels)
-    for (let i = rungs[0]; i <= DIFFICULTY_LEVELS.length - 1; i++) {
+    const rungSet = new Set(rungs)
+    const byLevel = Profile._answersBySessionLevel(wrapped, sessionLevels || new Map())
+    for (let i = startLevel; i <= maxLevel; i++) {
       const rungAnswers = byLevel.get(i) || []
       // 断档（从没以该档起练过）或题量不足 → 就停在这一档
-      if (!rungs.includes(i) || rungAnswers.length < LEVEL_EVIDENCE_MIN) return i
+      if (!rungSet.has(i) || rungAnswers.length < LEVEL_EVIDENCE_MIN) return i
       const rate = rungAnswers.filter(a => a.isCorrect).length / rungAnswers.length
       // 没掌握 → 继续练这一档，不升
       if (rate < ACCURACY_THRESHOLDS.good) return i
     }
-    return DIFFICULTY_LEVELS.length - 1
+    return maxLevel
   }
 
   /**

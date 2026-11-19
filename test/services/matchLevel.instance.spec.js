@@ -32,6 +32,17 @@ describe('matchLevel 对 Question 实例', () => {
     }
   })
 
+  it('答题记录：operator 归一化为 ASCII（* /）而算式是显示符号（× ÷）也能匹配', () => {
+    // 写库口径见 equationParser：equation 保留 × ÷，operator 归一化为 * /
+    const mul = { equation: '246×3=', solution: 738, operator: '*', operandMin: 0, operandMax: 0 }
+    const div = { equation: '84÷4=', solution: 21, operator: '/', operandMin: 0, operandMax: 0 }
+    expect(Question.matchLevel(mul), '246×3 应能匹配').not.toBeNull()
+    expect(Question.matchLevel(div), '84÷4 应能匹配').not.toBeNull()
+    // 与算式直接识别的结果一致
+    expect(Question.matchLevel(mul)?.levelIdx)
+      .toBe(Question.matchLevel({ equation: '246×3=' })?.levelIdx)
+  })
+
   it('普通对象（store 原始条目）仍然正常', () => {
     const m = Question.matchLevel({ equation: '78+98=__' })
     expect(m).not.toBeNull()

@@ -86,6 +86,59 @@
         </el-input>
       </el-form-item>
 
+      <!-- 练习档位：把自适应练习的起点钉在指定档位（家长可干预） -->
+      <el-form-item>
+        <el-collapse v-model="levelOpen" class="level-ratio">
+          <el-collapse-item name="level">
+            <template #title>
+              <span class="level-ratio__title">
+                练习档位
+                <el-tag v-if="overrideActive" size="small" type="warning" effect="plain">
+                  已手动指定
+                </el-tag>
+              </span>
+            </template>
+            <p class="level-ratio__hint">
+              自适应练习默认按答题记录自动升档。孩子进度被跳过时（例如口诀没练完就到了多位数乘法），
+              在这里把起点拉回指定档位即可。只改「从哪一档开始练」，不删答题史、不影响统计，
+              之后仍按教材顺序逐档推进。改完在<strong>下次开始练习</strong>时生效。
+            </p>
+            <div class="level-ratio__row">
+              <span class="level-ratio__label">当前实际档位</span>
+              <el-tag size="small" effect="plain" class="level-pick__current">{{ currentLevelText }}</el-tag>
+            </div>
+            <div class="level-ratio__row">
+              <span class="level-ratio__label">起点档位</span>
+              <el-select
+                v-model="levelDraft"
+                clearable
+                placeholder="自动（按练习记录计算）"
+                size="small"
+                class="level-pick"
+                popper-class="level-pick__popper"
+              >
+                <el-option-group v-for="group in groupedLevels" :key="group.grade" :label="group.grade">
+                  <el-option
+                    v-for="lv in group.levels"
+                    :key="lv.idx"
+                    :label="`Lv.${lv.idx + 1} ${lv.label}`"
+                    :value="lv.idx"
+                  />
+                </el-option-group>
+              </el-select>
+            </div>
+            <div class="level-ratio__actions">
+              <el-button size="small" type="primary" :disabled="levelDraft == null" @click="applyLevelOverride">
+                应用起点档位
+              </el-button>
+              <el-button size="small" :disabled="!overrideActive" @click="resetLevelOverride">
+                恢复自动
+              </el-button>
+            </div>
+          </el-collapse-item>
+        </el-collapse>
+      </el-form-item>
+
       <!-- 档位配比：默认全不配置 = 与原有选题权重完全一致 -->
       <el-form-item>
         <el-collapse v-model="ratioOpen" class="level-ratio">
@@ -137,9 +190,11 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
+import { ElMessage } from 'element-plus';
 import { fileNameGeneratedRuleEnum } from '@/utils/enum.js';
 import { DIFFICULTY_LEVELS } from '@/constants/difficulty';
+import { usePracticeStore } from '@/stores/practice';
 import {
   loadLevelCoefficients,
   saveLevelCoefficients,
@@ -147,6 +202,11 @@ import {
   COEF_MIN,
   COEF_MAX,
 } from '@/utils/store/levelCoefficients';
+import {
+  loadLevelOverride,
+  saveLevelOverride,
+  clearLevelOverride,
+} from '@/utils/store/levelOverride';
 
 const fileNameGeneratedRuleOptions = computed(() => {
   return Object.entries(fileNameGeneratedRuleEnum).map(([, { key, text }]) => {
@@ -264,6 +324,61 @@ function resetCoef() {
   coefficients.value = {}
 }
 
+/* ─── 练习档位（起点档位手动指定）─────────────────────────────
+ * 语义见 utils/store/levelOverride.js + services/abilityProfile.js#computeDifficultyIdx：
+ * 只钉「从哪一档开始练」，不删答题史；应用后旧轮次不再参与升档阶梯。
+ */
+const practiceStore = usePracticeStore()
+const levelOpen = ref([])
+const levelOverride = ref(loadLevelOverride())          // 已保存的覆盖（null = 自动）
+const overrideActive = computed(() => levelOverride.value != null)
+const levelDraft = ref(levelOverride.value?.levelIdx ?? null)
+const currentLevelIdx = ref(null)
+const currentLevelText = computed(() => {
+  if (currentLevelIdx.value == null) return '—'
+  const lv = DIFFICULTY_LEVELS[currentLevelIdx.value]
+  return lv ? `Lv.${currentLevelIdx.value + 1} ${lv.label}` : '—'
+})
+
+/** 读 DB 画像，显示「当前实际档位」（手动指定后就是指定档位） */
+async function refreshCurrentLevel() {
+  try {
+    const { Profile } = await import('@/services/abilityProfile')
+    const profile = await Profile.load()
+    currentLevelIdx.value = profile.difficultyIdx
+  } catch {
+    currentLevelIdx.value = null
+  }
+}
+
+// 每次打开设置抽屉同步一次：别处清过数据 / 改过档位时不会显示旧值
+watch(() => props.visible, (visible) => {
+  if (!visible) return
+  levelOverride.value = loadLevelOverride()
+  levelDraft.value = levelOverride.value?.levelIdx ?? null
+  refreshCurrentLevel()
+})
+
+/** 应用手动起点档位 */
+function applyLevelOverride() {
+  const saved = saveLevelOverride(levelDraft.value)
+  if (!saved) return
+  levelOverride.value = saved
+  practiceStore.bumpLevelOverride()
+  refreshCurrentLevel()
+  ElMessage.success(`起点档位已设为 Lv.${saved.levelIdx + 1} ${DIFFICULTY_LEVELS[saved.levelIdx].label}，下次开始练习生效`)
+}
+
+/** 清除手动指定，恢复自动升档 */
+function resetLevelOverride() {
+  clearLevelOverride()
+  levelOverride.value = null
+  levelDraft.value = null
+  practiceStore.bumpLevelOverride()
+  refreshCurrentLevel()
+  ElMessage.info('已恢复自动升档（按练习记录计算）')
+}
+
 /**
  * 
  * @param {Function} done 
@@ -352,6 +467,27 @@ const handleClose = (done) => {
 .level-ratio__input {
   flex: 0 0 96px;
   width: 96px;
+}
+
+/* 练习档位：起点档位下拉 + 操作按钮 */
+.level-pick {
+  flex: 0 0 210px;
+  width: 210px;
+}
+
+.level-pick__current {
+  flex: 0 0 auto;
+}
+
+.level-ratio__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* 下拉是 teleport 到 body 的，popper 类要写非 scoped（见文件说明） */
+.level-pick__popper {
+  min-width: 240px;
 }
 
 .level-ratio__reset {

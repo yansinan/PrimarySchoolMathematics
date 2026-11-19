@@ -910,6 +910,17 @@ watch(
 )
 
 /**
+ * 设置里改了「起点档位」（或恢复自动）→ 准备界面要立刻显示新档位。
+ * 设置抽屉与练习页不在同一组件树，靠 store 的版本号中转。
+ */
+watch(
+  () => practiceStore.levelOverrideRevision,
+  async () => {
+    if (readyToStart.value && !currentQuestion.value) await loadStartInfo()
+  }
+)
+
+/**
  * 全键盘操作：数字 / 退格 / 回车 / 空格
  *
  * 监听放在 V 层而不是 NumberKeypad 内部 —— 答题区可能是数字键区也可能是选择题，
