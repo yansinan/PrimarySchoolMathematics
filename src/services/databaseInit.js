@@ -14,6 +14,7 @@ import Dexie from 'dexie'
 import { clearFormState } from '@/utils/store/formPersistence'
 import { clearLevelCoefficients } from '@/utils/store/levelCoefficients'
 import { clearLevelOverride } from '@/utils/store/levelOverride'
+import { clearChallengeSetting } from '@/utils/store/challengeSetting'
 
 // ─── Schema helpers (Dexie mapToClass) ───────────────────────────────────
 
@@ -140,8 +141,9 @@ export async function importAllData(data) {
  * 清空所有本地数据（sessions + answers + profile + 本地设置）
  *
  * 本地设置也一并清掉：出题表单自动保存（psm_form_state）、档位配比系数
- * （psm_level_coefficients）和手动指定的起点档位（psm_level_override）
- * 都属于「用户数据」，重置后应该回到出厂默认，否则会残留上一次的配置。
+ * （psm_level_coefficients）、手动指定的起点档位（psm_level_override）和
+ * 挑战题开关（psm_challenge_enabled）都属于「用户数据」，
+ * 重置后应该回到出厂默认，否则会残留上一次的配置。
  */
 export async function clearAllData() {
   await db.transaction('rw', db.practiceSessions, db.answers, async () => {
@@ -152,4 +154,5 @@ export async function clearAllData() {
   try { clearFormState() } catch { /* ignore */ }
   try { clearLevelCoefficients() } catch { /* ignore */ }
   try { clearLevelOverride() } catch { /* ignore */ }
+  try { clearChallengeSetting() } catch { /* ignore */ }
 }

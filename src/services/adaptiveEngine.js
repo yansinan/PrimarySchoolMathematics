@@ -33,6 +33,7 @@ import { DIFFICULTY_LEVELS } from '@/constants/difficulty'
 import { Question, Answer, WrongAnswer } from '@/services'
 import { generateOneQuestion } from '@/utils/algorithm/adaptiveBatch'
 import { loadLevelCoefficients, COEF_DEFAULT } from '@/utils/store/levelCoefficients'
+import { loadChallengeEnabled } from '@/utils/store/challengeSetting'
 
 // 小组题量阶梯（每个速度级别对应一个基数）
 const GROUP_SIZES = [6, 10, 14, 18, 22]
@@ -136,9 +137,12 @@ export class Engine {
     weakLevelIndices = [],
     targetMin = 10,
     targetMax = 30,
+    challengeEnabled = null,
   } = {}) {
     this.profile = { difficultyIdx, strongLevelIndices, weakLevelIndices }
     this.difficultyIdx = difficultyIdx
+    /** 挑战题开关（家长在设置里手动决定；不传则实时读存储，默认关闭） */
+    this.challengeEnabled = challengeEnabled ?? loadChallengeEnabled()
     this.assistLevel = 0
     this.blankMode = 'result'
     this.groupSizeIdx = 0
@@ -467,10 +471,9 @@ export class Engine {
   pickStrongLevel() {
     const indices = this.strongLevelIndices
     if (!indices.length) return null
-    // 强项题最多领先当前档 1 档（与挑战题相同的上限）。
-    // 曾经是 +2：起点档位被钉到「乘法口诀·2~6」时，strong 里的「表内除法」
-    // 会被当成强项混进来，家长看到的就是「超过当前档位的高难度题」。
-    const MAX_ADVANCE = 1
+    // 强项题最多领先当前档：挑战题关闭时 0 档（只练本档及以下），打开时 1 档。
+    // 曾经固定 +2，钉住起点档位后会把「表内除法」当强项混进口诀练习里。
+    const MAX_ADVANCE = this.challengeEnabled ? 1 : 0
     const top = this.difficultyIdx + MAX_ADVANCE
     // 实例上的 levelCoefficients 优先（测试/外部注入），否则实时读存储
     const coeffs = this.levelCoefficients ?? loadLevelCoefficients()

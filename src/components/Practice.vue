@@ -104,6 +104,7 @@
             <div class="start-chips">
               <span class="chip">{{ startInfo.targetMin }}~{{ startInfo.targetMax }} 题</span>
               <span class="chip">每组 4~10 题</span>
+              <span class="chip">{{ startInfo.challengeEnabled ? '含挑战题·下一档' : '只练本档' }}</span>
               <span class="chip chip--level">
                 {{ startInfo.levelLabel }}
                 <span v-if="startInfo.grade" class="chip__grade">{{ startInfo.grade }}</span>
@@ -840,13 +841,14 @@ if (typeof window !== 'undefined') {
 // ─────────────────────────────────────────────────────────────
 const startInfo = ref({
   levelIdx: 0, levelLabel: '', accuracy: 0, streak: 0,
-  targetMin: 10, targetMax: 30, focus: []
+  targetMin: 10, targetMax: 30, challengeEnabled: false, focus: []
 })
 
 async function loadStartInfo() {
   const { Profile } = await import('@/services/abilityProfile')
   const { DIFFICULTY_LEVELS } = await import('@/constants/difficulty')
   const { Answer } = await import('@/services/Answer')
+  const { loadChallengeEnabled } = await import('@/utils/store/challengeSetting')
   const profile = await Profile.load()
   const idx = profile?.difficultyIdx ?? 0
   const level = DIFFICULTY_LEVELS[idx] || DIFFICULTY_LEVELS[0]
@@ -879,6 +881,8 @@ async function loadStartInfo() {
     streak,
     targetMin: liveTarget?.targetMin ?? cfg.targetMin ?? 10,
     targetMax: liveTarget?.targetMax ?? cfg.targetMax ?? 30,
+    // 挑战题由家长在设置里手动开关（默认关闭 → 只出当前档及以下）
+    challengeEnabled: loadChallengeEnabled(),
     // 练习重点只列当前档位及以下的弱项：更高档位这轮不会出题（见 Profile#getFocusLevels）
     focus: profile?.getFocusLevels ? profile.getFocusLevels() : [],
   }

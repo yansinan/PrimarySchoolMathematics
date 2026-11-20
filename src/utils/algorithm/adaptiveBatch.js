@@ -22,6 +22,7 @@ import { EquationSolver } from './EquationSolver'
 import { DIFFICULTY_LEVELS } from '../../constants/difficulty'
 import { Question } from '@/services'
 import { getLevelCoefficient } from '@/utils/store/levelCoefficients'
+import { loadChallengeEnabled } from '@/utils/store/challengeSetting'
 
 /**
  * 根据自适应引擎和排列方案生成一组题（仅主题库，不含 reserve）
@@ -59,7 +60,9 @@ function pickLevelForSlot(engine, slotType) {
     const idx = engine.pickWeakLevel()
     return idx == null ? engine.difficultyIdx : idx
   }
-  // challenge: 当前难度 + 1；该档配比系数为 0 时退回当前档（默认未配置 → 恒定 +1）
+  // challenge: 当前难度 + 1。开关由家长在设置里决定（默认关闭 → 只出本档）。
+  const challengeOn = engine.challengeEnabled ?? loadChallengeEnabled()
+  if (!challengeOn) return engine.difficultyIdx
   const target = Math.min(engine.difficultyIdx + 1, DIFFICULTY_LEVELS.length - 1)
   const coef = engine.levelCoefficients
     ? (engine.levelCoefficients[target] ?? 1)

@@ -135,6 +135,19 @@
                 恢复自动
               </el-button>
             </div>
+
+            <div class="level-ratio__row level-ratio__row--switch">
+              <span class="level-ratio__label">挑战题（下一档）</span>
+              <el-switch
+                :model-value="challengeEnabled"
+                size="small"
+                @update:model-value="setChallengeEnabled"
+              />
+            </div>
+            <p class="level-ratio__hint">
+              默认关闭：本轮只出当前档位及以下的题。有些档位的前置知识孩子还没学到，
+              上一档的题不是努力就能做出来的 —— 想加难度再在这里手动打开（每组约 15% 的下一档题）。
+            </p>
           </el-collapse-item>
         </el-collapse>
       </el-form-item>
@@ -207,6 +220,10 @@ import {
   saveLevelOverride,
   clearLevelOverride,
 } from '@/utils/store/levelOverride';
+import {
+  loadChallengeEnabled,
+  saveChallengeEnabled,
+} from '@/utils/store/challengeSetting';
 
 const fileNameGeneratedRuleOptions = computed(() => {
   return Object.entries(fileNameGeneratedRuleEnum).map(([, { key, text }]) => {
@@ -378,6 +395,25 @@ function resetLevelOverride() {
   refreshCurrentLevel()
   ElMessage.info('已恢复自动升档（按练习记录计算）')
 }
+
+/* ─── 挑战题开关 ─────────────────────────────────────────────
+ * 默认关闭：本轮只出当前档位及以下。家长按孩子学到哪一档手动决定是否加难度。
+ */
+const challengeEnabled = ref(loadChallengeEnabled())
+
+function setChallengeEnabled(value) {
+  const next = saveChallengeEnabled(!!value)
+  challengeEnabled.value = next
+  // 复用同一个刷新信号：准备界面「这次练什么」里的挑战题提示要跟着变
+  practiceStore.bumpLevelOverride()
+  ElMessage.info(next ? '已开启挑战题（每组约 15% 的下一档题）' : '已关闭挑战题（只出当前档及以下）')
+}
+
+/** 打开抽屉时同步一次挑战题设置 */
+watch(() => props.visible, (visible) => {
+  if (!visible) return
+  challengeEnabled.value = loadChallengeEnabled()
+})
 
 /**
  * 
