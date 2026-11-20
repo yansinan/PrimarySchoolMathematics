@@ -106,10 +106,16 @@ describe('档位配比 — 弱项选档', () => {
     expect(engine.pickWeakLevel()).toBe(9)
   })
 
-  it('弱项全被关掉时仍返回第一个，不至于返回 undefined', () => {
+  it('弱项全被系数关掉 → 返回 null（调用方回退当前档位，不硬塞一个）', () => {
     const engine = makeEngine({ weakLevelIndices: [6, 9] })
     engine.levelCoefficients = { 6: 0, 9: 0 }
-    expect(engine.pickWeakLevel()).toBe(6)
+    expect(engine.pickWeakLevel()).toBeNull()
+  })
+
+  it('弱项全在当前档位之上 → 返回 null（不把高档错题拉进本轮）', () => {
+    const engine = makeEngine({ weakLevelIndices: [16, 18, 19] })   // difficultyIdx = 15
+    engine.levelCoefficients = {}
+    expect(engine.pickWeakLevel()).toBeNull()
   })
 })
 

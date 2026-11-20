@@ -467,7 +467,10 @@ export class Engine {
   pickStrongLevel() {
     const indices = this.strongLevelIndices
     if (!indices.length) return null
-    const MAX_ADVANCE = 2
+    // 强项题最多领先当前档 1 档（与挑战题相同的上限）。
+    // 曾经是 +2：起点档位被钉到「乘法口诀·2~6」时，strong 里的「表内除法」
+    // 会被当成强项混进来，家长看到的就是「超过当前档位的高难度题」。
+    const MAX_ADVANCE = 1
     const top = this.difficultyIdx + MAX_ADVANCE
     // 实例上的 levelCoefficients 优先（测试/外部注入），否则实时读存储
     const coeffs = this.levelCoefficients ?? loadLevelCoefficients()
@@ -491,13 +494,20 @@ export class Engine {
   pickWeakLevel() {
     const indices = this.weakLevelIndices
     if (!indices.length) return null
-    // 从最低难度弱项开始练（indices 天然升序）；
-    // 被配比系数调成 0 的档位跳过（默认空表 → 仍取 indices[0]，行为不变）
     const coeffs = this.levelCoefficients ?? loadLevelCoefficients()
+    // 只补**当前档位及以下**的弱项：
+    // 弱项列表来自全部答题史，含远高于当前档位的档（例如钉在口诀·2~6 时，
+    // 历史里「两位数×一位数」的错题仍是弱项）—— 之前没有上限，这些高档会被
+    // 当成弱项练习题混进组里，孩子看到的就是「不应该出现的高难度题」。
+    // 从最低难度弱项开始练（indices 天然升序）；
+    // 被配比系数调成 0 的档位跳过（默认空表 → 仍取第一个可用的）。
     const allowed = indices.filter(i => {
+      if (i > this.difficultyIdx) return false
       const c = coeffs[i]
       return typeof c !== 'number' || c > 0
     })
-    return (allowed.length ? allowed : indices)[0]
+    // 一个可练的弱项都没有（全在当前档位之上）→ 返回 null，
+    // 让 pickLevelForSlot 退回当前档位，绝不把高档弱项拉进本轮。
+    return allowed.length ? allowed[0] : null
   }
 }

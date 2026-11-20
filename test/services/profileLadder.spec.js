@@ -178,6 +178,30 @@ describe('档位阶梯 — 家长手动指定起点档位（设置 → 练习档
   })
 })
 
+describe('整组题目不超过当前档位 +1', () => {
+  it('钉在口诀·2~6，历史强项/弱项里含更高档 → 组内最高只到 +1 档', () => {
+    const engine = new Engine({
+      difficultyIdx: L['乘法口诀·2~6'],
+      strongLevelIndices: [L['进退位巩固'], L['乘法口诀·7~9'], L['表内除法·7~9'], L['大数减法'], L['综合挑战'], L['三位数×一位数']],
+      weakLevelIndices: [L['两位数×一位数'], L['两位数×两位数'], L['两位数÷一位数']],
+      targetMin: 10,
+      targetMax: 30,
+    })
+    engine.levelCoefficients = {}
+    const maxAllowed = engine.difficultyIdx + 1
+    const violations = []
+    for (let g = 1; g <= 4; g++) {
+      const size = [6, 10, 14, 18][g - 1]
+      const plan = engine.generateQuestionPlan(g, size, false)
+      for (const q of generateAdaptiveBatch(engine, size, plan)) {
+        const m = Question.matchLevel(q)
+        if (m && m.levelIdx > maxAllowed) violations.push(`${q.equation} → ${m.levelIdx} ${m.label}`)
+      }
+    }
+    expect(violations, `出现超档题目：\n${violations.join('\n')}`).toEqual([])
+  }, 60000)
+})
+
 describe('练习重点 — 只列当前档位及以下的弱项', () => {
   const mkProfile = (difficultyIdx, weakLevelIndices) =>
     new Profile({ difficultyIdx, weakLevelIndices })
