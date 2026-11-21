@@ -114,7 +114,7 @@ src/
 │
 ├── services/                             ⭐ S 层（顶层，与 utils/components 同级）
 │  ├── analysis.js                        ⭐ C1+C2+C3 升层
-│  ├── abilityProfile.js                  ⭐ Profile 类（load / computeDifficultyIdx / 强弱项查询）
+│  ├── abilityProfile.js                  ⭐ Profile 类（load / loadSessionLevels / computeDifficultyIdx / 强弱项查询）
 │  ├── adaptiveEngine.js                  ⭐ Engine 类（2026-06-10 升层自 utils/algorithm）
 │  ├── PracticeSession.js                 ⭐ session 域类（save / getAnswers / computeStats / CRUD）
 │  ├── Question.js                        ⭐ 领域模型：题目元数据 + 查询（2026-06-12 迁自 utils/algorithm，文件名大写）

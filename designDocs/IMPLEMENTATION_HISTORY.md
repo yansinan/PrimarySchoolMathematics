@@ -801,3 +801,50 @@ practiceStore.currentDifficultyIdx = adaptiveEngine.value.difficultyIdx  // 取 
 | `npx vitest run` | 105/105 PASS ✅ |
 | 浏览器模块加载 | 6 个导出函数全部正确解析 ✅ |
 | 端到端答题测试 | 答错 `938-246=__`，`getWrongAnswers()` 正确返回 1 条记录 ✅ |
+
+---
+
+## 17. 乘除法难度阶梯 + 三者边界 + 升档阶梯修复（2026-11）
+
+> 三轮业务迭代，单测 105 → 243。详细方案见 `designDocs/12-PLAN` / `13-PLAN` / `14-FIX`。
+
+### 17.1 12-PLAN：乘除法难度阶梯（2026-11-17）
+
+**断点**：`matchLevel` 对乘除题返回 `null` → 进不了能力画像/统计，还会被 `adaptiveBatch` 的 B12 校验当非法题丢弃。乘除法在生成器、求解器、统计映射三层本就完整支持，断点只在「题目 → 难度档位」的匹配。
+
+**修复**：`matchLevel` 支持乘除；难度档位按人教教材进度重排为 **24 级**（原 12 级）。能力评估（诊断）按 dr 要求未动。
+
+### 17.2 13-PLAN：诊断 / 自适应 / 手动出题三者边界（2026-11-18）
+
+**结论**：不再给手动出题加难度档位。两套东西彻底分开，用流程边界而非共享状态划界。
+
+- `assessmentCompleted` getter 改基于 `hasRealProfile`（来自 DB 画像），**不再从 `phase` 推导** —— 手动出题会把 phase 设为 'practice'，用 phase 推导会误判已评估。
+- 诊断门控：未完成诊断时隐藏练习入口（`Practice.vue` 用 `hasRealProfile` 统一判断）。
+- 手动出题照旧进答题史/统计，但不影响自适应升档。
+
+### 17.3 14-FIX：升档阶梯跳档修复（2026-11-19~20）
+
+**根因**：升档看「单题命中的档位」而非「整轮起始档」，无题量门槛（1 题 100% = 该档强项），+1 叠加导致每轮跳 1~2 档，中间档被整段跳过。5 轮 ×30 题就从「二上两位数加减」窜到「三上多位数乘法」。
+
+**修复链**（commit `8af2ee4` 起）：
+
+| # | 改动 | 文件 |
+|---|------|------|
+| 1 | `computeDifficultyIdx` 加 `sessionLevels` 参数，按轮次走阶梯（每轮最多升一档，跳过的档下轮回填） | `services/abilityProfile.js` |
+| 2 | `LEVEL_EVIDENCE_MIN = 10` 题量门槛（一轮至少答满 10 题才算该档「练过」） | `constants/practice.js` |
+| 3 | 手动出题不参与阶梯（只写 `listSource === 'adaptive'` 的起始档位快照） | `composables/usePracticeSaver.js` |
+
+**补记 §六（2026-11-19）**：练习档位手动控制。家长可在「其他设置 → 练习档位」手动指定起点档位（24 档下拉），覆盖值存 localStorage（`utils/store/levelOverride.js`）。这推翻了 13-PLAN 里「档位是引擎私事」的定调 —— 只保留自动升档一旦被历史数据带偏，家长无手段纠正。`Profile#getFocusLevels()` 同步收口：只取当前档位及以下的弱项。
+
+**补记 §七（2026-11-20）**：混题上限收口。`pickWeakLevel` 原无上限（弱项来自全部答题史，钉在低档时仍出高档错题）→ 改为只取 `<= difficultyIdx`；`pickStrongLevel` 上限 `difficultyIdx + 2` → `+1`。整组题目档位上限 = `difficultyIdx + 1`。
+
+**补记 §八（2026-11-20）**：挑战题改家长手动开关。原恒定 `difficultyIdx + 1`（约 15%）→ 家长开关控制（`utils/store/challengeSetting.js`，默认**关**）。孩子没学到的单元出挑战题只会挫败。
+
+**I-1 关闭**：本轮同时关闭了 `.refactor-todo.md` 的 I-1（`computeDifficultyIdx` 双源）。store 不再存档位计算结果，单一事实源 = `Profile.load()`；engine 递升问题由 `loadSessionLevels` 阶梯方案落地。
+
+### 17.4 验证
+
+| 测试 | 结果 |
+|------|------|
+| `npx vitest run` | 243/243 PASS ✅（19 文件） |
+| 浏览器实测 | 钉到 Lv.10 乘法口诀·2~6 后连答无超档题、console 零报错 ✅ |
