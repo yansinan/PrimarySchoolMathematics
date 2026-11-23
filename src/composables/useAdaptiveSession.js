@@ -268,13 +268,13 @@ export function useAdaptiveSession(options = {}) {
     let evaluationScore = 3  // 默认 3 = 刚刚好
     try {
       playSfx('group')
-      const score = await dialogs.showSelfEvaluationDialog({
+      evaluationScore = (await dialogs.showSelfEvaluationDialog({
         groupIndex: groupIdx,
         correctCount: groupCorrect,
         totalCount: groupAnswers.length,
         timeText: formatDuration(groupTime),
         comment: groupComment,
-      })
+      })) ?? 3
     } catch { /* 弹窗关闭异常 → 保持默认 3 */ }
 
     adaptiveEngine.value.lastEvaluation = evaluationScore

@@ -11,7 +11,7 @@
  * 目标：保持信心，探索边界。
  *
  * 升层说明：2026-06-10 从 utils/algorithm/adaptiveEngine.js（U 层）升到 services/（S 层）。
- * 纯函数（computeDifficultyIdx）和 utility 保留在 utils/algorithm/adaptiveEngine.js。
+ * computeDifficultyIdx 已 inline 为 Profile 静态方法，见 services/abilityProfile.js。
  */
 
 import { sumResponseTimes } from '@/utils/score'

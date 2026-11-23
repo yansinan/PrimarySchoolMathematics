@@ -35,7 +35,7 @@ import { loadLevelOverride } from '@/utils/store/levelOverride'
  *   Engine  = 会话运行时状态，通过 this.profile 引用 Profile 实例
  *
  * @see services/adaptiveEngine.js — Engine 类（持 Profile 实例）
- * @see utils/algorithm/adaptiveEngine.js — computeDifficultyIdx（原 U 层函数已 inline）
+ * computeDifficultyIdx 已 inline 为本文件 Profile.computeDifficultyIdx 静态方法。
  */
 /**
  * 判断一个 profile 是否代表「已完成真实能力评估」
