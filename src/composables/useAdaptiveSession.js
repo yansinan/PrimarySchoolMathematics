@@ -151,6 +151,14 @@ export function useAdaptiveSession(options = {}) {
     practiceStore.resetPracticeSession()
     practiceStore.session._pendingProfileSnapshot = dbProfile.snapshot()
     practiceStore.session.sessionStartTime = Date.now()
+    // 本轮配置快照：只用于练习记录展示（起始档位 / 题量目标）。
+    // 自适应轮不经过 Generate，不写这里，记录列表里难度显示「—」、完成度只能按默认 30 题猜。
+    practiceStore.session.configSnapshot = {
+      mode: 'adaptive',
+      difficultyIdx: dbProfile.difficultyIdx,
+      targetMin,
+      targetMax,
+    }
     practiceStore.setPhase('practice')
 
     const size = engine.getGroupSize()

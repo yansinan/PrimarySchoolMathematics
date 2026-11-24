@@ -106,6 +106,9 @@ export function usePracticeSaver(profileRef = null) {
     const pid = getPracticeSessionId()
     await PracticeSession.create({
       practiceSessionId: pid,
+      // 中断的轮次在记录列表里显示的正是最后一个 checkpoint 行，
+      // 不带本轮配置快照的话，那条记录会丢掉起始档位和题量目标。
+      configSnapshot: practiceStore.session.configSnapshot,
       evaluations,
       // 标记为 checkpoint，不是最终结算
       profileSnapshot: null,

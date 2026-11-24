@@ -152,14 +152,25 @@
               </div>
               <div class="session-item__right">
                 <span class="session-item__count">{{ sessionStats[session.id]?.totalQuestions || session.totalQuestions }}题</span>
+                <!-- 完成/中断以本轮落库的 completed 为准；旧数据没有该字段时退回按题量进度显示 -->
+                <el-tag
+                  v-if="sessionStats[session.id]?.completed === true"
+                  size="small"
+                  type="success"
+                  effect="plain"
+                  class="session-item__status"
+                >已完成</el-tag>
+                <el-tag
+                  v-else-if="sessionStats[session.id]?.completed === false"
+                  size="small"
+                  type="warning"
+                  effect="plain"
+                  class="session-item__status"
+                >中断</el-tag>
                 <span
-                  v-if="sessionStats[session.id]?.completion != null"
+                  v-else-if="sessionStats[session.id]?.completion != null"
                   class="session-item__completion"
-                  :class="sessionStats[session.id].completion >= 1 ? 'session-item__completion--done' : ''"
-                >
-                  <template v-if="sessionStats[session.id].completion >= 1">✓</template>
-                  <template v-else>{{ Math.round(sessionStats[session.id].completion * 100) }}%</template>
-                </span>
+                >{{ Math.round(sessionStats[session.id].completion * 100) }}%</span>
                 <el-tag
                   v-if="sessionStats[session.id]?.accuracy != null"
                   size="small"
@@ -519,14 +530,13 @@ onBeforeUnmount(() => {
 }
 
 .session-item__completion {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: #e6a23c;
 }
 
-.session-item__completion--done {
-  color: #58cc71;
-  font-size: 16px;
+.session-item__status {
+  font-size: 11px;
 }
 
 .session-item__arrow {

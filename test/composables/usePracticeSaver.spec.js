@@ -52,12 +52,14 @@ function mkAnswer(questionIndex, solution, userAnswer = solution) {
  * @param {object} saver usePracticeSaver 实例
  * @param {Array} answers 本轮要答的题
  * @param {object} [startSnapshot] 本轮起始档位快照（startNewAdaptiveSession 在开局时写入）
+ * @param {object} [configSnapshot] 本轮配置快照（自适应轮：mode/difficultyIdx/targetMin/targetMax）
  */
-async function startRound(store, saver, answers, startSnapshot = null) {
+async function startRound(store, saver, answers, startSnapshot = null, configSnapshot = null) {
   store.resetPracticeSession()
   store.setPhase('practice')
   store.setListSource('adaptive')
   store.session._pendingProfileSnapshot = startSnapshot
+  store.session.configSnapshot = configSnapshot
   for (const a of answers) {
     store.session.answers.push(a)
     await saver.savePerQuestion()
@@ -132,11 +134,14 @@ describe('轮次身份：一轮一个 practiceSessionId', () => {
 })
 
 describe('中断的轮次仍进入练习记录', () => {
+  /** 自适应轮的配置快照（与 startNewAdaptiveSession 写入的形状一致） */
+  const ADAPTIVE_CFG = { mode: 'adaptive', difficultyIdx: 2, targetMin: 8, targetMax: 12 }
+
   /** 第 1 组 2 题已自我评价（checkpoint 落库），第 2 组答了 1 题就中断，没有最终结算 */
   async function interruptedRound() {
     const store = usePracticeStore()
     const saver = usePracticeSaver()
-    await startRound(store, saver, [mkAnswer(0, 2), mkAnswer(1, 3)])
+    await startRound(store, saver, [mkAnswer(0, 2), mkAnswer(1, 3)], null, ADAPTIVE_CFG)
     await saver.saveGroupCheckpoint(historyUpTo([2], 4))
     store.session.answers.push(mkAnswer(2, 4))
     await saver.savePerQuestion()
@@ -154,6 +159,11 @@ describe('中断的轮次仍进入练习记录', () => {
     const stats = await PracticeSession.getBatchSessionStats(list)
     expect(stats[list[0].id].totalQuestions).toBe(3)
     expect(stats[list[0].id].practiceType).toBe('自适应')
+    // 完成/中断一眼可辨：completed=false 供 UI 打「中断」标签
+    expect(stats[list[0].id].completed).toBe(false)
+    // 中断轮次的列表行是 checkpoint，也要带本轮配置快照：难度不再是「—」、完成度用真实上限
+    expect(stats[list[0].id].difficultyLabel).not.toBe('—')
+    expect(stats[list[0].id].completion).toBeCloseTo(3 / 12)
   })
 
   it('答题详情按组切开：已评价的组各占一组，没答完的下一组单独成组', async () => {
@@ -167,9 +177,10 @@ describe('中断的轮次仍进入练习记录', () => {
     expect(detail.answers[0].questionIndex).toBe(2)
   })
 
-  it('完成的轮次：详情按组切分不受影响', async () => {
+  it('完成的轮次：详情按组切分不受影响，状态为已完成', async () => {
     const store = usePracticeStore()
     const saver = usePracticeSaver()
+    store.session.configSnapshot = { mode: 'adaptive', difficultyIdx: 2, targetMin: 5, targetMax: 20 }
     const sizes = [2, 3, 2]
     for (let g = 0; g < sizes.length; g++) {
       for (let k = 0; k < sizes[g]; k++) {
@@ -182,8 +193,39 @@ describe('中断的轮次仍进入练习记录', () => {
 
     const [entry] = await PracticeSession.list()
     expect(entry.completed).toBe(true)
+    const stats = await PracticeSession.getBatchSessionStats([entry])
+    expect(stats[entry.id].completed).toBe(true)
+    expect(stats[entry.id].difficultyLabel).not.toBe('—')
+    // 提前结束（7 题 < 上限 20）不影响「已完成」判定
+    expect(stats[entry.id].completion).toBeCloseTo(7 / 20)
     const detail = await PracticeSession.getDetail(entry.id)
     expect(detail.siblings.map(s => s.answers.length)).toEqual([2, 3, 2])
     expect(detail.answers).toHaveLength(0)
+  })
+})
+
+describe('computeSessionStats 的完成状态', () => {
+  const answers = (n) => Array.from({ length: n }, () => ({ userAnswer: 1, solution: 1 }))
+
+  it('completed 原样透传：true / false / 旧数据 undefined', () => {
+    expect(PracticeSession.computeSessionStats({ completed: true }, answers(2)).completed).toBe(true)
+    expect(PracticeSession.computeSessionStats({ completed: false }, answers(2)).completed).toBe(false)
+    expect(PracticeSession.computeSessionStats({}, answers(2)).completed).toBeUndefined()
+  })
+
+  it('自适应轮按本轮 targetMax 算题量进度，类型由 mode 识别', () => {
+    const s = PracticeSession.computeSessionStats(
+      { completed: false, config: { mode: 'adaptive', difficultyIdx: 2, targetMax: 12 } },
+      answers(6)
+    )
+    expect(s.practiceType).toBe('自适应')
+    expect(s.difficultyLabel).not.toBe('—')
+    expect(s.completion).toBeCloseTo(0.5)
+  })
+
+  it('没有 completed 字段的旧数据仍可用（不因缺字段抛错）', () => {
+    const s = PracticeSession.computeSessionStats({ evaluations: '[{"group":0,"score":3}]' }, answers(3))
+    expect(s.practiceType).toBe('自适应')
+    expect(s.completed).toBeUndefined()
   })
 })

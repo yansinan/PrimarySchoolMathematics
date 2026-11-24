@@ -892,3 +892,20 @@ practiceStore.currentDifficultyIdx = adaptiveEngine.value.difficultyIdx  // 取 
 | — 连续两轮 | `practiceSessionId` 不同，第一轮 8 条答案未被覆盖 ✅ |
 | — 中断后练习记录 | 两轮各一条；中断轮次 `completed=false`、带本组评价；详情按组切为 4 题 + 1 题 ✅ |
 | console | 零错误 ✅ |
+
+### 18.4 补记（2026-11-24）：练习记录上的「已完成 / 中断」
+
+**问题**：列表原来用 `completion = 题数 / (config.targetMax || 30)` 推断完成度。自适应轮的 `configSnapshot` 是 null，分母永远按 30 题猜：练满 8 题也只显示「27%」、永远不出现 ✓。而且自适应轮允许在 min~max 之间提前结束，这个比值本来就不能当完成判据。
+
+**改法**：
+
+| # | 改动 | 文件 |
+|---|------|------|
+| 1 | 自适应开局把本轮计划写入 `configSnapshot`（`mode / difficultyIdx / targetMin / targetMax`）；组 checkpoint 也带（中断轮次在列表里显示的正是 checkpoint 行） | `composables/useAdaptiveSession.js` / `composables/usePracticeSaver.js` |
+| 2 | `computeSessionStats` 增加 `completed`（原样透传 `session.completed`：true / false / undefined）；类型识别加 `config.mode === 'adaptive'`；难度标签与题量进度改从真实配置读 | `services/PracticeSession.js` |
+| 3 | 列表右侧改为状态标签：已完成（绿）/ 中断（橙）；旧数据没有 `completed` 字段时退回原来的百分比 | `components/stats/StatsDrawer.vue` |
+| 4 | 答题详情抽屉头同步显示同一状态 | `components/stats/SessionDetail.vue` |
+
+**语义**：`completed` 是唯一完成判据（最终结算落库即 true）；`completion` 只作为「练到本轮上限的几成」的进度提示，不再用于判断完成与否。旧数据没有 `completed` 字段 → 不臆测，保留百分比显示。
+
+**验证**：`npx vitest run` 255/255 ✅（+3 `computeSessionStats` 用例）；浏览器实测 9/9 ✅ —— 列表出现「10题 已完成」「11题 中断」，自适应轮难度不再是「—」，详情头状态一致，console 零错误。

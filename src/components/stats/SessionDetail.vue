@@ -10,6 +10,20 @@
         <el-icon :size="20" style="margin-right: 6px;"><Document /></el-icon>
         答题详情
       </span>
+      <el-tag
+        v-if="session.completed === true"
+        size="small"
+        type="success"
+        effect="plain"
+        class="detail-status"
+      >已完成</el-tag>
+      <el-tag
+        v-else-if="session.completed === false"
+        size="small"
+        type="warning"
+        effect="plain"
+        class="detail-status"
+      >中断</el-tag>
     </template>
 
     <template v-if="statsStore.selectedSession">
@@ -230,6 +244,11 @@ function handleClosed() {
   align-items: center;
   font-weight: 600;
   font-size: 18px;
+}
+
+.detail-status {
+  margin-left: 10px;
+  vertical-align: middle;
 }
 
 .detail-header {

@@ -116,37 +116,47 @@ export class PracticeSession extends SchemaSession {
    * 计算 session 摘要统计（不依赖 DB 的纯函数）
    * @param {Object} session — 原始 session 记录
    * @param {Array} answers — 本 session 的答案数组
-   * @returns {{ totalQuestions, correctCount, accuracy, difficultyLabel, completion, practiceType }}
+   * @returns {{ totalQuestions, correctCount, accuracy, difficultyLabel, completion, practiceType, completed }}
+   *   - completed 原样透传 session.completed：true=已完成 / false=中断 / undefined=旧数据没有该字段
    */
   static computeSessionStats(session, answers = []) {
     const correctCount = answers.filter(a => a.isCorrect).length
     const total = answers.length
     const accuracy = total > 0 ? correctCount / total : 0
 
-    // 难度标签：从 config 读 difficultyIdx
-    let difficultyLabel = '—'
+    // 本轮配置快照：自适应轮由 startNewAdaptiveSession 写入
+    // { mode:'adaptive', difficultyIdx, targetMin, targetMax }，手动轮是 Generate 的表单快照
+    let cfg = null
     try {
-      const cfg = typeof session.config === 'string' ? JSON.parse(session.config) : session.config
-      if (cfg?.difficultyIdx != null) {
-        const d = DIFFICULTY_LEVELS[cfg.difficultyIdx]
-        if (d) difficultyLabel = d.label
-      }
+      cfg = typeof session.config === 'string' ? JSON.parse(session.config) : session.config
     } catch { /* ignore */ }
 
-    // 完成度：实际题数 / 计划目标
-    let completion = total > 0 ? 1 : 0
-    try {
-      const cfg = typeof session.config === 'string' ? JSON.parse(session.config) : session.config
-      const targetMax = cfg?.targetMax || 30
-      completion = targetMax > 0 ? Math.min(1, total / targetMax) : 1
-    } catch { /* ignore */ }
+    // 难度标签：从 config 读 difficultyIdx
+    let difficultyLabel = '—'
+    if (cfg?.difficultyIdx != null) {
+      const d = DIFFICULTY_LEVELS[cfg.difficultyIdx]
+      if (d) difficultyLabel = d.label
+    }
+
+    // 题量进度：实际题数 / 本轮上限（自适应轮允许在 min~max 之间提前结束，
+    // 所以这个数只是「练到上限的几成」，完成与否看 completed，不能拿它当完成判据）
+    const targetMax = cfg?.targetMax || 30
+    const completion = targetMax > 0 ? Math.min(1, total / targetMax) : 1
 
     // 练习类型
     let practiceType = '普通'
-    if (session.evaluations) practiceType = '自适应'
-    else if (session.config?.diagnostic) practiceType = '诊断'
+    if (session.evaluations || cfg?.mode === 'adaptive') practiceType = '自适应'
+    else if (cfg?.diagnostic) practiceType = '诊断'
 
-    return { totalQuestions: total, correctCount, accuracy, difficultyLabel, completion, practiceType }
+    return {
+      totalQuestions: total,
+      correctCount,
+      accuracy,
+      difficultyLabel,
+      completion,
+      practiceType,
+      completed: session.completed,
+    }
   }
 
   /**
