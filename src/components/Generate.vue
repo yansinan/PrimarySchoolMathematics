@@ -246,6 +246,9 @@ const generateFormulas = () => {
     return prev;
   }, []);  
 
+  // 新一轮手动练习：清上一轮状态并换新的 practiceSessionId（见 stores/practice.js#resetPracticeSession）。
+  // 必须在 setConfigSnapshot 之前 —— resetPracticeSession 会把 configSnapshot 清空。
+  practiceStore.resetPracticeSession()
   // Capture config snapshot for stats tracking
   practiceStore.setConfigSnapshot(toRaw(unref(formData)))
 

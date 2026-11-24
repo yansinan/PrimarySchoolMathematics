@@ -152,10 +152,10 @@ export class PracticeSession extends SchemaSession {
   /**
    * 批量加载 sessions 的统计信息
    * @param {Array<Object>} sessions
-   * @returns {Promise<Map<number, Object>>} sessionId → stats
+   * @returns {Promise<Object<string, Object>>} sessionId → stats（普通对象，按 id 下标取）
    */
   static async getBatchSessionStats(sessions) {
-    if (!sessions.length) return new Map()
+    if (!sessions.length) return {}
     // 用 practiceSessionId 分组查 answers（而非 sessionId）
     const psIds = [...new Set(sessions.filter(s => s.practiceSessionId).map(s => s.practiceSessionId))]
     const standaloneIds = sessions.filter(s => !s.practiceSessionId).map(s => s.id)
@@ -222,9 +222,14 @@ export class PracticeSession extends SchemaSession {
     let consumed = 0
     if (session && session.practiceSessionId) {
       const totalAnswers = answers.length
-      // 按 createdAt 排序，跳过无 evaluations 的（savePerQuestion 创建的空壳）
+      // 组边界 = 带 evaluations、且不是最终结算（completed）的行。
+      // 每个 checkpoint 的 evaluations 是累积历史，末尾那条就是它自己这一组；
+      // 最终结算行的 evaluations 是整轮历史，末组已被最后一个 checkpoint 覆盖，再算一次会切走两次。
+      // 被点开的这一行若是未完成的 checkpoint（中断的轮次），它自己也是边界，
+      // 否则它那一组会和后面没答完的下一组混在一起。旧数据没有 completed 字段，保持原「排除自身」行为。
+      const isInterruptedCheckpoint = session.completed === false && !!session.evaluations
       const checkpoints = (await PracticeSession.findByPracticeSessionId(session.practiceSessionId))
-        .filter(s => s.id !== sessionId && s.evaluations)
+        .filter(s => s.evaluations && s.completed !== true && (s.id !== sessionId || isInterruptedCheckpoint))
         .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''))
       for (const s of checkpoints) {
         let groupSize = 0

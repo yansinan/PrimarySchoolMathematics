@@ -49,8 +49,13 @@ export const usePracticeStore = defineStore('practice', {
       // P2-2: 诊断阶段答题 — 与练习阶段 session.answers 完全隔离
       // 防止诊断 5 道题污染练习统计（避免原 125% bug）
       diagnosticAnswers: [],
+      /**
+       * 本轮的持久化身份：一轮一个，所有 checkpoint + 最终结算共用。
+       * 由 resetPracticeSession 清空、usePracticeSaver 在本轮首次写入时生成。
+       */
       practiceSessionId: null,
-      sessionDbId: null,          // 对应 DB practiceSessions 表的 auto id (FK)
+      /** 本轮首题创建的 practiceSessions 行 id（answer.sessionId 外键指向它），随 practiceSessionId 一起清 */
+      sessionDbId: null,
       _pendingProfileSnapshot: null,  // 练习开始时暂存的 profile 快照（第一题写入时一并入库）
       lastSavedAnswerCount: 0,
       currentAnswer: '',
@@ -208,6 +213,13 @@ export const usePracticeStore = defineStore('practice', {
       this.session.startTime = null
       this.session.sessionStartTime = null
       this.session.configSnapshot = null
+      // 新一轮 = 新的持久化身份。不清的话，同一页面生命周期内第二轮起会复用第一轮的 id：
+      //  - Answer.save 按 (practiceSessionId, questionIndex) 判同一答题槽位 → 第二轮第 1 题覆盖第一轮第 1 题
+      //  - PracticeSession.list 按 practiceSessionId 去重 → 多轮合并成一条练习记录
+      //  - Profile.loadSessionLevels 每个 practiceSessionId 只认首条快照 → 第二轮起丢「本轮起始档位」
+      this.session.practiceSessionId = null
+      this.session.sessionDbId = null
+      this.session._pendingProfileSnapshot = null
     },
     resetQuestionInputState() {
       this.session.currentAnswer = ''

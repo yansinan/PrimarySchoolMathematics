@@ -848,3 +848,47 @@ practiceStore.currentDifficultyIdx = adaptiveEngine.value.difficultyIdx  // 取 
 |------|------|
 | `npx vitest run` | 243/243 PASS ✅（19 文件） |
 | 浏览器实测 | 钉到 Lv.10 乘法口诀·2~6 后连答无超档题、console 零报错 ✅ |
+
+---
+
+## 18. 练习保存时机与轮次身份（2026-11-24）
+
+> 用户报告：一组练习的保存应该在自我评价后立即落库；整组练习的保存不该等到总结页点按钮。
+> 排查中发现同一个根因还会让「练习记录」丢轮次、覆盖答案。
+
+### 18.1 断点
+
+1. **最终结算等按钮**：`completeGroup` 先 `await showPracticeSummaryDialog()`，再 `saveSessionFinal`。弹窗开着时关标签页 / 崩溃 → 本轮永远没有 `completed` 标记和最终快照。手动练习 `handlePracticeComplete` 一直是先存后弹，两条路径不一致。
+2. **组 checkpoint 排在画像刷新之后**：自我评价 → `evaluateGroup` → `Profile.load()`（全表读）→ 才写 checkpoint。画像读取失败会连带丢掉这一组已产生的评价。
+3. **轮次身份从不重置**（更根本）：`practiceSessionId` / `sessionDbId` 只在 store 初始化时置空，`resetPracticeSession()` 不清。同一页面生命周期内第二轮起复用第一轮 id：
+   - `Answer.save` 按 `(practiceSessionId, questionIndex)` 判同一答题槽位 → 第二轮第 1 题**覆盖**第一轮第 1 题；
+   - `PracticeSession.list` 按 `practiceSessionId` 去重 → 多轮合并成一条练习记录；
+   - `Profile.loadSessionLevels` 每个 pid 只认首条快照 → 第二轮起丢「本轮起始档位」，升档阶梯失去证据。
+   - 手动出题（`Generate.vue`）甚至不经过 `resetPracticeSession`。
+4. **中断轮次的详情切组**：`getDetail` 把被点开的那一行排除在组边界之外。中断轮次被点开的是 checkpoint，它自己那一组会和没答完的下一组混在一起。
+5. `savePerQuestion` 无 profile 时 `Answer.save` 没有 `await` → 返回的 Promise 不代表已落库，紧随其后的读库可能缺最后一题（真实场景靠 800ms 反馈动画掩盖）。
+
+### 18.2 修复
+
+| # | 改动 | 文件 |
+|---|------|------|
+| 1 | `resetPracticeSession` 一并清 `practiceSessionId` / `sessionDbId` / `_pendingProfileSnapshot`（一轮一个持久化身份） | `stores/practice.js` |
+| 2 | 手动出题开局先 `resetPracticeSession()`，再 `setConfigSnapshot` | `components/Generate.vue` |
+| 3 | `startNewAdaptiveSession` 把 profile 快照暂存挪到 reset 之后 | `composables/useAdaptiveSession.js` |
+| 4 | 组 checkpoint 提到 `Profile.load()` 之前；最终结算提到总结弹窗之前（先算汇总 → 落库 → 弹窗） | `composables/useAdaptiveSession.js` |
+| 5 | `getDetail` 组边界 = 带 evaluations 且非 completed 的行；被点开的未完成 checkpoint 也算边界（无 `completed` 字段的旧数据保持原行为） | `services/PracticeSession.js` |
+| 6 | `savePerQuestion` fallback 分支 `await Answer.save` | `composables/usePracticeSaver.js` |
+| 7 | 修正 `getBatchSessionStats` 返回值 JSDoc（写的是 Map，实际是普通对象） | `services/PracticeSession.js` |
+
+**设计口径**：保存只跟数据走，不等任何不产生数据的 UI。一组完成 + 自我评价 = 一个完整的练习单元，已落库的答案也应出现在练习记录里；中断轮次 `completed=false`，列表用完成度百分比区分。
+
+### 18.3 验证
+
+| 测试 | 结果 |
+|------|------|
+| `npx vitest run` | 252/252 PASS ✅（21 文件；新增 `test/composables/usePracticeSaver.spec.js` 6 例 + `useAdaptiveSession.spec.js` 3 例） |
+| 浏览器实测（Playwright + chromium headless） | 13/13 ✅ |
+| — 总结弹窗未点击时读库 | 已有 `completed: true` 行 + 组评价 ✅ |
+| — 连续两轮 | `practiceSessionId` 不同，第一轮 8 条答案未被覆盖 ✅ |
+| — 中断后练习记录 | 两轮各一条；中断轮次 `completed=false`、带本组评价；详情按组切为 4 题 + 1 题 ✅ |
+| console | 零错误 ✅ |

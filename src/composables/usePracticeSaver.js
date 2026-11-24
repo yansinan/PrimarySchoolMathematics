@@ -86,8 +86,10 @@ export function usePracticeSaver(profileRef = null) {
       if (profile && typeof profile.recordAnswer === 'function') {
         await profile.recordAnswer(answerData)
       } else {
-        // fallback: 无 profile 时直接写
-        Answer.save(answerData)
+        // fallback: 无 profile 时直接写。
+        // 调用方仍不 await 本方法（fire-and-forget），这里 await 只是让返回的 Promise
+        // 真正代表「已落库」，避免紧随其后的读库（组结束 / 统计刷新）读到缺最后一题的中间态。
+        await Answer.save(answerData)
       }
     }
   }

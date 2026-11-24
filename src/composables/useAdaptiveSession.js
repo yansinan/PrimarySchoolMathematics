@@ -137,8 +137,8 @@ export function useAdaptiveSession(options = {}) {
       targetMin,
       targetMax,
     })
-    // 暂存 profile 快照（第一题写入时一并创建 session）
-    practiceStore.session._pendingProfileSnapshot = dbProfile.snapshot()
+    // 暂存 profile 快照（第一题写入时一并创建 session）——
+    // 必须放在 resetPracticeSession 之后，它会清掉上一轮没消费掉的快照
     _profileForSaver = dbProfile
     engine.wrongAnswerPool = await WrongAnswer.loadPool(dbProfile)
     adaptiveEngine.value = engine
@@ -147,7 +147,9 @@ export function useAdaptiveSession(options = {}) {
     practiceStore.currentGroupIndex = 1
     practiceStore.currentDifficultyIdx = dbProfile.difficultyIdx
 
+    // 新一轮：清状态 + 换新的 practiceSessionId（见 stores/practice.js#resetPracticeSession）
     practiceStore.resetPracticeSession()
+    practiceStore.session._pendingProfileSnapshot = dbProfile.snapshot()
     practiceStore.session.sessionStartTime = Date.now()
     practiceStore.setPhase('practice')
 
@@ -285,8 +287,12 @@ export function useAdaptiveSession(options = {}) {
     adaptiveGroupIndex.value++
     practiceStore.currentGroupIndex = adaptiveGroupIndex.value
 
-    // ── 实时保存检查点（写 DB） ──
-    // 先读画像（一次 DB 查询），更新 engine.profile（强/弱项列表 getter 委派到 profile）
+    // ── 组 checkpoint：自我评价一落定就写 DB ──
+    // 放在组边界的画像刷新之前：evaluateGroup 只依赖内存数据，先落库，
+    // 后面任何一步读库失败都不会丢掉这一组已经产生的评价。
+    await saver.saveGroupCheckpoint(result.engine.history)
+
+    // ── 组边界刷新画像（一次 DB 查询），更新 engine.profile（强/弱项列表 getter 委派到 profile） ──
     // 注意：engine.difficultyIdx（engine 自身字段，由 evaluateGroup / adjustNextQuestion 维护）
     // 与 dbProfile.difficultyIdx（Profile 实例字段，computeDifficultyIdx 从 DB 全集计算）
     // 是两个独立变量。组边界只刷 profile 的强弱项列表，不覆盖 engine 自身的运行时难度。
@@ -294,14 +300,11 @@ export function useAdaptiveSession(options = {}) {
     adaptiveEngine.value.profile = dbProfile
     practiceStore.currentDifficultyIdx = adaptiveEngine.value.difficultyIdx
 
-    // 保存组 checkpoint
-    await saver.saveGroupCheckpoint(result.engine.history)
-
     // ── 强制兜底: 累积答题超过硬上限 → 直接结束 ──
     const forceDone = allAnswers.length >= TARGET_LIMITS.absoluteMax
 
     if (result.done || forceDone) {
-      // ── 全部完成 → 弹汇总弹窗 ──
+      // ── 整轮完成：先算汇总（纯内存）→ 立即落库 → 最后弹总结 ──
       const finalAnswers = allAnswers
       const totalCorrect = Math.round(Answer.sumScores(finalAnswers))
       // 用时用「整轮开始时间 → 现在」的墙上时间，而不是逐题 responseTime 之和。
@@ -311,6 +314,20 @@ export function useAdaptiveSession(options = {}) {
       const totalRate = Math.round((totalCorrect / finalAnswers.length) * 100)
       const { emoji, comment, color: rateColor2 } = getCommentByRate(totalRate)
 
+      // 最终结算先落库：总结弹窗上的按钮不产生任何数据，保存不能等它。
+      // 否则弹窗开着时关标签页 / 崩溃，这一轮就永远没有 completed 标记和最终快照。
+      // （手动练习 handlePracticeComplete 一直是先存后弹，这里对齐）
+      const profile = _profileForSaver
+      const history = (result.engine && result.engine.history) || []
+      const evaluations = (history || [])
+        .filter(h => h.evaluation != null)
+        .map(h => ({ group: h.groupIdx, score: h.evaluation }))
+      await saver.saveSessionFinal({
+        evaluations: evaluations.length ? JSON.stringify(evaluations) : null,
+        finalProfileSnapshot: profile?.snapshot ? profile.snapshot() : null,
+      })
+
+      // ── 汇总弹窗（纯展示，不产生数据） ──
       let action = 'close'
       try {
         action = await dialogs.showPracticeSummaryDialog({
@@ -326,16 +343,6 @@ export function useAdaptiveSession(options = {}) {
         })
       } catch { /* 弹窗异常 → action 保持 'close' */ }
 
-      // 无论 action 是什么, 都先保存到数据库
-      const profile = _profileForSaver
-      const history = (result.engine && result.engine.history) || []
-      const evaluations = (history || [])
-        .filter(h => h.evaluation != null)
-        .map(h => ({ group: h.groupIdx, score: h.evaluation }))
-      await saver.saveSessionFinal({
-        evaluations: evaluations.length ? JSON.stringify(evaluations) : null,
-        finalProfileSnapshot: profile?.snapshot ? profile.snapshot() : null,
-      })
       practiceStore.setListPractices([])
 
       if (action === 'confirm') {
