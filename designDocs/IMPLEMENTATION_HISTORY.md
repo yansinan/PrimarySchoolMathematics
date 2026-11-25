@@ -1127,6 +1127,7 @@ P0–P4 全部落地：数据层（uid 迁移、快照适配）→ 通道（反�
 | localStorage `psm_level_coefficients` | 档位配比 | **新增同步** |
 | localStorage `psm_level_override` | 手动起点档位 | **新增同步** |
 | localStorage `psm_challenge_enabled` | 挑战题开关 | **新增同步** |
+| localStorage `psm_auto_advance` | 自动升档开关（默认手动） | **新增同步** |
 | localStorage `psm_sfx_enabled` | 音效开关 | **新增同步** |
 | localStorage `customer-config` | 「保存的配置」列表 | **新增同步** |
 | localStorage `psm.snapshotSync.*` | 本机同步凭据/状态 | 永不同步（白名单外） |

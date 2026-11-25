@@ -72,6 +72,17 @@ describe('writeSetting / exportSettingRows', () => {
     writeSetting(FORM, 'x')
     expect(exportSettingRows()).toEqual([{ key: FORM, value: 'x', updatedAt: 1_000 }])
   })
+
+  it('自动升档开关（psm_auto_advance）会被导出为同步行', async () => {
+    const { saveAutoAdvance, loadAutoAdvance } = await import('@/utils/store/autoAdvance')
+    saveAutoAdvance(true)
+    expect(loadAutoAdvance()).toBe(true)
+    const row = exportSettingRows().find((r) => r.key === 'psm_auto_advance')
+    expect(row?.value).toBe('1')
+    // 关闭也要能同步：写显式 '0'，不是删键
+    saveAutoAdvance(false)
+    expect(exportSettingRows().find((r) => r.key === 'psm_auto_advance')?.value).toBe('0')
+  })
 })
 
 describe('applySettingRows', () => {
