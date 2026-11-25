@@ -23,6 +23,13 @@ const USER_ID_KEY = `${KEY_PREFIX}boundUserId`
 /** 自动同步间隔：整库快照，没必要像 SDK 默认那样 30s 一次 */
 const SYNC_INTERVAL_MS = 120_000
 
+/**
+ * 当前部署是否提供同步服务。
+ * GitHub Pages 等纯静态部署没有 /sync 反代，构建时用 VITE_SYNC_ENABLED=0 关掉入口，
+ * 避免出现一个点了必然失败的「启用同步」按钮。
+ */
+const syncAvailable = import.meta.env.VITE_SYNC_ENABLED !== '0'
+
 /** 模块级单例：同一页面只允许一个调度，否则会重复 push */
 let sdk = null
 /** 自动同步是否已启动（避免重复 start） */
@@ -39,6 +46,8 @@ const identity = ref(null)
 const configured = ref(false)
 const busy = ref(false)
 const initialized = ref(false)
+/** 最近一次快照的字节数（粗略，用于容量提示） */
+const snapshotBytes = ref(0)
 
 function readLocal(key) {
   try { return localStorage.getItem(key) } catch { return null }
@@ -67,6 +76,17 @@ function deviceName() {
   return `PSM · ${os}`
 }
 
+/** 包装 exportSnapshot：顺手记录快照大小，供面板显示数据量 */
+async function exportAllForSync() {
+  const snapshot = await exportSnapshot()
+  try {
+    snapshotBytes.value = JSON.stringify(snapshot).length
+  } catch {
+    snapshotBytes.value = 0
+  }
+  return snapshot
+}
+
 function ensureSdk() {
   if (sdk) return sdk
   sdk = createSnapshotSync({
@@ -74,7 +94,7 @@ function ensureSdk() {
     keyPrefix: KEY_PREFIX,
     // cookie 模式：服务端 Set-Cookie(HttpOnly)，SDK 不把 token 写进 localStorage
     storeToken: false,
-    exportAll: exportSnapshot,
+    exportAll: exportAllForSync,
     importAll: importSnapshot,
     policies: SNAPSHOT_POLICIES,
     // 新配对的设备首次同步采用云端数据，而不是把本机旧数据推上去
@@ -104,6 +124,7 @@ function maybeAutoStart() {
  * @param {number} [delayMs] 防抖毫秒；答题连发时会被后续调用重置
  */
 function markDirty(delayMs = 2000) {
+  if (!syncAvailable) return
   if (!configured.value && !hasBoundBefore()) return
   ensureSdk().markDirty(delayMs)
   status.value = ensureSdk().status
@@ -114,6 +135,11 @@ function markDirty(delayMs = 2000) {
  * 连接失败不会抛错（SDK 返回 null + offline 状态）。
  */
 async function init() {
+  if (!syncAvailable) {
+    initialized.value = true
+    status.value = { state: 'unconfigured', error: null, revision: 0, lastSyncAt: null, pending: false }
+    return null
+  }
   const s = ensureSdk()
   let result = null
   try {
@@ -129,6 +155,7 @@ async function init() {
 
 /** 首台设备：用预置 projectId + 用户名注册（零运维，不用手输 projectId） */
 async function enrollFirstDevice() {
+  if (!syncAvailable) throw new Error('当前部署不支持同步')
   const s = ensureSdk()
   try {
     const result = await s.enroll({
@@ -153,6 +180,7 @@ async function enrollFirstDevice() {
 
 /** 第二台设备：用主设备生成的一次性配对码加入同一用户 */
 async function enrollWithPairingCode(code) {
+  if (!syncAvailable) throw new Error('当前部署不支持同步')
   const s = ensureSdk()
   const result = await s.enroll({
     pairingCode: String(code || '').trim().toUpperCase(),
@@ -166,6 +194,7 @@ async function enrollWithPairingCode(code) {
 
 /** 手动同步一轮：pull → merge → import → push */
 async function syncNow() {
+  if (!syncAvailable) return { state: 'unconfigured', revision: null }
   if (busy.value) return { state: 'busy', revision: null }
   busy.value = true
   try {
@@ -179,11 +208,13 @@ async function syncNow() {
 
 /** 生成一次性配对码（给第二台设备） */
 async function createPairingCode(ttlSeconds = 600) {
+  if (!syncAvailable) throw new Error('当前部署不支持同步')
   return ensureSdk().createPairingCode({ ttlSeconds })
 }
 
-/** 开启自动同步（定时 + 在线/可见恢复）；未注册时返回 false */
+/** 开启自动同步（定时 + 在线/可见恢复）；未注册/不支持时返回 false */
 function startAutoSync() {
+  if (!syncAvailable) return false
   const started = ensureSdk().start({ intervalMs: SYNC_INTERVAL_MS })
   autoStarted = !!started
   refreshConfigured()
@@ -212,6 +243,8 @@ export function useSnapshotSync() {
     configured,
     busy,
     initialized,
+    syncAvailable,
+    snapshotBytes,
     hasBoundBefore,
     deviceName,
     init,

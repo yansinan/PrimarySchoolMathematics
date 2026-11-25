@@ -6,10 +6,10 @@
   "scripts": {
     "stop": "pkill -f node",
     "dev": "NODE_OPTIONS='--inspect=0.0.0.0:9229' vite --host 0.0.0.0",
-    "build:github": "vite build --base=/PrimarySchoolMathematics/",
+    "build:github": "VITE_SYNC_ENABLED=0 vite build --base=/PrimarySchoolMathematics/",
     "preview:github": "vite preview --base=/PrimarySchoolMathematics/",
     "build": "vite build",
-    "build:suiyan": "vite build --base=/demo/psm/",
+    "build:suiyan": "VITE_SYNC_ENABLED=0 vite build --base=/demo/psm/",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

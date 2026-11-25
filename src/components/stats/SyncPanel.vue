@@ -18,8 +18,18 @@
       同一孩子的练习记录在多台设备间自动合并；同步失败不影响本机答题。
     </p>
 
+    <el-alert
+      v-if="!syncAvailable"
+      type="info"
+      :closable="false"
+      show-icon
+      class="sync-panel__alert"
+      title="当前部署未启用同步"
+      description="静态部署（如 GitHub Pages）没有同步服务，练习数据只保存在本机。"
+    />
+
     <!-- 未启用 -->
-    <template v-if="!configured">
+    <template v-else-if="!configured">
       <el-alert
         v-if="boundBefore"
         type="warning"
@@ -55,7 +65,8 @@
       </div>
       <div class="sync-panel__meta">
         <span>最后同步：{{ lastSyncText }}</span>
-        <span v-if="pending">有改动待推送</span>
+        <span v-if="sizeText">数据量约 {{ sizeText }}</span>
+        <span v-else-if="pending">有改动待推送</span>
       </div>
 
       <el-button type="primary" class="w-full" :loading="busy" @click="onSyncNow">
@@ -87,14 +98,20 @@ import { Connection } from '@element-plus/icons-vue'
 import { useSnapshotSync } from '@/composables/useSnapshotSync'
 import { SYNC_STATUS_LABELS, syncStatusLabel, syncStatusTone } from '@/sync/labels.js'
 const sync = useSnapshotSync()
-const { status, identity, configured, busy } = sync
+const { status, identity, configured, busy, syncAvailable, snapshotBytes } = sync
 
 const label = computed(() => syncStatusLabel(status.value?.state))
 const tagType = computed(() => {
   const tone = syncStatusTone(status.value?.state, status.value?.pending)
   return { ok: 'success', busy: 'info', warn: 'warning', bad: 'danger' }[tone] || 'info'
 })
-const errorText = computed(() => (status.value?.state === 'offline' || status.value?.state === 'error' ? status.value.error : ''))
+const errorText = computed(() => {
+  const s = status.value
+  if (!s || (s.state !== 'offline' && s.state !== 'error')) return ''
+  // 同步服务对超大快照返回 payload_too_large（8MB 上限）
+  if (s.error === 'payload_too_large') return '数据量超过同步上限（8MB），建议先导出备份、清掉不需要的旧记录'
+  return s.error || ''
+})
 
 const boundBefore = ref(false)
 const pairCode = ref('')
@@ -104,6 +121,11 @@ let pairingTimer = null
 const lastSyncText = computed(() => {
   const at = status.value?.lastSyncAt
   return at ? new Date(at).toLocaleString('zh-CN', { hour12: false }) : '—'
+})
+const sizeText = computed(() => {
+  const bytes = snapshotBytes.value
+  if (!bytes) return ''
+  return bytes < 1024 ? '< 1 KB' : `${Math.round(bytes / 1024)} KB`
 })
 const pairingExpireText = computed(() => {
   const at = pairing.value?.expiresAt

@@ -72,6 +72,27 @@
 
 > 打包完成后,为了github page部署,前端静态资源会复制一份到`docs`文件夹
 
+## 多设备同步 | Multi-device sync
+
+练习数据默认只在本机 IndexedDB。想让同一孩子在多台设备间自动合并，接自建的
+`indexDB-snapshot-sync` 服务（同工作区兄弟项目）：
+
+1. **同步服务**：宿主 `:4010` 跑起 `indexDB-snapshot-sync`（`docker compose up -d`）。
+2. **同源反代**：`vite.config.js` 已配 `/sync` → `SYNC_SERVER_URL`（默认 `http://127.0.0.1:4010`）。
+   家庭部署 `docker compose up -d` 会带 `SYNC_SERVER_URL=http://helix:4010`（见 `docker-compose.yml`）。
+3. **首台设备**：打开「练习统计」抽屉 → 底部「多设备同步」→「启用同步」。
+   预置 projectId 在 `src/sync/config.js`（已固定绑定本项目），不必手输。
+4. **第二台设备**：主设备点「生成配对码」，另一台在面板里输入配对码，即加入同一账号。
+5. **状态**：页头圆点（绿=已同步 / 蓝=同步中 / 橙=离线 / 红=需重新配对），点它打开同步面板。
+
+说明：
+
+- 凭据存 HttpOnly cookie，浏览器 JS 读不到 token。
+- 阶段一「只增不删」：同步不删记录；`/reset` 清空前会提示「同时断开本机同步」，否则云端记录会被拉回来。
+- 静态部署（GitHub Pages / 演示站）没有 `/sync`，构建脚本已设 `VITE_SYNC_ENABLED=0`，面板显示「当前部署未启用同步」。
+- 同步服务数据在 `indexDB-snapshot-sync/data/`（`auth.json` + `projects/<projectId>/<namespace>/snapshot.json`），请纳入备份（Timeshift / rsync）。
+- 快照上限 8MB；`questions` 是派生缓存，不参与同步。
+
 ## 技术栈 | Tech Stack
 - Vue 3
 - pinia

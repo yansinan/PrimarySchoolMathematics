@@ -1078,3 +1078,35 @@ practiceStore.currentDifficultyIdx = adaptiveEngine.value.difficultyIdx  // 取 
 - 删除不传播（重置页已提供「断开同步」出口）；
 - 冲突收敛由 `test/services/snapshot.spec.js` 的 lww 用例覆盖（平局保留远端），未做浏览器级并发冲突演练；
 - `navigator.locks` 在 http 局域网下不可用，多标签锁退化为无锁。
+
+---
+
+## 23. 快照同步 P4：部署收敛与运维（2026-11-25）
+
+### 23.1 静态部署关闭同步入口
+
+- `syncAvailable = import.meta.env.VITE_SYNC_ENABLED !== '0'`。
+- 不可用时：`init()` 直接返回、`markDirty / syncNow / startAutoSync` 全部 no-op；面板显示「当前部署未启用同步」；页头不显示状态点。
+- `package.json` 的 `build:github` / `build:suiyan` 加 `VITE_SYNC_ENABLED=0`（GitHub Pages / 演示站没有 `/sync` 反代，避免出现点了必然失败的按钮）。
+
+### 23.2 容量可见
+
+- `exportAll` 外包一层记录快照字节数，面板显示「数据量约 X KB」（<1KB 显示 `< 1 KB`）。
+- 同步服务对超大快照会报 `payload_too_large`，面板映射成「数据量超过同步上限（8MB），建议先导出备份、清掉不需要的旧记录」。
+
+### 23.3 文档
+
+根 `readme.md` 增加「多设备同步 | Multi-device sync」：同步服务、`/sync` 反代、首台设备启用、第二台配对码、页头状态点、只增不删、静态部署开关、备份位置（`indexDB-snapshot-sync/data/`）、8MB 上限与 `questions` 不参与同步。
+
+### 23.4 验证
+
+| 测试 | 结果 |
+|------|------|
+| `npx vitest run` | 290/290 PASS ✅ |
+| 浏览器 dev（8080） | 未启用分支 / 启用后已启用分支 / 数据量显示 ✅ |
+| 浏览器 `VITE_SYNC_ENABLED=0`（4175） | 面板显示「当前部署未启用同步」、无启用按钮、无状态点 ✅ |
+| 页面异常 | 0 ✅ |
+
+### 23.5 全阶段收口
+
+P0–P4 全部落地：数据层（uid 迁移、快照适配）→ 通道（反代、SDK 接线）→ 自动同步与状态点 → 双设备配对与重置断开 → 部署收敛。剩余可做：删除传播（墓碑）、浏览器级并发冲突演练、快照体积超限的自动裁剪。

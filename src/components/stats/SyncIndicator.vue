@@ -26,9 +26,9 @@ import { syncStatusLabel, syncStatusTone } from '@/sync/labels.js'
 
 defineEmits(['open'])
 
-const { status, configured } = useSnapshotSync()
+const { status, configured, syncAvailable } = useSnapshotSync()
 
-const visible = computed(() => configured.value)
+const visible = computed(() => syncAvailable && configured.value)
 const label = computed(() => syncStatusLabel(status.value?.state))
 const tone = computed(() => syncStatusTone(status.value?.state, status.value?.pending))
 </script>
