@@ -49,7 +49,8 @@ designDocs/
 │   └── DESIGN.md                          产品设计（业务流程）
 │
 ├── 业务规划（活跃）
-│   └── v4-PLAN-error-injection.md       v4.1 错题注入 + v4.2 L2.5 难度
+│   ├── v4-PLAN-error-injection.md       v4.1 错题注入 + v4.2 L2.5 难度
+│   └── 15-PLAN-snapshot-sync.md         多设备快照同步（可行性 + 阶段计划）
 └── 实施历史（参考）
     └── IMPLEMENTATION_HISTORY.md          v2.3+v3 实施过程（合并历史）
 
@@ -124,3 +125,4 @@ designDocs/
 | UI 业务 v3.0+ | [_ARCHIEVED_07-PLAN-v2-ui-roadmap.md](./_ARCHIEVED_07-PLAN-v2-ui-roadmap.md) |
 | 出题流程业务 | [DESIGN.md](./DESIGN.md) |
 | 浏览器实测细节 | [_ARCHIEVED_12-TODO-browser-smoke-test-v2.3.md](./_ARCHIEVED_12-TODO-browser-smoke-test-v2.3.md) |
+| 多设备同步（规划） | [15-PLAN-snapshot-sync.md](./15-PLAN-snapshot-sync.md) |
