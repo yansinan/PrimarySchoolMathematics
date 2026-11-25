@@ -85,33 +85,15 @@ import { ref, computed, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Connection } from '@element-plus/icons-vue'
 import { useSnapshotSync } from '@/composables/useSnapshotSync'
-
+import { SYNC_STATUS_LABELS, syncStatusLabel, syncStatusTone } from '@/sync/labels.js'
 const sync = useSnapshotSync()
 const { status, identity, configured, busy } = sync
 
-const STATUS_LABELS = {
-  idle: '待同步',
-  syncing: '同步中…',
-  synced: '已同步',
-  offline: '离线，稍后重试',
-  unauthorized: '需重新配对',
-  unconfigured: '未启用',
-  error: '同步失败',
-  busy: '同步中…',
-  locked: '其他标签页同步中',
-}
-
-const STATUS_TAGS = {
-  synced: 'success',
-  offline: 'warning',
-  unauthorized: 'danger',
-  error: 'danger',
-  syncing: 'info',
-  busy: 'info',
-}
-
-const label = computed(() => STATUS_LABELS[status.value?.state] || status.value?.state || '未启用')
-const tagType = computed(() => STATUS_TAGS[status.value?.state] || 'info')
+const label = computed(() => syncStatusLabel(status.value?.state))
+const tagType = computed(() => {
+  const tone = syncStatusTone(status.value?.state, status.value?.pending)
+  return { ok: 'success', busy: 'info', warn: 'warning', bad: 'danger' }[tone] || 'info'
+})
 const errorText = computed(() => (status.value?.state === 'offline' || status.value?.state === 'error' ? status.value.error : ''))
 
 const boundBefore = ref(false)
@@ -161,7 +143,7 @@ async function onSyncNow() {
   const result = await sync.syncNow()
   if (result.state === 'synced') ElMessage.success('已同步')
   else if (result.state !== 'busy' && result.state !== 'locked') {
-    ElMessage.warning(STATUS_LABELS[result.state] || result.state)
+    ElMessage.warning(syncStatusLabel(result.state))
   }
 }
 

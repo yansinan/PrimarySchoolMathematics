@@ -19,6 +19,7 @@
 
 import { usePracticeStore } from '@/stores/practice'
 import { useStatsQuery } from '@/composables'
+import { useSnapshotSync } from '@/composables/useSnapshotSync'
 // persistSession 已内聚到 PracticeSession.save() 静态方法
 import { PracticeSession } from '@/services/PracticeSession'
 import { Answer } from '@/services'
@@ -38,6 +39,8 @@ function extractEvaluationsJSON(history) {
 export function usePracticeSaver(profileRef = null) {
   const practiceStore = usePracticeStore()
   const { refreshAll } = useStatsQuery()
+  // 多设备同步：写库后标记待同步（未绑定同步的机器上是 no-op）
+  const sync = useSnapshotSync()
 
   /** 获取/生成轮次 ID（每轮首次保存时生成） */
   function getPracticeSessionId() {
@@ -91,6 +94,8 @@ export function usePracticeSaver(profileRef = null) {
         // 真正代表「已落库」，避免紧随其后的读库（组结束 / 统计刷新）读到缺最后一题的中间态。
         await Answer.save(answerData)
       }
+      // 每题写库后标记待同步：4s 防抖，练习中连答不会每题都推一次整库快照
+      sync.markDirty(4000)
     }
   }
 
@@ -113,6 +118,8 @@ export function usePracticeSaver(profileRef = null) {
       // 标记为 checkpoint，不是最终结算
       profileSnapshot: null,
     })
+    // 组边界是自然的同步点：1.5s 后推一次
+    sync.markDirty(1500)
   }
 
   /**
@@ -135,6 +142,8 @@ export function usePracticeSaver(profileRef = null) {
     }
     practiceStore.session.lastSavedAnswerCount = practiceStore.session.answers.length
     await refreshAll()
+    // 整轮完成：立刻标记，让同步尽快跟上（不阻塞弹窗/跳转）
+    sync.markDirty(0)
   }
 
   return {

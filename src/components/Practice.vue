@@ -10,6 +10,7 @@
           <div class="stage-badge" :class="{ 'stage-badge--assessment': isAssessment }">{{ currentStage }}</div>
           <div class="header-right">
             <div class="streak-badge" v-if="session.streak > 0">🔥 {{ session.streak }}</div>
+            <SyncIndicator @open="statsStore.openDrawer()" />
             <button
               type="button"
               class="sfx-toggle"
@@ -174,11 +175,13 @@ import NumberKeypad from '@/components/input/NumberKeypad.vue'
 import OptionButtons from '@/components/input/OptionButtons.vue'
 import PracticeSummaryDialog from '@/components/dialog/PracticeSummaryDialog.vue'
 import SelfEvaluationDialog from '@/components/dialog/SelfEvaluationDialog.vue'
+import SyncIndicator from '@/components/stats/SyncIndicator.vue'
 import { useAnswerBuilder } from '@/composables/useAnswerBuilder'
 import { useSubmitHandler } from '@/composables/useSubmitHandler'
 import { useAdaptiveSession } from '@/composables/useAdaptiveSession'
 import { usePracticeDialogs } from '@/composables/usePracticeDialogs'
 import { usePracticeSaver } from '@/composables/usePracticeSaver'
+import { useSnapshotSync } from '@/composables/useSnapshotSync'
 import { decideListPracticesTransition } from '@/utils/listPracticesGuard'
 import { useDisplayStrategy } from '@/composables/useDisplayStrategy'  // 🆕 PR-4.2 抽离 displayStats + applyDisplayModeForCurrentQuestion + generateOptions
 import { FEEDBACK_DELAYS, ASSESSMENT_ABORT_WRONG_STREAK, getCommentByRate, ASSIST_LEVELS, MAX_ATTEMPT_PER_QUESTION } from '@/constants/practice'
@@ -224,6 +227,9 @@ const dialogs = usePracticeDialogs()
 
 // ── 持久化 composable（封装 3 处 PracticeSession.save 调用） ──
 const saver = usePracticeSaver()
+
+// ── 多设备同步（C 层）：恢复身份 + 已绑定则开启自动同步 ──
+const snapshotSync = useSnapshotSync()
 
 // ── 答题数据构造 composable（ARCH 合规：V 不直接 import U） ──
 const { buildAnswerMeta, buildScore } = useAnswerBuilder()
@@ -999,6 +1005,8 @@ onMounted(() => window.addEventListener('psm:db-blocked', handleDbBlocked))
 onUnmounted(() => window.removeEventListener('psm:db-blocked', handleDbBlocked))
 
 onMounted(async () => {
+  // 恢复同步身份；已绑定则自动开始定时同步（不阻塞、失败只影响状态点）
+  void snapshotSync.init()
   if (listPractices.value.length > 0) return  // 已有题目，不干预
   // 从 DB 实时计算是否有诊断画像（判定收口到 hasRealProfile，抽屉门禁共用同一判据）
   const { Profile, hasRealProfile } = await import('@/services/abilityProfile')

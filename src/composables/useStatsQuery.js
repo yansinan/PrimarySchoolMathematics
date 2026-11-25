@@ -27,6 +27,7 @@
  * - C → S → D: 此 composable 直接调 database (M 层可引 D 层)
  */
 import { useStatsStore } from '@/stores/stats'
+import { useSnapshotSync } from '@/composables/useSnapshotSync'
 import { getSessions, getSessionDetail, deleteSession as dbDeleteSession, PracticeSession } from '@/services/PracticeSession'
 import { getAggregatedStats } from '@/services/statsAggregator'
 import { exportAllData, importAllData } from '@/services/databaseInit'
@@ -34,6 +35,8 @@ import { Answer } from '@/services'
 
 export function useStatsQuery() {
   const store = useStatsStore()
+  // 多设备同步：导入文件后要把新数据推上去（未绑定同步的机器上是 no-op）
+  const sync = useSnapshotSync()
 
   /**
    * 加载最近 N 个 session 列表
@@ -162,6 +165,7 @@ export function useStatsQuery() {
       const data = JSON.parse(text)
       const result = await importAllData(data)
       await refreshAll()
+      sync.markDirty(0)
       return result
     } catch (err) {
       console.error('[useStatsQuery] Failed to import data:', err)

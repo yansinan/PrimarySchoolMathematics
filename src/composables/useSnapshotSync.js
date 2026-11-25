@@ -25,6 +25,8 @@ const SYNC_INTERVAL_MS = 120_000
 
 /** 模块级单例：同一页面只允许一个调度，否则会重复 push */
 let sdk = null
+/** 自动同步是否已启动（避免重复 start） */
+let autoStarted = false
 
 const status = ref({
   state: 'unconfigured',
@@ -88,6 +90,26 @@ function refreshConfigured() {
 }
 
 /**
+ * 已绑定就开启自动同步（定时 + 在线/可见恢复）。
+ * start() 内部会先 stop()，所以重复调用安全；这里再用 autoStarted 避免每次 init 都立刻触发一轮。
+ */
+function maybeAutoStart() {
+  if (!configured.value || autoStarted) return
+  autoStarted = ensureSdk().start({ intervalMs: SYNC_INTERVAL_MS })
+}
+
+/**
+ * 本地写入后标记待同步（防抖）。
+ * 未绑定过的机器直接 no-op —— 不创建 SDK、不写 storage、不留定时器。
+ * @param {number} [delayMs] 防抖毫秒；答题连发时会被后续调用重置
+ */
+function markDirty(delayMs = 2000) {
+  if (!configured.value && !hasBoundBefore()) return
+  ensureSdk().markDirty(delayMs)
+  status.value = ensureSdk().status
+}
+
+/**
  * 恢复身份：有 cookie 会话就拿到 identity；没有就 unconfigured。
  * 连接失败不会抛错（SDK 返回 null + offline 状态）。
  */
@@ -101,6 +123,7 @@ async function init() {
   if (result?.user?.id) writeLocal(USER_ID_KEY, result.user.id)
   initialized.value = true
   refreshConfigured()
+  maybeAutoStart()
   return result
 }
 
@@ -154,17 +177,20 @@ async function createPairingCode(ttlSeconds = 600) {
 /** 开启自动同步（定时 + 在线/可见恢复）；未注册时返回 false */
 function startAutoSync() {
   const started = ensureSdk().start({ intervalMs: SYNC_INTERVAL_MS })
+  autoStarted = !!started
   refreshConfigured()
   return started
 }
 
 function stopAutoSync() {
   sdk?.stop()
+  autoStarted = false
 }
 
 /** 解绑本机：清本地凭据与绑定标记（不动服务端数据） */
 function resetBinding() {
   sdk?.reset()
+  autoStarted = false
   writeLocal(USER_ID_KEY, null)
   identity.value = null
   configured.value = false
@@ -185,6 +211,7 @@ export function useSnapshotSync() {
     enrollWithPairingCode,
     syncNow,
     createPairingCode,
+    markDirty,
     startAutoSync,
     stopAutoSync,
     resetBinding,

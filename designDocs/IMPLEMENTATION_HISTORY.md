@@ -1009,3 +1009,31 @@ practiceStore.currentDifficultyIdx = adaptiveEngine.value.difficultyIdx  // 取 
 ### 20.4 下一步（P2）
 
 `markDirty()` 接到三个写入点 + 自动调度（120s / 在线 / 可见）+ 页头状态点。
+
+---
+
+## 21. 快照同步 P2：自动同步 + 状态点（2026-11-25）
+
+### 21.1 接线
+
+| 位置 | 改动 |
+|------|------|
+| `composables/usePracticeSaver.js` | 每题写库后 `markDirty(4000)`（连答合并成一次）；组 checkpoint `markDirty(1500)`；最终结算 `markDirty(0)` |
+| `composables/useStatsQuery.js` | 导入文件后 `markDirty(0)` |
+| `composables/useSnapshotSync.js` | `markDirty` 在未绑定机器上是 no-op（不创建 SDK、不写 storage、不留定时器）；`init()` 检测到已绑定就 `start({ intervalMs: 120s })`（定时 + online/可见恢复），`autoStarted` 防重复 start |
+| `components/stats/SyncIndicator.vue` | 页头状态点：绿=已同步 / 蓝=同步中（呼吸）/ 橙=离线或待推送 / 红=需重新配对；未绑定不渲染；点击打开统计抽屉 |
+| `components/Practice.vue` | 挂状态点；`onMounted` 恢复身份并自动开始同步（不阻塞答题） |
+| `sync/labels.js` | 状态文案与视觉基调的单一来源（面板与状态点共用，避免两份映射） |
+
+### 21.2 验证
+
+| 测试 | 结果 |
+|------|------|
+| `npx vitest run` | 289/289 PASS ✅（新增 `test/sync/labels.spec.js` 4 例） |
+| 浏览器（Playwright） | 6/6 ✅：未绑定不显示状态点 → 启用后出现且 `--ok` → 答题 2 道 → **不点「立即同步」**，9s 后状态点仍 `--ok`、抽屉显示已同步 → 点状态点能打开抽屉 |
+| 服务端核对 | 快照 rev 1（启用时空库推送）→ **rev 2、answers=2**：答题后自动推送成功 ✅ |
+| console | 零错误 ✅ |
+
+> 同步节流：每题 `markDirty(4000)` 会把连续答题合并成一次推送；组边界 1.5s、整轮完成立即推送。自动同步间隔 120s（整库快照，没必要 30s 一轮）。
+>
+> 测试账号：浏览器验证用路由改写用户名成「同步自测」，验证后已从 `auth.json` 与该命名空间清掉。
