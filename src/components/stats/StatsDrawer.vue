@@ -205,6 +205,10 @@
           </el-col>
         </el-row>
       </template>
+
+      <!-- ── 多设备同步（独立于「有没有练习记录」：空库也要能启用/配对） ── -->
+      <el-divider />
+      <SyncPanel />
     </div>
 
     <!-- ── Session detail drawer (nested) ── -->
@@ -222,7 +226,9 @@ import { useAbilityProfile } from '@/composables/useAbilityProfile'
 import { useStatsDrawer } from '@/composables/useStatsDrawer'
 // chartBuilder 抽离 Chart.js 实例管理（S 层）
 import { buildTrendChart, buildOperatorChart, destroyChart } from '@/services/chartBuilder'
+import { useSnapshotSync } from '@/composables/useSnapshotSync'
 import SessionDetail from './SessionDetail.vue'
+import SyncPanel from './SyncPanel.vue'
 
 // ── 统计抽屉数据 + 操作（ARCH 合规：V 不经 C 层不直连 store） ──
 // 关键: 顶层解构 → Vue 3 模板自动解包 ref（不用 .value）
@@ -234,6 +240,9 @@ const {
   openSessionDetail, refreshAll, loadAllAnswers, openDrawer,
   exportData, importData, formatDate, formatDuration
 } = useStatsDrawer()
+
+// ── 多设备同步（C 层）：身份恢复 + 面板状态 ──
+const snapshotSync = useSnapshotSync()
 
 // P2 阶段 14: useAbilityProfile 传 options.answers = 全量历史
 // 显示孩子长期掌握度
@@ -351,6 +360,8 @@ async function handleOpen() {
   try {
     await openDrawer()
     await profile.refreshMasteryFromAnswers(allAnswers?.value || [])
+    // 恢复同步身份（有 cookie 会拿到 identity；失败只影响同步面板状态）
+    void snapshotSync.init()
     await nextTick()
     rebuildCharts()
   } catch (err) {

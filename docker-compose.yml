@@ -36,6 +36,11 @@ services:
       - HOME=/tmp
       - TZ=Asia/Shanghai
       - NODE_OPTIONS=--max-old-space-size=2048
+      # /sync 反代目标（indexDB-snapshot-sync 跑在宿主 :4010）。
+      # helix 是宿主在容器网络里的别名，靠下面的 host-gateway 解析。
+      - SYNC_SERVER_URL=http://helix:4010
+    extra_hosts:
+      - "helix:host-gateway"
     cap_drop:
       - ALL
     healthcheck:

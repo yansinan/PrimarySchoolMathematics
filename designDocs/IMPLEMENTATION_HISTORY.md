@@ -969,3 +969,43 @@ practiceStore.currentDifficultyIdx = adaptiveEngine.value.difficultyIdx  // 取 
 - 删除不传播（阶段一）：`/reset` 前需先断开同步，否则下次同步会把云端数据拉回（重置页改造在 P3）。
 - `navigator.locks` 在 http 局域网下不可用（需安全上下文），多标签锁退化为无锁。
 - 迁移不可逆：升级到 v6 后旧代码（v5）打开会 `VersionError`，回滚只能保留 v6 或清库。
+
+---
+
+## 20. 快照同步 P1：反代 + SDK 接线 + 同步面板（2026-11-25）
+
+> 规划见 [15-PLAN-snapshot-sync.md](./15-PLAN-snapshot-sync.md)；P0（uid 迁移 + 快照适配）见 §19。
+
+### 20.1 通道
+
+- `vite.config.js`：`/sync` 同源反代 → `process.env.SYNC_SERVER_URL || http://127.0.0.1:4010`，`rewrite` 去掉 `/sync` 前缀（同步服务的路由是 `/v1/*`）。同源是为了 HttpOnly cookie 能用。
+- `docker-compose.yml`：加 `SYNC_SERVER_URL=http://helix:4010` + `extra_hosts: helix:host-gateway`（对齐 spellwell）。重建容器后 `GET :4003/sync/v1/me` 返回 401 = 已连到宿主同步服务。
+
+### 20.2 接线
+
+| 层 | 文件 | 职责 |
+|---|---|---|
+| C | `composables/useSnapshotSync.js` | SDK 单例（cookie 模式、keyPrefix `psm.snapshotSync.`、lww 策略、`preferRemoteOnFirstBind`）；`init / enrollFirstDevice / enrollWithPairingCode / syncNow / createPairingCode / resetBinding / startAutoSync` |
+| V | `components/stats/SyncPanel.vue` | 状态标签、启用同步 / 配对码加入 / 立即同步 / 生成配对码 / 解绑 |
+| V | `components/stats/StatsDrawer.vue` | 抽屉打开时 `init()` 恢复身份；面板放在「导出/导入」下方，**独立于「有没有练习记录」** |
+
+- 凭据用 HttpOnly cookie（`storeToken:false`），浏览器 JS 读不到 token。
+- **凭据丢失保护**：注册成功后记 `boundUserId`；再次 `init()` 失败且该标记存在时，面板只提供「配对码加入」，不自动重新注册 —— 用 projectId 再注册会在云端建出一个空账号，看起来像「数据全丢」。
+- 首台设备用预置 projectId + 用户名一键注册；其他设备用一次性配对码加入同一用户。
+
+### 20.3 验证
+
+| 测试 | 结果 |
+|------|------|
+| `npx vitest run` | 285/285 PASS ✅ |
+| 浏览器 8080（Playwright） | 7/7 ✅：空库也能看到面板 → 启用同步 → 身份显示 → 立即同步「已同步」→ 生成配对码 → `document.cookie` 无 `ss_device` → console 零错误 |
+| 服务端核对 | `data/projects/proj_6pYzoEk4Hx66DtWzyQ-DWA/user-…/snapshot.json` rev=1、answers=2（正是测试造的两条诊断答案） |
+| 4003 容器（家庭部署） | 反代 401（连通）、页面正常渲染、同步面板可见 ✅ |
+
+> 排障：同步面板最初放在 `v-if="aggregatedStats && aggregatedStats.totalSessions > 0"` 内，空库时整块不渲染 —— 已移到条件外（同步是数据管理，不应依赖已有记录）。
+>
+> 测试账号：浏览器验证用路由改写用户名成「同步自测」，验证后已从 `auth.json` 与该命名空间清掉；`init` 用户保留作为项目标记。
+
+### 20.4 下一步（P2）
+
+`markDirty()` 接到三个写入点 + 自动调度（120s / 在线 / 可见）+ 页头状态点。

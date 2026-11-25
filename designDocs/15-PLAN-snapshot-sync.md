@@ -252,7 +252,7 @@ extra_hosts:
 
 每阶段独立可合入：P0a/P0b/P0c/P1 无用户可见变化，P2/P3 才有。
 
-> **进度（2026-11-25）**：P0a / P0b / P0c 已落地（分支 `feat/snapshot-sync`），实施记录见 [IMPLEMENTATION_HISTORY.md](./IMPLEMENTATION_HISTORY.md) §19。下一步 P1（vite 反代 + SDK 接线 + 设置页）。
+> **进度（2026-11-25）**：P0a / P0b / P0c 与 P1 已落地（分支 `feat/snapshot-sync`），实施记录见 [IMPLEMENTATION_HISTORY.md](./IMPLEMENTATION_HISTORY.md) §19–§20。下一步 P2（`markDirty` 接线 + 自动调度 + 状态点）。
 
 ---
 
