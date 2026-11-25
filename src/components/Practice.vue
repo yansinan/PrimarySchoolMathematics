@@ -183,7 +183,7 @@ import { decideListPracticesTransition } from '@/utils/listPracticesGuard'
 import { useDisplayStrategy } from '@/composables/useDisplayStrategy'  // 🆕 PR-4.2 抽离 displayStats + applyDisplayModeForCurrentQuestion + generateOptions
 import { FEEDBACK_DELAYS, ASSESSMENT_ABORT_WRONG_STREAK, getCommentByRate, ASSIST_LEVELS, MAX_ATTEMPT_PER_QUESTION } from '@/constants/practice'
 
-import { playSfx, isSfxEnabled, setSfxEnabled } from '@/utils/sound/sfx'
+import { playSfx, isSfxEnabled, setSfxEnabled, tierForRate } from '@/utils/sound/sfx'
 import { usePracticeStore } from '@/stores/practice'
 import { useStatsStore } from '@/stores/stats'
 import { storeToRefs } from 'pinia'
@@ -404,7 +404,8 @@ const handleSubmit = (answer) => {
   }
 
   if (result.isCorrect) {
-    playSfx('correct')
+    // 连对越多，音效越高（不给文字也能听出「连击」）
+    playSfx('correct', { streak: session.value.streak })
     session.value.feedbackType = 'correct'
     updateStats(true)
     ElMessage.success({
@@ -418,7 +419,7 @@ const handleSubmit = (answer) => {
   }
 
   // ── 答错 ──
-  playSfx('wrong')
+  playSfx('wrong', { attempt: result.attemptCount })
   session.value.feedbackType = 'wrong'
   ElMessage.error({
     message: `✗ 正确答案是 ${currentQuestion.value.solution}`,
@@ -433,6 +434,8 @@ const handleSubmit = (answer) => {
 
   // 错题重试上限
   if (result.attemptCount >= MAX_ATTEMPT_PER_QUESTION + 1) {
+    // 跳题提示音：比「答错」更温和，且错开答错音（wrong 约 160ms）
+    setTimeout(() => playSfx('skip'), 200)
     ElMessage.warning({
       message: `本题已重试 ${MAX_ATTEMPT_PER_QUESTION} 次, 跳过`,
       duration: FEEDBACK_DELAYS.wrong,
@@ -551,7 +554,7 @@ const handlePracticeComplete = async () => {
   }
   await saver.saveSessionFinal({ finalProfileSnapshot: finalProfile })
 
-  playSfx('complete')
+  playSfx('complete', { tier: tierForRate(rate) })
   // 评语（抽到 constants/practice.getCommentByRate）
   const { emoji, comment, color: rateColor } = getCommentByRate(rate)
   let action = 'close'

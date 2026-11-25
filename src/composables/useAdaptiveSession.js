@@ -26,7 +26,7 @@ import { generateDiagnosticQuestions, analyzeAbility } from '@/utils/algorithm/d
 import { Engine } from '@/services/adaptiveEngine'
 import { generateAdaptiveBatch } from '@/utils/algorithm/adaptiveBatch'
 import { Profile, hasRealProfile } from '@/services/abilityProfile'
-import { playSfx } from '@/utils/sound/sfx'
+import { playSfx, tierForRate } from '@/utils/sound/sfx'
 import { getGroupComment, getCommentByRate } from '@/constants/practice'
 import { sumResponseTimes } from '@/utils/score'
 import { TARGET_LIMITS } from '@/utils/form/formDefaults'
@@ -107,6 +107,8 @@ export function useAdaptiveSession(options = {}) {
    * - 没有画像：进入空闲态，重新生成诊断题开始评估
    */
   async function startNewAdaptiveSession() {
+    // 新一轮开始音效（handleStartPractice 里已有一声 start，靠 sfx 的 1.2s 节流去重）
+    playSfx('start')
     if (!practiceStore.assessmentCompleted) {
       // 无画像 → 重新评估
       practiceStore.setPhase('idle')
@@ -193,6 +195,7 @@ export function useAdaptiveSession(options = {}) {
     const answeredCount = snapshot.length
     const profile = analyzeAbility(snapshot)
 
+    playSfx('assess')
     ElMessage({
       message: `📊 评估完成！共 ${answeredCount} 题，正确 ${correctCount.value} 题`,
       duration: 3000,
@@ -276,7 +279,7 @@ export function useAdaptiveSession(options = {}) {
     // ── 强化小组反馈: 弹出自我评价对话框 ──
     let evaluationScore = 3  // 默认 3 = 刚刚好
     try {
-      playSfx('group')
+      playSfx('group', { perfect: groupAnswers.length > 0 && groupCorrect === groupAnswers.length })
       evaluationScore = (await dialogs.showSelfEvaluationDialog({
         groupIndex: groupIdx,
         correctCount: groupCorrect,
@@ -289,8 +292,13 @@ export function useAdaptiveSession(options = {}) {
     adaptiveEngine.value.lastEvaluation = evaluationScore
 
     // 评估并决定下一步
+    const prevDifficultyIdx = engine.difficultyIdx
     const result = engine.evaluateGroup(groupAnswers)
     adaptiveEngine.value = result.engine
+    // 升档奖励音：错开组完成音（group 约 200ms）与自我评价弹窗
+    if (result.engine.difficultyIdx > prevDifficultyIdx) {
+      setTimeout(() => playSfx('levelup'), 320)
+    }
     adaptiveGroupIndex.value++
     practiceStore.currentGroupIndex = adaptiveGroupIndex.value
 
@@ -319,6 +327,8 @@ export function useAdaptiveSession(options = {}) {
       const startedAt = practiceStore.session.sessionStartTime
       const totalTime = startedAt ? (Date.now() - startedAt) : sumResponseTimes(finalAnswers)
       const totalRate = Math.round((totalCorrect / finalAnswers.length) * 100)
+      // 结束音效按成绩分档：优秀 / 一般 / 鼓励（不评判）
+      playSfx('complete', { tier: tierForRate(totalRate) })
       const { emoji, comment, color: rateColor2 } = getCommentByRate(totalRate)
 
       // 最终结算先落库：总结弹窗上的按钮不产生任何数据，保存不能等它。
