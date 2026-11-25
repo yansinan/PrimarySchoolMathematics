@@ -32,6 +32,7 @@
 
 import { Question } from './Question'
 import { DB } from '@/services/databaseInit'
+import { newUid } from '@/utils/id'
 
 export class Answer extends Question {
   /** @param {Object} [raw] — db.answers 行或 useSubmitHandler 构造的 answerEntry */
@@ -179,6 +180,8 @@ export class Answer extends Question {
       sessionId: this.sessionId,
       questionId: this.questionId,
       practiceSessionId: this.practiceSessionId,
+      // 快照同步的稳定行键（见 designDocs/15-PLAN-snapshot-sync.md §5）
+      uid: this.uid,
     }
   }
 
@@ -211,9 +214,10 @@ export class Answer extends Question {
     // 同一题的重试不应新增一行：practiceSessionId + questionIndex 视为同一个答题槽位。
     // 原实现在答错重试时每次都 insert，导致 DB 里一题多行（如某槽位 4 行 attemptCount 1..4），
     // 于是 DB 侧准确率（按行统计）与 UI（按题去重）不一致，画像被重试记录污染。
+    let existing = null
     if (plain.id == null && plain.questionIndex != null) {
       try {
-        const existing = plain.practiceSessionId
+        existing = plain.practiceSessionId
           ? await DB.answers
             .where('practiceSessionId').equals(plain.practiceSessionId)
             .filter(r => r.questionIndex === plain.questionIndex)
@@ -225,6 +229,15 @@ export class Answer extends Question {
       } catch {
         // 查询失败就按新增处理，不阻塞答题
       }
+    }
+
+    // v6：每行必须有稳定 uid。新行生成；更新行沿用库里已有的 ——
+    // put 是整行替换，内存对象里没带 uid 就会把它抹掉；uid 一变，
+    // 另一台设备上就会多出一条「同一题」的重复记录。
+    if (!plain.uid) {
+      plain.uid = existing?.uid
+        || (plain.id != null ? (await DB.answers.get(plain.id))?.uid : null)
+        || newUid()
     }
 
     return await DB.answers.put(plain)

@@ -252,6 +252,8 @@ extra_hosts:
 
 每阶段独立可合入：P0a/P0b/P0c/P1 无用户可见变化，P2/P3 才有。
 
+> **进度（2026-11-25）**：P0a / P0b / P0c 已落地（分支 `feat/snapshot-sync`），实施记录见 [IMPLEMENTATION_HISTORY.md](./IMPLEMENTATION_HISTORY.md) §19。下一步 P1（vite 反代 + SDK 接线 + 设置页）。
+
 ---
 
 ## 9. 风险与对策
@@ -271,13 +273,15 @@ extra_hosts:
 
 ---
 
-## 10. 待确认的决策点
+## 10. 已确认的决策（2026-11-25）
 
-1. **projectId 来源**：给 PSM 新建项目（干净，但要读一次服务启动日志拿 bootstrap 码）还是复用 SpellWell 项目建新用户（省事，但共享 join capability）？
-2. **删除语义**：阶段一「只增不删 + 重置前断开同步」够不够，还是直接做墓碑？
-3. **`questions` 是否同步**：建议不同步（派生缓存，可由 answers 重建）。同意？
-4. **部署目标**：只保证家庭局域网（4003 + 反代），还是要上公网 HTTPS？
-5. **首次配对体验**：预置 `projectId` + 用户名（零运维）还是保留 bootstrap 码（更私密）？
+| 决策点 | 结论 |
+|---|---|
+| projectId 来源 | **新建项目**。服务端 bootstrap 生成 `proj_6pYzoEk4Hx66DtWzyQ-DWA`，预置进 `src/sync/config.js`，之后固定绑定本项目 |
+| 删除语义 | 阶段一「只增不删 + 重置前断开同步」 |
+| `questions` | **不同步**（可由 answers 推导） |
+| 部署目标 | 暂时只保证家庭局域网（4003 + 反代） |
+| 首次配对 | 预置 projectId + 用户名（零运维）。首台设备自动注册；后续设备用一次性配对码加入同一用户 |
 
 ---
 

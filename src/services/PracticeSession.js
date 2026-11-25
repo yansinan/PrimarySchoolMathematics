@@ -10,6 +10,7 @@
 import { DB, PracticeSession as SchemaSession } from './databaseInit'
 import { Answer } from '@/services'
 import { sumResponseTimes } from '@/utils/score'
+import { newUid } from '@/utils/id'
 import { DIFFICULTY_LEVELS } from '@/constants/difficulty'
 
 // ─── Domain Class ──────────────────────────────────────────────────────────
@@ -39,6 +40,8 @@ export class PracticeSession extends SchemaSession {
     }
     try {
       return await DB.practiceSessions.add({
+        // 快照同步的稳定行键（见 designDocs/15-PLAN-snapshot-sync.md §5）
+        uid: newUid(),
         studentId,
         practiceSessionId,
         config: safeClone(configSnapshot) || null,

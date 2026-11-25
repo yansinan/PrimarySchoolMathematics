@@ -985,6 +985,19 @@ function handleKeydown(e) {
 onMounted(() => window.addEventListener('keydown', handleKeydown))
 onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
 
+/**
+ * 数据库升级被其他标签页占用时的提示（databaseInit 派发 psm:db-blocked）。
+ * 没有提示的话，第二个标签页会一直卡在加载态，用户完全不知道发生了什么。
+ */
+function handleDbBlocked() {
+  ElMessage.warning({
+    message: '检测到练习数据升级被其他标签页占用，请关闭其他标签页后刷新本页',
+    duration: 6000,
+  })
+}
+onMounted(() => window.addEventListener('psm:db-blocked', handleDbBlocked))
+onUnmounted(() => window.removeEventListener('psm:db-blocked', handleDbBlocked))
+
 onMounted(async () => {
   if (listPractices.value.length > 0) return  // 已有题目，不干预
   // 从 DB 实时计算是否有诊断画像（判定收口到 hasRealProfile，抽屉门禁共用同一判据）

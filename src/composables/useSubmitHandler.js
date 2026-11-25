@@ -16,6 +16,7 @@
  *   - handleNext / digitFocus 等 UI 操作
  */
 import { useAnswerBuilder } from '@/composables/useAnswerBuilder'
+import { newUid } from '@/utils/id'
 
 export function useSubmitHandler({ practiceStore, saver }) {
   const { buildAnswerMeta, buildScore } = useAnswerBuilder()
@@ -61,6 +62,9 @@ export function useSubmitHandler({ practiceStore, saver }) {
     // 旧数据兼容：读取时 getAnswerScore 会用 getter 优先，stored 字段仅 fallback
     // 只取需要字段，不 spread currentQuestion（避免 id/options 等字段污染 answers 表）
     const answerEntry = {
+      // 快照同步的稳定行键：同一题重试必须复用 uid，
+      // 换 uid 会在另一台设备上变成「同一题两条记录」。
+      uid: existingIdx >= 0 ? (targetAnswers[existingIdx].uid || newUid()) : newUid(),
       equation: currentQuestion.equation,
       solution: currentQuestion.solution,
       userAnswer,

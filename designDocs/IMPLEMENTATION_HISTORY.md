@@ -909,3 +909,63 @@ practiceStore.currentDifficultyIdx = adaptiveEngine.value.difficultyIdx  // 取 
 **语义**：`completed` 是唯一完成判据（最终结算落库即 true）；`completion` 只作为「练到本轮上限的几成」的进度提示，不再用于判断完成与否。旧数据没有 `completed` 字段 → 不臆测，保留百分比显示。
 
 **验证**：`npx vitest run` 255/255 ✅（+3 `computeSessionStats` 用例）；浏览器实测 9/9 ✅ —— 列表出现「10题 已完成」「11题 中断」，自适应轮难度不再是「—」，详情头状态一致，console 零错误。
+
+---
+
+## 19. 快照同步 P0：uid 迁移 + 快照适配（2026-11-25）
+
+> 分支 `feat/snapshot-sync`。规划与决策见 [15-PLAN-snapshot-sync.md](./15-PLAN-snapshot-sync.md)。
+> 决策：新建项目 / 删除只增不删 / questions 不同步 / 家庭局域网 / 预置 projectId+用户名。
+
+### 19.1 项目落地
+
+- 在同步服务（容器 `indexdb-snapshot-sync`，`127.0.0.1:4010`）上用 bootstrap 码创建新项目 `proj_6pYzoEk4Hx66DtWzyQ-DWA`，bootstrap 码随即轮换。
+- bootstrap 顺带建的 `init` 用户是空壳命名空间，不使用；首台设备会用 `projectId + 用户名` 另建自己的用户。
+- `src/sync/config.js` 预置 `SYNC_PROJECT_ID` / `SYNC_USER_NAME='孩子'` / `SYNC_BASE_URL='/sync'`。
+
+### 19.2 P0a：导出完整性
+
+- `exportAllData` 改为单事务读取；答案归属覆盖 `sessionId`、`practiceSessionId`、诊断孤儿三种情况。
+- 旧实现只按 `sessionId` 查，诊断答案不会进备份 —— 先修这个，迁移前的备份才完整。
+
+### 19.3 P0b：Dexie v6（uid）
+
+| # | 改动 | 文件 |
+|---|------|------|
+| 1 | `newUid()`：randomUUID → getRandomValues → 时间戳+随机（局域网 http 非安全上下文下 randomUUID 不可用） | `utils/id.js` |
+| 2 | v6 schema 给 `practiceSessions` / `answers` 加 `&uid`；`backfillUids` 只写 uid，迁移后自检行数与 uid 覆盖，异常回滚 | `services/databaseInit.js` |
+| 3 | `Answer.toJSON` 补 uid；`Answer.save` 更新时沿用库里已有 uid | `services/Answer.js` |
+| 4 | 同一题重试复用 uid（否则 put 整行替换会换掉 uid → 另一台设备出现重复记录） | `composables/useSubmitHandler.js` |
+| 5 | `PracticeSession.create` 生成 uid | `services/PracticeSession.js` |
+| 6 | 多标签：`versionchange` 自动 close；`blocked` 派发 `psm:db-blocked`，练习页提示「关闭其他标签页后刷新」 | `services/databaseInit.js` / `components/Practice.vue` |
+| 7 | 旧 JSON 导入补 uid（否则永远进不了同步）；孤儿答案按 `equation+timestamp` 判重导入 | `services/databaseInit.js` |
+
+### 19.4 P0c：快照适配
+
+- vendored 官方 SDK（`src/sync/client.js|merge.js|browser.js`，与上游逐字节一致，`diff` 校验通过）。
+- `services/snapshot.js`：
+  - `exportSnapshot`：单事务、不携带本机自增 id；
+  - `importSnapshot`：按 uid upsert、`sessionId` 重映射到本机同 pid 首行、校验 `schemaVersion`、不删除本地行、幂等；
+  - `SNAPSHOT_POLICIES`：`practiceSessions` 用 `lww(updatedAt)`，`answers` 用 `lww(timestamp)`。
+- 为什么 answers 不能用 `union`：`unionRecords` 先遍历远端、同键跳过 —— 答错重试的本地新答案会输给远端旧记录。
+
+### 19.5 验证
+
+| 测试 | 结果 |
+|------|------|
+| `npx vitest run` | 285/285 PASS ✅（新增 4 个 spec / 30 例） |
+| 浏览器实测（Playwright + chromium） | 12/12 ✅ |
+| — 用 Dexie 造真实 v5 库 → 打开应用 | v6 迁移后 3 会话 / 4 答案 / 1 题目不变，uid 唯一非空，`pid/completed/config` 不变 |
+| — 导出 | 含 1 条诊断孤儿答案，答案全部带 uid |
+| — 新答题 | 新行自动带 uid |
+| — 练习记录 | 迁移后抽屉照常显示 |
+| — 多标签阻塞 | `psm:db-blocked` 提示可见 |
+| console | 零错误 ✅ |
+
+> 排障记录：第一次浏览器验证用原生 `indexedDB` 手搓 v5 schema，`questions` 表的索引集与 Dexie 期望不一致 → Dexie 在升级时重建该表导致行丢失。改用 Dexie 按 v5 schema 造库后，三张表都完整保留。**结论：真实用户库（Dexie 创建）迁移安全；手搓 IDB 的种子不是忠实样本。**
+
+### 19.6 已知边界
+
+- 删除不传播（阶段一）：`/reset` 前需先断开同步，否则下次同步会把云端数据拉回（重置页改造在 P3）。
+- `navigator.locks` 在 http 局域网下不可用（需安全上下文），多标签锁退化为无锁。
+- 迁移不可逆：升级到 v6 后旧代码（v5）打开会 `VersionError`，回滚只能保留 v6 或清库。
