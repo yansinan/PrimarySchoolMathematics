@@ -31,6 +31,7 @@ import { Question, Answer, WrongAnswer } from '@/services'
 import { generateOneQuestion } from '@/utils/algorithm/adaptiveBatch'
 import { loadLevelCoefficients } from '@/utils/store/levelCoefficients'
 import { loadChallengeEnabled } from '@/utils/store/challengeSetting'
+import { loadAutoAdvance } from '@/utils/store/autoAdvance'
 
 // 小组题量阶梯（每个速度级别对应一个基数）
 const GROUP_SIZES = [6, 10, 14, 18, 22]
@@ -135,11 +136,17 @@ export class Engine {
     targetMin = 10,
     targetMax = 30,
     challengeEnabled = null,
+    autoAdvance = null,
   } = {}) {
     this.profile = { difficultyIdx, strongLevelIndices, weakLevelIndices }
     this.difficultyIdx = difficultyIdx
     /** 挑战题开关（家长在设置里手动决定；不传则实时读存储，默认关闭） */
     this.challengeEnabled = challengeEnabled ?? loadChallengeEnabled()
+    /**
+     * 升档方式（家长在设置里决定；不传则实时读存储，默认手动）：
+     * 手动时组内不自动升/降档，档位只在家长点「升一档」时推进。
+     */
+    this.autoAdvance = autoAdvance ?? loadAutoAdvance()
     this.assistLevel = 0
     this.blankMode = 'result'
     this.groupSizeIdx = 0
@@ -273,7 +280,8 @@ export class Engine {
     }
     const maxLevel = DIFFICULTY_LEVELS.length - 1
 
-    if (!done && engine.consecutiveGood >= MIN_CONSECUTIVE_FOR_TRANSITION && engine.groupsAtThisLevel >= MIN_GROUPS_PER_DIMENSION) {
+    // 手动升档模式：组内不自动升降档（档位只由家长在设置里推进）
+    if (engine.autoAdvance && !done && engine.consecutiveGood >= MIN_CONSECUTIVE_FOR_TRANSITION && engine.groupsAtThisLevel >= MIN_GROUPS_PER_DIMENSION) {
       if (engine.difficultyIdx < maxLevel) {
         engine.difficultyIdx = Math.min(maxLevel, engine.difficultyIdx + 1)
         engine.assistLevel = Math.min(MAX_NORMAL_ASSIST_LEVEL, engine.assistLevel + 1)
@@ -282,7 +290,7 @@ export class Engine {
         const remaining = engine.targetMax - engine.totalAnswered
         if (remaining > 0) nextSize = Math.min(nextSize, remaining)
       } else { done = true }
-    } else if (!done && engine.consecutiveBad >= MIN_CONSECUTIVE_FOR_TRANSITION && engine.groupsAtThisLevel >= MIN_GROUPS_PER_DIMENSION) {
+    } else if (engine.autoAdvance && !done && engine.consecutiveBad >= MIN_CONSECUTIVE_FOR_TRANSITION && engine.groupsAtThisLevel >= MIN_GROUPS_PER_DIMENSION) {
       if (engine.difficultyIdx > 0) {
         engine.difficultyIdx = Math.max(0, engine.difficultyIdx - 1)
         engine.assistLevel = 0; engine.groupsAtThisLevel = 0; engine.consecutiveBad = 0
@@ -412,7 +420,7 @@ export class Engine {
         if (!roundAnswers[i].isCorrect) wrongStreak++
         else break
       }
-      if (wrongStreak >= 2 && this.difficultyIdx > 0) {
+      if (this.autoAdvance && wrongStreak >= 2 && this.difficultyIdx > 0) {
         this.difficultyIdx = Math.max(0, this.difficultyIdx - 1)
         // P2-1: 连续答错换更简单的题——即时生成（不再从 reserve pool 取）
         if (nextIdx >= 0 && nextIdx < listPractices.length) {

@@ -148,6 +148,29 @@
               默认关闭：本轮只出当前档位及以下的题。有些档位的前置知识孩子还没学到，
               上一档的题不是努力就能做出来的 —— 想加难度再在这里手动打开（每组约 15% 的下一档题）。
             </p>
+
+            <div class="level-ratio__row level-ratio__row--switch">
+              <span class="level-ratio__label">自动升档</span>
+              <el-switch
+                :model-value="autoAdvanceOn"
+                size="small"
+                @update:model-value="setAutoAdvance"
+              />
+            </div>
+            <p class="level-ratio__hint">
+              默认手动：练得再好也停在当前档位，孩子可以多练几轮；什么时候进下一档由你点下面的按钮决定。
+              打开自动后恢复原行为（练够量 + 正确率达标就自动进下一档）。
+            </p>
+            <div class="level-ratio__actions">
+              <el-button
+                size="small"
+                type="success"
+                :disabled="nextLevel == null || autoAdvanceOn"
+                @click="promoteOneLevel"
+              >
+                {{ nextLevel == null ? '已是最后一档' : `升一档：Lv.${nextLevel.idx + 1} ${nextLevel.label}` }}
+              </el-button>
+            </div>
           </el-collapse-item>
         </el-collapse>
       </el-form-item>
@@ -224,6 +247,11 @@ import {
   loadChallengeEnabled,
   saveChallengeEnabled,
 } from '@/utils/store/challengeSetting';
+import {
+  loadAutoAdvance,
+  saveAutoAdvance,
+} from '@/utils/store/autoAdvance';
+import { playSfx } from '@/utils/sound/sfx';
 
 const fileNameGeneratedRuleOptions = computed(() => {
   return Object.entries(fileNameGeneratedRuleEnum).map(([, { key, text }]) => {
@@ -413,6 +441,50 @@ function setChallengeEnabled(value) {
 watch(() => props.visible, (visible) => {
   if (!visible) return
   challengeEnabled.value = loadChallengeEnabled()
+})
+
+/* ─── 升档方式（默认手动）──────────────────────────────────────
+ * 手动：练得再好也停在当前档，家长点「升一档」才推进（= 改起点档位）。
+ * 自动：恢复原行为（练够量 + 正确率达标 → 下一档）。
+ */
+const autoAdvanceOn = ref(loadAutoAdvance())
+
+/** 下一档（用于「升一档」按钮文案；已到最后一档时为 null） */
+const nextLevel = computed(() => {
+  const from = currentLevelIdx.value
+  if (from == null) return null
+  const idx = Math.min(from + 1, DIFFICULTY_LEVELS.length - 1)
+  if (idx <= from) return null
+  return { idx, label: DIFFICULTY_LEVELS[idx].label }
+})
+
+function setAutoAdvance(value) {
+  const next = saveAutoAdvance(!!value)
+  autoAdvanceOn.value = next
+  practiceStore.bumpLevelOverride()
+  ElMessage.info(next
+    ? '已改为自动升档：练够量且正确率达标就进下一档'
+    : '已改为手动升档：练得再好也停在当前档，由你点「升一档」')
+}
+
+/** 手动升一档：把起点档位改成下一档（旧轮次不再参与阶梯，避免又被拉回去） */
+function promoteOneLevel() {
+  const target = nextLevel.value
+  if (!target) return
+  const saved = saveLevelOverride(target.idx)
+  if (!saved) return
+  levelOverride.value = saved
+  levelDraft.value = target.idx
+  practiceStore.bumpLevelOverride()
+  refreshCurrentLevel()
+  playSfx('levelup')
+  ElMessage.success(`已升到 Lv.${target.idx + 1} ${target.label}，下次开始练习生效`)
+}
+
+/** 打开抽屉时同步一次升档方式 */
+watch(() => props.visible, (visible) => {
+  if (!visible) return
+  autoAdvanceOn.value = loadAutoAdvance()
 })
 
 /**

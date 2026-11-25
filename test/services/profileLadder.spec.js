@@ -244,6 +244,43 @@ describe('档位阶梯 — 记录解析不到档位时仍按轮次走', () => {
   })
 })
 
+describe('升档方式 — 手动（promote=false，默认设置）', () => {
+  it('本档练够量且掌握 → 停在 9，不自动升到 10', () => {
+    const answers = answersAtLevel(L['乘法口诀·2~6'], 30, { pid: 'ps_1' })
+    const sessionLevels = new Map([['ps_1', L['乘法口诀·2~6']]])
+    // 手动：停在当前档
+    expect(Profile.computeDifficultyIdx(answers, sessionLevels, null, false))
+      .toBe(L['乘法口诀·2~6'])
+    // 自动：原行为，升一档
+    expect(Profile.computeDifficultyIdx(answers, sessionLevels, null, true))
+      .toBe(L['乘法口诀·7~9'])
+  })
+
+  it('手动模式：停在练过的档位，不被旧的高档记录拉走，也不自动跳到断档', () => {
+    const answers = [
+      ...answersAtLevel(L['进退位巩固'], 30, { pid: 'ps_1' }),
+      ...answersAtLevel(L['两位数×两位数'], 30, { pid: 'ps_2' }),
+    ]
+    const sessionLevels = new Map([
+      ['ps_1', L['进退位巩固']],
+      ['ps_2', L['两位数×两位数']],
+    ])
+    // 手动 = 停在当前练的档位（8），等家长点「升一档」；18 档的旧记录不参与判定
+    expect(Profile.computeDifficultyIdx(answers, sessionLevels, null, false))
+      .toBe(L['进退位巩固'])
+    // 自动模式对照：回填断档 → 9
+    expect(Profile.computeDifficultyIdx(answers, sessionLevels, null, true))
+      .toBe(L['乘法口诀·2~6'])
+  })
+
+  it('手动 + 指定起点：起点之上没练过 → 第 10 档也不越档', () => {
+    const answers = answersAtLevel(L['乘法口诀·2~6'], 30, { pid: 'ps_new' })
+    const sessionLevels = new Map([['ps_new', L['乘法口诀·2~6']]])
+    expect(Profile.computeDifficultyIdx(answers, sessionLevels, L['乘法口诀·2~6'], false))
+      .toBe(L['乘法口诀·2~6'])
+  })
+})
+
 describe('档位阶梯 — 无轮次记录时保持诊断定位逻辑', () => {
   const mk = (pairs) => pairs.map(([equation, solution]) => ({
     equation, solution, userAnswer: solution,

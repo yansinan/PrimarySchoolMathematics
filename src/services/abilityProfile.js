@@ -23,6 +23,7 @@ import {
   LEVEL_EVIDENCE_MIN,
 } from '@/constants/practice'
 import { loadLevelOverride } from '@/utils/store/levelOverride'
+import { loadAutoAdvance } from '@/utils/store/autoAdvance'
 
 /**
  * 用户能力画像（不可变数据类）
@@ -167,7 +168,10 @@ export class Profile {
     const override = loadLevelOverride()
     const sessionLevels = await Profile.loadSessionLevels(studentId, override?.since ?? null)
     return new Profile({
-      difficultyIdx: Profile.computeDifficultyIdx(answers, sessionLevels, override?.levelIdx ?? null),
+      // 升档方式：默认手动（练得再好也停在本档，由家长点「升一档」）
+      difficultyIdx: Profile.computeDifficultyIdx(
+        answers, sessionLevels, override?.levelIdx ?? null, loadAutoAdvance(),
+      ),
       strongLevelIndices: groups.filter(g => g.accuracy >= STRONG_THRESHOLD).map(g => g.levelIdx),
       weakLevelIndices: groups.filter(g => g.accuracy < WEAK_THRESHOLD).map(g => g.levelIdx),
       masteryMap,
@@ -226,12 +230,18 @@ export class Profile {
    * C. 家长手动指定了起点档位（utils/store/levelOverride）→ 以该档为 baseline，
    *    只认 baseline 之后新增的轮次；即使还没有新轮次，也直接返回 baseline。
    *
+   * 升档方式（第四参 promote，默认 true）：
+   *   - true  自动：本档「练够量 + 掌握」→ 返回下一档（原行为）
+   *   - false 手动（默认设置）：停在**当前档位**，不自动抬难度；
+   *     家长在设置里点「升一档」= 改起点档位（见 levelOverride）
+   *
    * @param {Array} answers - Answer 实例或 plain object
    * @param {Map<string, number>} [sessionLevels] - practiceSessionId → 起始档位
    * @param {number|null} [baselineLevel] - 手动指定的起点档位索引
+   * @param {boolean} [promote=true] - 是否允许自动升档
    * @returns {number} DIFFICULTY_LEVELS 索引
    */
-  static computeDifficultyIdx(answers, sessionLevels = null, baselineLevel = null) {
+  static computeDifficultyIdx(answers, sessionLevels = null, baselineLevel = null, promote = true) {
     if (!answers?.length) return 0
     const wrapped = answers.map(a => (a instanceof Answer ? a : new Answer(a)))
     const groups = Question.groupAnswersByLevel(wrapped)
@@ -256,6 +266,8 @@ export class Profile {
       const rate = rungAnswers.filter(a => a.isCorrect).length / rungAnswers.length
       // 没掌握 → 继续练这一档，不升
       if (rate < ACCURACY_THRESHOLDS.good) return i
+      // 已掌握：手动升档模式就停在本档（家长点「升一档」才推进）
+      if (!promote) return i
     }
     return maxLevel
   }
