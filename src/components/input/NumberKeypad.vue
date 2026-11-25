@@ -40,7 +40,7 @@
           type="success"
           size="large"
           :disabled="disabled || !currentValue"
-          @click="$emit('submit')"
+          @click="handleConfirm"
           class="grid-btn confirm-btn"
         >
           确认
@@ -87,10 +87,16 @@ const handleNumber = (num) => {
 
 const handleBackspace = () => {
   if (props.currentValue) {
-    playSfx('tap')
+    playSfx('keyBack')
     emit('backspace')
     emit('input', props.currentValue.slice(0, -1))
   }
+}
+
+/** 确认键：短促两声上行（随后的对/错音效会接上，不要抢戏） */
+const handleConfirm = () => {
+  playSfx('keyConfirm')
+  emit('submit')
 }
 </script>
 

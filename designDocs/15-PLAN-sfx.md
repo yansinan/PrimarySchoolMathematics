@@ -20,7 +20,9 @@
 
 | 音效 | 触发时机 | 声音设计 |
 |---|---|---|
-| `tap` | 数字键 / 选项 / 键盘输入 | 极短 A5 轻点 |
+| `tap` | 数字键 / 选项（点击或物理键盘） | 660Hz 短音 + 一点高频「键帽」头，像指尖敲塑料键 |
+| `keyBack` | 退格（屏幕键盘 / 物理 Backspace） | A4→330Hz 短下滑，比数字键低一点，好区分 |
+| `keyConfirm` | 确认键 / 回车提交 | 660→880Hz 两音快速上行（30+45ms，短到不抢随后的对/错音） |
 | `correct` | 答对 | C6→E6 两音 + 一点 C7 高频闪光 |
 | `correct`（连对） | 同一轮连对 ≥3 / ≥5 / ≥10 | 依次追加 G6 / C7 / E7 —— 不给文字也能听出「连击」 |
 | `wrong` | 答错（attempt 1） | A3→F3 低音下滑，短促 |
@@ -44,6 +46,10 @@
 
 | 文件 | 位置 | 音效 |
 |---|---|---|
+| `components/input/NumberKeypad.vue` | 数字键 / 退格 / 确认 | `tap` / `keyBack` / `keyConfirm` |
+| `components/input/OptionButtons.vue` | 选中选项 | `tap` |
+| `components/Practice.vue` | 物理键盘：数字 / Backspace / Enter | `tap` / `keyBack` / `keyConfirm` |
+| 同上 | 选择题 ← → 移动焦点、数字快选、回车提交 | `tap` / `keyConfirm` |
 | `components/Practice.vue` | `handleSubmit` 答对 | `correct` + `{ streak }` |
 | 同上 | 答错 | `wrong` + `{ attempt }` |
 | 同上 | 错满 3 次强制跳题 | `skip`（200ms 后，错开答错音） |
@@ -87,6 +93,8 @@
 | 练习中连对 3 题 | 每题 3 / 3 / 4 个音（第 3 题连对加成） |
 | 同一题错两次 | 第一次 1 个音，第二次 2 个音 |
 | `psm_sfx_enabled=0` 后答题 | +0（完全静音） |
+| 物理键盘 7 / Backspace / Enter | +2（tap）/ +1（keyBack）/ +3（keyConfirm + 该题答错音） |
+| 屏幕键盘 5 / 退格 / 确认 | +2 / +1 / +4（keyConfirm + 再次答错双音） |
 | console | 零报错 |
 
 > 音色好不好听没法在无头浏览器里断言，需要家长实际听一遍；音量/音高都在

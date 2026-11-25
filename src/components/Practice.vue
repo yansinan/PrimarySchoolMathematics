@@ -941,7 +941,7 @@ function handleKeydown(e) {
 
   // 准备界面：回车 = 点「开始练习」
   if (readyToStart.value && !currentQuestion.value) {
-    if (e.key === 'Enter') { e.preventDefault(); handleStartPractice() }
+    if (e.key === 'Enter') { e.preventDefault(); playSfx('keyConfirm'); handleStartPractice() }
     return
   }
   if (!currentQuestion.value) return
@@ -954,8 +954,8 @@ function handleKeydown(e) {
 
   if (isKeypad()) {
     if (/^[0-9]$/.test(e.key)) { e.preventDefault(); playSfx('tap'); handleInput(e.key); return }
-    if (e.key === 'Backspace') { e.preventDefault(); handleBackspace(); return }
-    if (e.key === 'Enter') { e.preventDefault(); handleSubmit(); return }
+    if (e.key === 'Backspace') { e.preventDefault(); playSfx('keyBack'); handleBackspace(); return }
+    if (e.key === 'Enter') { e.preventDefault(); playSfx('keyConfirm'); handleSubmit(); return }
     return
   }
 
@@ -966,15 +966,17 @@ function handleKeydown(e) {
     e.preventDefault()
     const dir = e.key === 'ArrowRight' ? 1 : -1
     optionFocusIdx.value = (optionFocusIdx.value + dir + opts.length) % opts.length
+    playSfx('tap')
     return
   }
   if (/^[1-9]$/.test(e.key)) {
     const idx = Number(e.key) - 1
-    if (idx < opts.length) { e.preventDefault(); optionFocusIdx.value = idx; handleSelect(opts[idx]) }
+    if (idx < opts.length) { e.preventDefault(); optionFocusIdx.value = idx; playSfx('tap'); handleSelect(opts[idx]) }
     return
   }
   if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault()
+    playSfx('keyConfirm')
     if (opts.length) handleSelect(opts[Math.min(optionFocusIdx.value, opts.length - 1)])
     else handleSubmit()
   }

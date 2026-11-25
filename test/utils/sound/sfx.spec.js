@@ -72,6 +72,19 @@ afterEach(() => {
   delete globalThis.window
 })
 
+describe('音效 — 按键音', () => {
+  it('数字键 / 退格 / 确认各自有声，且能区分', async () => {
+    const tap = await countNotes('tap')
+    const back = await countNotes('keyBack', undefined, 80)
+    const confirm = await countNotes('keyConfirm', undefined, 80)
+    expect(tap).toBeGreaterThan(0)
+    expect(back).toBeGreaterThan(0)
+    expect(confirm).toBeGreaterThan(0)
+    // 三种按键音不是同一个音（音数/音高不同）：确认键是两音上行
+    expect(confirm).toBeGreaterThan(back)
+  })
+})
+
 describe('音效 — 结束整轮的成绩分档', () => {
   it('tierForRate：95 以上优秀、60~94 一般、60 以下鼓励', () => {
     expect(tierForRate(100)).toBe('great')

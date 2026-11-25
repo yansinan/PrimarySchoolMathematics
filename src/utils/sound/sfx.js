@@ -30,7 +30,9 @@ const STORAGE_KEY = 'psm_sfx_enabled'
 
 /** 同一音效的节流时间（毫秒）：连对时 correct 会连续触发，避免波形叠加变吵 */
 const THROTTLE_MS = {
-  tap: 70,
+  tap: 60,
+  keyBack: 60,
+  keyConfirm: 90,
   correct: 70,
   wrong: 70,
   skip: 200,
@@ -123,8 +125,22 @@ const N = {
 }
 
 const VOICE = {
-  // 按键：极短极轻，像指尖敲一下
-  tap() { tone(N.A5, 0.045, { gain: 0.03, type: 'sine' }) },
+  // 数字键 / 选项：短促的「塑料按键」感（主音 + 一点高频头，像指尖敲键帽）
+  tap() {
+    tone(660, 0.042, { gain: 0.045, type: 'sine' })
+    tone(N.E6, 0.016, { gain: 0.012, type: 'sine', delay: 0.004 })
+  },
+
+  // 退格：比数字键低一点、带一点下滑，区分「删掉一位」
+  keyBack() {
+    tone(N.A4, 0.038, { gain: 0.04, type: 'sine', slideTo: 330 })
+  },
+
+  // 确认 / 提交：两音快速上行（很短，不和随后的对/错音抢戏）
+  keyConfirm() {
+    tone(660, 0.03, { gain: 0.04, type: 'sine' })
+    tone(N.A5, 0.045, { gain: 0.035, type: 'sine', delay: 0.028 })
+  },
 
   /**
    * 答对：C6 → E6，再补一点高频闪光。
