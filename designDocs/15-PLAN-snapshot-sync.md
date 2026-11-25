@@ -252,7 +252,7 @@ extra_hosts:
 
 每阶段独立可合入：P0a/P0b/P0c/P1 无用户可见变化，P2/P3 才有。
 
-> **进度（2026-11-25）**：P0a / P0b / P0c、P1、P2 已落地（分支 `feat/snapshot-sync`），实施记录见 [IMPLEMENTATION_HISTORY.md](./IMPLEMENTATION_HISTORY.md) §19–§21。下一步 P3（双设备配对 + 冲突收敛 + 重置前断开同步）。
+> **进度（2026-11-25）**：P0a / P0b / P0c、P1、P2、P3 已落地（分支 `feat/snapshot-sync`），实施记录见 [IMPLEMENTATION_HISTORY.md](./IMPLEMENTATION_HISTORY.md) §19–§22。剩 P4 收尾（快照体积监控 / `data/` 备份 / 部署说明）。
 
 ---
 

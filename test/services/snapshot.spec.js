@@ -106,6 +106,34 @@ describe('exportSnapshot / importSnapshot', () => {
     expect((await DB.practiceSessions.toArray())[0].id).toBe(firstSid)
   })
 
+  it('导入后列表取最终行：快照按 uid 排序，不能按自增 id 判新旧', async () => {
+    // 造一轮：首题壳 + 最终结算（completed）
+    const sid = await PracticeSession.create({
+      practiceSessionId: 'ps_final',
+      configSnapshot: { mode: 'adaptive', difficultyIdx: 2, targetMax: 12 },
+      profileSnapshot: { difficultyIdx: 2 },
+    })
+    await Answer.save(mkAnswer('ps_final', sid, 0, Date.now() - 5000))
+    await PracticeSession.create({
+      practiceSessionId: 'ps_final',
+      configSnapshot: { mode: 'adaptive', difficultyIdx: 2, targetMax: 12 },
+      evaluations: '[{"group":0,"score":3,"count":1}]',
+      completed: true,
+    })
+
+    const snap = await exportSnapshot()
+    // 模拟合并后的顺序：按 uid 排序（与真实 merge 一致），此时顺序与创建顺序无关
+    snap.stores.practiceSessions.sort((a, b) => String(a.uid).localeCompare(String(b.uid)))
+
+    await resetDb()
+    await importSnapshot(snap)
+
+    const [entry] = await PracticeSession.list()
+    expect(entry.practiceSessionId).toBe('ps_final')
+    expect(entry.completed).toBe(true)
+    expect(entry.evaluations).toBeTruthy()
+  })
+
   it('schemaVersion 不匹配 / 缺 uid：拒绝导入且不写入任何行', async () => {
     await seedRound('ps_a', 1)
     const snap = await exportSnapshot()

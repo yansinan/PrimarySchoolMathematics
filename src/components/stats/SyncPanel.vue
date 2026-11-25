@@ -110,9 +110,19 @@ const pairingExpireText = computed(() => {
   return at ? new Date(at).toLocaleTimeString('zh-CN', { hour12: false }) : ''
 })
 
+/** 服务端错误码 → 中文提示（见 indexDB-snapshot-sync/auth-store.js） */
+const ERROR_HINTS = {
+  user_exists: '云端已有同名用户。请在仍能同步的设备上生成配对码后加入，不要重复启用。',
+  project_not_found: '云端项目不存在（projectId 可能已失效）。',
+  invalid_pairing_code: '配对码无效或已使用，请重新生成。',
+  pairing_code_expired: '配对码已过期，请重新生成。',
+  invalid_name: '用户名不合法。',
+  too_many_attempts: '尝试太频繁，请稍后再试。',
+}
+
 function showError(e, fallback) {
-  const msg = e?.body?.error || e?.message || fallback
-  ElMessage.error(msg)
+  const code = e?.body?.error
+  ElMessage.error(ERROR_HINTS[code] || e?.message || fallback)
 }
 
 async function onEnable() {
@@ -120,6 +130,8 @@ async function onEnable() {
     await sync.enrollFirstDevice()
     ElMessage.success('同步已启用')
   } catch (e) {
+    // 同名用户已存在：切到「配对码加入」引导
+    if (e?.body?.error === 'user_exists') boundBefore.value = true
     showError(e, '启用同步失败')
   }
 }

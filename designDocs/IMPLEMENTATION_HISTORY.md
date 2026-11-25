@@ -1037,3 +1037,44 @@ practiceStore.currentDifficultyIdx = adaptiveEngine.value.difficultyIdx  // 取 
 > 同步节流：每题 `markDirty(4000)` 会把连续答题合并成一次推送；组边界 1.5s、整轮完成立即推送。自动同步间隔 120s（整库快照，没必要 30s 一轮）。
 >
 > 测试账号：浏览器验证用路由改写用户名成「同步自测」，验证后已从 `auth.json` 与该命名空间清掉。
+
+---
+
+## 22. 快照同步 P3：双设备配对 / 首绑 + 重置断开 + 列表取行修复（2026-11-25）
+
+### 22.1 双设备与账号
+
+- A 启用同步 → 造一轮 → 立即同步 → 生成配对码；B 用配对码加入**同一用户**。
+- 首绑 `preferRemoteOnFirstBind`：B 首次同步直接采用云端，A 的轮次出现在 B（会话行 + 答案，`sessionId` 按 pid 重映射到 B 的本地首行）。
+- 服务端对同项目**重名用户返回 409 `user_exists`**。`enrollFirstDevice` 遇到它记下「曾绑定」，面板改为引导用配对码加入（不反复撞 409）；`SyncPanel` 增加错误码 → 中文提示映射（`user_exists` / `project_not_found` / `invalid_pairing_code` / `pairing_code_expired` / `too_many_attempts`）。
+
+### 22.2 重置页
+
+`/reset` 增加「同时断开本机同步（推荐）」复选（已绑定时显示，默认勾选）：
+
+- 勾选 → `resetBinding()` 再 `clearAllData()`（否则下次同步会把云端记录拉回来）；
+- 不勾选 → 二次确认「云端记录会在下次同步时重新下载回来」。
+
+### 22.3 修复：练习记录取「最新行」的判据
+
+- **症状**：B 同步后，A 那轮已经完成的练习在 B 的练习记录里显示成「中断」。
+- **根因**：`PracticeSession.list()` 按本地自增 id 取每轮最新行；但快照合并（`latestWins`）输出按 `uid` 排序 —— 导入端的自增 id 先后与真实时间无关，于是「首题壳」被当成最终行。
+- **修复**：改为按 `createdAt` 取最新（同毫秒时完成行优先，再平手看 id）。回归测试覆盖「快照按 uid 排序后导入」这一场景。
+
+### 22.4 验证
+
+| 测试 | 结果 |
+|------|------|
+| `npx vitest run` | 290/290 PASS ✅（新增 1 例：导入后列表取最终行） |
+| 浏览器 A/B 双设备（Playwright 双 context） | 10/10 ✅ |
+| — A | 启用同步、造轮次、手动同步、生成配对码 |
+| — B | 配对加入 → 首绑收到 A 的轮次（`completed=true`、1 题）→ 抽屉显示 1 条 |
+| — 重置 | 勾选断开 → 清空后本地 0 行、`boundUserId` 清空 |
+| console | 零错误 ✅ |
+| 测试账号 | 验证后已从 `auth.json` 与命名空间清理 |
+
+### 22.5 已知边界（阶段一）
+
+- 删除不传播（重置页已提供「断开同步」出口）；
+- 冲突收敛由 `test/services/snapshot.spec.js` 的 lww 用例覆盖（平局保留远端），未做浏览器级并发冲突演练；
+- `navigator.locks` 在 http 局域网下不可用，多标签锁退化为无锁。

@@ -130,17 +130,25 @@ async function init() {
 /** 首台设备：用预置 projectId + 用户名注册（零运维，不用手输 projectId） */
 async function enrollFirstDevice() {
   const s = ensureSdk()
-  const result = await s.enroll({
-    projectId: SYNC_PROJECT_ID,
-    userName: SYNC_USER_NAME,
-    deviceName: deviceName(),
-    requestId: createRequestId(),
-  })
-  // 注册响应里 Set-Cookie；init() 走 /v1/me 确认 cookie 会话后 configured 才为真
-  await init()
-  writeLocal(USER_ID_KEY, result?.user?.id || '1')
-  refreshConfigured()
-  return result
+  try {
+    const result = await s.enroll({
+      projectId: SYNC_PROJECT_ID,
+      userName: SYNC_USER_NAME,
+      deviceName: deviceName(),
+      requestId: createRequestId(),
+    })
+    // 注册响应里 Set-Cookie；init() 走 /v1/me 确认 cookie 会话后 configured 才为真
+    await init()
+    writeLocal(USER_ID_KEY, result?.user?.id || '1')
+    refreshConfigured()
+    return result
+  } catch (error) {
+    // 服务端不允许同项目内重名用户（409 user_exists）。说明云端已有这个账号，
+    // 多半是本机曾绑定过或家里另一台设备已启用 —— 记下「绑定过」，
+    // 面板会改为引导用配对码加入，而不是反复撞 409。
+    if (error?.body?.error === 'user_exists') writeLocal(USER_ID_KEY, 'exists')
+    throw error
+  }
 }
 
 /** 第二台设备：用主设备生成的一次性配对码加入同一用户 */

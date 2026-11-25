@@ -199,17 +199,37 @@ export class PracticeSession extends SchemaSession {
 
   // ── Session CRUD（封装 DB.practiceSessions 所有操作） ──
 
+  /**
+   * 同一轮多行里取「最新」的那行
+   *
+   * 不能按本地自增 id 判断：快照合并后数组按 uid 排序（见 sdk/merge.js 的 latestWins），
+   * 导入到另一台设备时自增 id 的先后与真实时间无关 —— 曾导致列表把「首题壳」当成最终行，
+   * 已完成的轮次显示成「中断」。
+   *
+   * 判据：createdAt 最新的行；同一毫秒时完成行优先；再平手才看 id。
+   * @param {Object} a
+   * @param {Object} b
+   * @returns {boolean} a 是否比 b 更新
+   */
+  static isLaterRow(a, b) {
+    const at = a?.createdAt || ''
+    const bt = b?.createdAt || ''
+    if (at !== bt) return at > bt
+    if ((a?.completed === true) !== (b?.completed === true)) return a?.completed === true
+    return (a?.id || 0) > (b?.id || 0)
+  }
+
   /** 获取最近 sessions（每轮只返回最新一条） */
   static async list(studentId = 'default', limit = 50) {
     const all = await DB.practiceSessions
-      .where('studentId').equals(studentId)
-      .reverse().toArray()
+      .where('studentId').equals(studentId).toArray()
 
     const groups = new Map()
     const standalone = []
     for (const s of all) {
       if (s.practiceSessionId) {
-        if (!groups.has(s.practiceSessionId)) {
+        const current = groups.get(s.practiceSessionId)
+        if (!current || PracticeSession.isLaterRow(s, current)) {
           groups.set(s.practiceSessionId, s)
         }
       } else {
