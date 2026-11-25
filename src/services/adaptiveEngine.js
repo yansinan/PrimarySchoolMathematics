@@ -18,21 +18,18 @@ import { sumResponseTimes } from '@/utils/score'
 import { EquationSolver } from '@/utils/algorithm/EquationSolver'
 import {
   ACCURACY_THRESHOLDS,
-  SPEED_THRESHOLDS,
   ASSIST_LEVELS,
   MAX_NORMAL_ASSIST_LEVEL,
-  MASTERY_CHECK_CONFIG,
   MIN_CONSECUTIVE_FOR_TRANSITION,
   MIN_GROUPS_PER_DIMENSION,
   PROFILE_RATIOS,
   STRONG_THRESHOLD,
-  WEAK_THRESHOLD,
   EVAL_WEAK_THRESHOLD,
 } from '@/constants/practice'
 import { DIFFICULTY_LEVELS } from '@/constants/difficulty'
 import { Question, Answer, WrongAnswer } from '@/services'
 import { generateOneQuestion } from '@/utils/algorithm/adaptiveBatch'
-import { loadLevelCoefficients, COEF_DEFAULT } from '@/utils/store/levelCoefficients'
+import { loadLevelCoefficients } from '@/utils/store/levelCoefficients'
 import { loadChallengeEnabled } from '@/utils/store/challengeSetting'
 
 // 小组题量阶梯（每个速度级别对应一个基数）

@@ -159,11 +159,10 @@ async function _getMasteryByNumberFromAnswers(answers, number) {
     const refForDigits = q || a
     if (!refForDigits || !Question.extractOperandDigits(refForDigits).includes(number)) continue
     total += 1
-    // 用 getAnswerScore 而非 Answer.score getter：
-    //   - getter 严格要求 userAnswer === solution
-    //   - getAnswerScore 优先用 a.score 字段，回退到 a.isCorrect
-    //   - 测试 fixture 经常用 isCorrect=false + userAnswer=60 这种组合
-    //   - 这是“兼容历史数据”的妥协，正常答题流两个判断一致
+    // 用 Answer.sumScores（即 score getter）而非 isCorrect：
+    //   - isCorrect 只看最终答案对不对
+    //   - score 按尝试次数衰减：一次对=1、两次对≈0.67
+    //   - attemptScore === 1 即「一次就答对」，与全项目 isCorrect 口径不同
     const attemptScore = Answer.sumScores([a])
     score += attemptScore
     if (attemptScore === 1) correct += 1

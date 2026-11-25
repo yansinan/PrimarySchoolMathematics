@@ -89,7 +89,7 @@
 </template>
 
 <script setup>
-import { ref, computed, defineComponent, nextTick } from 'vue';
+import { ref, computed, nextTick } from 'vue';
 
 const props = defineProps({
   visible: {

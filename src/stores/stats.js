@@ -7,8 +7,8 @@ import { OPERATOR_SYMBOLS } from '@/services'
  * Stats Store — stats 状态字段 + UI toggle + 派生 getter
  *
  * D 组 D2 整改后 (2026-06-08) 职责只剩:
- * - 6 个 state 字段 (sessions/selectedSession/aggregatedStats/allAnswers/drawerVisible/loading)
- * - 5 个 getter (accuracyTrend/operatorBreakdown/weakAreas/overallAccuracyPercent/loading)
+ * - 7 个 state 字段 (sessions/selectedSession/aggregatedStats/sessionStats/allAnswers/drawerVisible/loading)
+ * - 4 个 getter (accuracyTrend/operatorBreakdown/weakAreas/overallAccuracyPercent)
  * - 3 个 drawer UI toggle (toggleDrawer/openDrawer/closeDrawer)
  *
  * 8 个数据 action 全部抽到 composables/useStatsQuery.js (5 read + 3 write/IO):

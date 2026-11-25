@@ -138,7 +138,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, watchEffect } from 'vue'
+import { ref, computed, watchEffect } from 'vue'
 import { Document, Check, Close, WarningFilled } from '@element-plus/icons-vue'
 import { useStatsStore } from '@/stores/stats'
 import { formatDuration } from '@/utils/time/timeFormat'

@@ -96,11 +96,6 @@ export function getLevelCoefficient(idx, map) {
   return typeof v === 'number' ? v : COEF_DEFAULT
 }
 
-/** 是否存在任何已配置项（UI 用于显示「已自定义」标记） */
-export function hasLevelCoefficients(map) {
-  return Object.keys(map || loadLevelCoefficients()).length > 0
-}
-
 /** 清空全部配置（恢复原基准权重） */
 export function clearLevelCoefficients() {
   try { localStorage.removeItem(STORAGE_KEY) } catch { /* ignore */ }

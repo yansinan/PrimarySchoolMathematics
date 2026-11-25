@@ -34,7 +34,7 @@ export const usePracticeStore = defineStore('practice', {
      * 手动出题（Generate.vue 生成题单）会把它置 false 直接进题。
      */
     readyToStart: false,
-    /** 当前难度索引（由 loadProfile 从 DB 计算，-1 表示未加载） */
+    /** 当前难度索引（useAdaptiveSession 从 Profile.load() 同步，-1 表示未加载） */
     currentDifficultyIdx: -1,
     /**
      * 「练习档位」被手动改动过的版本号。
@@ -83,7 +83,6 @@ export const usePracticeStore = defineStore('practice', {
     }
   }),
   getters: {
-    // listQuations:(state)=>{state.listPractices.map((e)=>e.quation);},
     isReady: (state) => state.listPractices && state.listPractices.length > 0,
     totalQuestions: (s) => s.listPractices && s.listPractices.length,
     currentIndex: (state) => state.session.currentIndex,
@@ -181,9 +180,6 @@ export const usePracticeStore = defineStore('practice', {
       // 同样清掉 diagnosticAnswers，下一轮可能重新诊断
       this.session.diagnosticAnswers = []
       this.session.currentIndex = 0
-    },
-    setCurrentDifficulty(idx, groupIdx) {
-      this.currentGroupIndex = groupIdx
     },
     clearAdaptiveEngine() {
       this.currentGroupIndex = 0

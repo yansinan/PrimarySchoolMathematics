@@ -32,8 +32,6 @@
 
 import { Question } from './Question'
 import { DB } from '@/services/databaseInit'
-// 引入 DB Answer 确保 domain Answer 覆盖其全部字段
-import { Answer as DBAnswer } from '@/services/databaseInit'
 
 export class Answer extends Question {
   /** @param {Object} [raw] — db.answers 行或 useSubmitHandler 构造的 answerEntry */

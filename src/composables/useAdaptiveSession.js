@@ -32,7 +32,6 @@ import { sumResponseTimes } from '@/utils/score'
 import { TARGET_LIMITS } from '@/utils/form/formDefaults'
 import { formatDuration } from '@/utils/time/timeFormat'
 import { Answer, WrongAnswer } from '@/services'
-import { PracticeSession } from '@/services/PracticeSession'
 
 /**
  * 自适应会话 composable 工厂
