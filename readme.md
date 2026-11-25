@@ -88,6 +88,7 @@
 说明：
 
 - 凭据存 HttpOnly cookie，浏览器 JS 读不到 token。
+- 同步内容包括：练习轮次与答案、出题配置（含练习量）、档位配比、起点档位、挑战题开关、音效开关、保存的配置列表。
 - 阶段一「只增不删」：同步不删记录；`/reset` 清空前会提示「同时断开本机同步」，否则云端记录会被拉回来。
 - 静态部署（GitHub Pages / 演示站）没有 `/sync`，构建脚本已设 `VITE_SYNC_ENABLED=0`，面板显示「当前部署未启用同步」。
 - 同步服务数据在 `indexDB-snapshot-sync/data/`（`auth.json` + `projects/<projectId>/<namespace>/snapshot.json`），请纳入备份（Timeshift / rsync）。

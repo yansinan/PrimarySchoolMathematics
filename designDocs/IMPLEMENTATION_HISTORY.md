@@ -1110,3 +1110,47 @@ practiceStore.currentDifficultyIdx = adaptiveEngine.value.difficultyIdx  // 取 
 ### 23.5 全阶段收口
 
 P0–P4 全部落地：数据层（uid 迁移、快照适配）→ 通道（反代、SDK 接线）→ 自动同步与状态点 → 双设备配对与重置断开 → 部署收敛。剩余可做：删除传播（墓碑）、浏览器级并发冲突演练、快照体积超限的自动裁剪。
+
+---
+
+## 24. 配置同步：localStorage 配置纳入快照（2026-11-25）
+
+> 用户反馈「练习的配置没有同步」。盘点全部本地存储后，把 6 个配置键接进快照。
+
+### 24.1 数据盘点（同步范围）
+
+| 存储 | 内容 | 处理 |
+|------|------|------|
+| IndexedDB `practiceSessions` / `answers` | 练习轮次、答案 | 已同步（P0） |
+| IndexedDB `questions` | 派生缓存（可由 answers 重建，且当前无写入方） | 不同步 |
+| localStorage `psm_form_state` | 出题表单 + 题组（含自适应练习量 targetMin/Max） | **新增同步** |
+| localStorage `psm_level_coefficients` | 档位配比 | **新增同步** |
+| localStorage `psm_level_override` | 手动起点档位 | **新增同步** |
+| localStorage `psm_challenge_enabled` | 挑战题开关 | **新增同步** |
+| localStorage `psm_sfx_enabled` | 音效开关 | **新增同步** |
+| localStorage `customer-config` | 「保存的配置」列表 | **新增同步** |
+| localStorage `psm.snapshotSync.*` | 本机同步凭据/状态 | 永不同步（白名单外） |
+| sessionStorage 打印临时数据 | 打印页一次性数据 | 不同步（页面级临时态） |
+
+### 24.2 实现
+
+- `utils/store/settingsRegistry.js`：白名单 + 每键 `updatedAt`（元数据存 `psm_settings_meta`）+ 墓碑（`value:null` 表示显式清除，用于传播「关掉/清空」）+ `writeSetting / readSetting / exportSettingRows / applySettingRows / resetSettings`。
+- 6 个配置的写入口改走 `writeSetting`：formPersistence / levelCoefficients / levelOverride / challengeSetting / sfx / configStorage。
+- **挑战题「关闭」改为显式写 `'0'`**：原来删键，删键的关闭在 lww 合并里传不出去，另一台会一直保持开启。
+- **内容没变不刷新时间戳**：每次启动表单 watcher 都会把「当前值」再写一遍；若也刷新时间戳，本机永远比另一台新，另一台真正的配置修改会被它覆盖。
+- 快照新增 `stores.settings`，策略 `lww(key='key', timeField='updatedAt')`；导入在 DB 事务**之后**应用（localStorage 不参与 IDB 事务）。
+- **首次绑定强制采用云端配置**：merge 打 `settingsReplace` 标记 → `importSnapshot` 用 `force` 应用。原因：新设备启动时写的默认配置时间戳比云端那条真实配置还新，只靠 lww 会被挡掉。
+- UI 实时刷新：`psm:settings-applied` 事件 → Generate 重载表单（抽屉关着时）、OptionsDrawer 刷新档位/挑战题、Practice 刷新音效开关。
+- `/reset` 走 `resetSettings()`：删值 + 删时间，不留墓碑（重置不把「清空配置」同步出去）。
+
+### 24.3 验证
+
+| 测试 | 结果 |
+|------|------|
+| `npx vitest run` | 314/314 PASS ✅（新增注册表 10 例 + 快照配置 4 例） |
+| 浏览器 A/B 双设备（Playwright） | 10/10 ✅ |
+| — A | 改 5 项配置（表单/练习量、挑战题、起点档位、档位配比、音效）→ 同步 → 生成配对码 |
+| — B | 配对首绑 → 5 项配置全部收到；打开「出题 → 其他设置」看到同步后的卷子标题、挑战题开关为开 |
+| console | 零错误 ✅ |
+
+> 已知边界：配置的 lww 依赖设备时钟；同一毫秒的并发修改按「远端优先」收敛。

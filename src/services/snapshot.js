@@ -20,6 +20,7 @@
  * 下次同步会把云端数据拉回来 —— 所以重置页提供「同时断开同步」。
  */
 import { DB } from './databaseInit'
+import { exportSettingRows, applySettingRows } from '@/utils/store/settingsRegistry'
 
 /** 快照结构版本：不匹配就拒绝导入，避免把旧结构静默写进新库 */
 export const SNAPSHOT_SCHEMA_VERSION = 1
@@ -28,6 +29,8 @@ export const SNAPSHOT_SCHEMA_VERSION = 1
 export const SNAPSHOT_POLICIES = Object.freeze({
   practiceSessions: Object.freeze({ mode: 'lww', key: 'uid', timeField: 'updatedAt' }),
   answers: Object.freeze({ mode: 'lww', key: 'uid', timeField: 'timestamp' }),
+  // 本地配置：每个键独立按写入时间取新（墓碑行 value=null 也会传播）
+  settings: Object.freeze({ mode: 'lww', key: 'key', timeField: 'updatedAt' }),
 })
 
 /** 快照里不携带设备本地的自增 id */
@@ -51,6 +54,8 @@ export async function exportSnapshot() {
     stores: {
       practiceSessions: (await DB.practiceSessions.toArray()).map(withoutLocalId),
       answers: (await DB.answers.toArray()).map(withoutLocalId),
+      // 本地配置（出题表单/练习量、档位配比、起点档位、挑战题、音效、保存的配置）
+      settings: exportSettingRows(),
     },
   }))
 }
@@ -62,10 +67,13 @@ export async function exportSnapshot() {
  * 另一轮（甚至另一台设备上的别的东西）。导入时按 `practiceSessionId` 找到本机
  * 这轮的首行 id；本机已有的行保留自己的外键，只同步内容。
  *
+ * 配置（settings）在数据库事务**之后**应用：localStorage 不参与 IDB 事务，
+ * 放到后面才不会出现「事务回滚了但配置已经改了」。
+ *
  * 幂等：同一快照重复导入结果一致。
  *
- * @param {{schemaVersion:number, stores:{practiceSessions:Array, answers:Array}}} snapshot
- * @returns {Promise<void>}
+ * @param {{schemaVersion:number, stores:{practiceSessions:Array, answers:Array, settings?:Array}}} snapshot
+ * @returns {Promise<string[]>} 实际应用的配置键
  */
 export async function importSnapshot(snapshot) {
   const version = snapshot?.schemaVersion
@@ -77,6 +85,7 @@ export async function importSnapshot(snapshot) {
   if (!Array.isArray(sessions) || !Array.isArray(answers)) {
     throw new TypeError('快照缺少 stores.practiceSessions / stores.answers')
   }
+  const settings = Array.isArray(snapshot?.stores?.settings) ? snapshot.stores.settings : []
 
   await DB.transaction('rw', DB.practiceSessions, DB.answers, async () => {
     // 1) 会话行：按 uid upsert
@@ -114,4 +123,8 @@ export async function importSnapshot(snapshot) {
       }
     }
   })
+
+  // 配置在事务之后应用（见函数注释）。
+  // 首次绑定（新设备配对）时云端快照是账号真相，直接用 force 覆盖本机默认配置。
+  return applySettingRows(settings, { force: snapshot.settingsReplace === true })
 }

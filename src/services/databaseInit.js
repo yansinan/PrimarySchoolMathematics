@@ -12,10 +12,12 @@
 
 import Dexie from 'dexie'
 import { newUid } from '@/utils/id'
+import { resetSettings } from '@/utils/store/settingsRegistry'
 import { clearFormState } from '@/utils/store/formPersistence'
 import { clearLevelCoefficients } from '@/utils/store/levelCoefficients'
 import { clearLevelOverride } from '@/utils/store/levelOverride'
 import { clearChallengeSetting } from '@/utils/store/challengeSetting'
+import { clearAutoAdvanceSetting } from '@/utils/store/autoAdvance'
 
 // ─── Schema helpers (Dexie mapToClass) ───────────────────────────────────
 
@@ -217,7 +219,7 @@ export async function importAllData(data) {
  *
  * 本地设置也一并清掉：出题表单自动保存（psm_form_state）、档位配比系数
  * （psm_level_coefficients）、手动指定的起点档位（psm_level_override）和
- * 挑战题开关（psm_challenge_enabled）都属于「用户数据」，
+ * 挑战题开关（psm_challenge_enabled）、自动升档（psm_auto_advance）都属于「用户数据」，
  * 重置后应该回到出厂默认，否则会残留上一次的配置。
  */
 export async function clearAllData() {
@@ -230,4 +232,16 @@ export async function clearAllData() {
   try { clearLevelCoefficients() } catch { /* ignore */ }
   try { clearLevelOverride() } catch { /* ignore */ }
   try { clearChallengeSetting() } catch { /* ignore */ }
+  try { clearAutoAdvanceSetting() } catch { /* ignore */ }
+  // 配置键的同步时间戳一并清掉（不留墓碑）：
+  // 阶段一「只增不删」，重置本机不应把「清空配置」同步给其它设备。
+  try {
+    resetSettings([
+      'psm_form_state',
+      'psm_level_coefficients',
+      'psm_level_override',
+      'psm_challenge_enabled',
+      'psm_auto_advance',
+    ])
+  } catch { /* ignore */ }
 }

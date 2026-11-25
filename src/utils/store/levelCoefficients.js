@@ -24,6 +24,8 @@
  * @see ../services/adaptiveEngine.js  pickStrongLevel / pickWeakLevel
  */
 
+import { writeSetting } from './settingsRegistry'
+
 const STORAGE_KEY = 'psm_level_coefficients'
 
 /** 系数取值范围 */
@@ -74,13 +76,11 @@ export function saveLevelCoefficients(map) {
     if (coef === COEF_DEFAULT) continue
     clean[idx] = clampCoef(coef)
   }
-  try {
-    if (Object.keys(clean).length) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(clean))
-    } else {
-      localStorage.removeItem(STORAGE_KEY)
-    }
-  } catch { /* 隐私模式 / 配额满：静默降级为不生效 */ }
+  if (Object.keys(clean).length) {
+    writeSetting(STORAGE_KEY, JSON.stringify(clean))
+  } else {
+    writeSetting(STORAGE_KEY, null)
+  }
   return clean
 }
 
@@ -98,5 +98,5 @@ export function getLevelCoefficient(idx, map) {
 
 /** 清空全部配置（恢复原基准权重） */
 export function clearLevelCoefficients() {
-  try { localStorage.removeItem(STORAGE_KEY) } catch { /* ignore */ }
+  writeSetting(STORAGE_KEY, null)
 }

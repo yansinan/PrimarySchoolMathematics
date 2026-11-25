@@ -226,7 +226,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import { fileNameGeneratedRuleEnum } from '@/utils/enum.js';
 import { DIFFICULTY_LEVELS } from '@/constants/difficulty';
@@ -486,6 +486,17 @@ watch(() => props.visible, (visible) => {
   if (!visible) return
   autoAdvanceOn.value = loadAutoAdvance()
 })
+
+/** 多设备同步把配置写进来后，开着的设置抽屉也要刷新（档位 / 配比 / 挑战题） */
+function handleSettingsApplied() {
+  if (!props.visible) return
+  levelOverride.value = loadLevelOverride()
+  levelDraft.value = levelOverride.value?.levelIdx ?? null
+  challengeEnabled.value = loadChallengeEnabled()
+  refreshCurrentLevel()
+}
+onMounted(() => window.addEventListener('psm:settings-applied', handleSettingsApplied))
+onUnmounted(() => window.removeEventListener('psm:settings-applied', handleSettingsApplied))
 
 /**
  * 

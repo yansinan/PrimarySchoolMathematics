@@ -39,11 +39,12 @@ describe('挑战题开关 — 保存 / 读取 / 清除', () => {
     expect(store.get(KEY)).toBe('1')
   })
 
-  it('关闭后读回 false，并清掉存储键', () => {
+  it('关闭后读回 false，并写显式 "0"（删键的关闭无法同步）', () => {
     saveChallengeEnabled(true)
     expect(saveChallengeEnabled(false)).toBe(false)
     expect(loadChallengeEnabled()).toBe(false)
-    expect(store.has(KEY)).toBe(false)
+    // 显式 '0' 才能被快照同步合并；删键会让另一台设备一直保持开启
+    expect(store.get(KEY)).toBe('0')
   })
 
   it('清除设置 → 回到默认关闭', () => {

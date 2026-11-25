@@ -18,6 +18,7 @@
  */
 
 import { DIFFICULTY_LEVELS } from '@/constants/difficulty'
+import { writeSetting } from './settingsRegistry'
 
 const STORAGE_KEY = 'psm_level_override'
 
@@ -53,17 +54,14 @@ export function saveLevelOverride(levelIdx) {
   const idx = Number(levelIdx)
   if (!isValidIdx(idx)) return null
   const value = { levelIdx: idx, since: Date.now() }
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(value))
-  } catch { /* 隐私模式 / 配额满：静默降级为不生效 */ }
+  writeSetting(STORAGE_KEY, JSON.stringify(value))
   return value
 }
 
 /** 清除手动指定的起点档位（恢复按练习记录计算） */
 export function clearLevelOverride() {
-  try {
-    localStorage.removeItem(STORAGE_KEY)
-  } catch { /* ignore */ }
+  // 墓碑：显式清除要能同步到其它设备
+  writeSetting(STORAGE_KEY, null)
 }
 
 /**

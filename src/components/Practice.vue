@@ -187,7 +187,7 @@ import { decideListPracticesTransition } from '@/utils/listPracticesGuard'
 import { useDisplayStrategy } from '@/composables/useDisplayStrategy'  // 🆕 PR-4.2 抽离 displayStats + applyDisplayModeForCurrentQuestion + generateOptions
 import { FEEDBACK_DELAYS, ASSESSMENT_ABORT_WRONG_STREAK, getCommentByRate, ASSIST_LEVELS, MAX_ATTEMPT_PER_QUESTION } from '@/constants/practice'
 
-import { playSfx, isSfxEnabled, setSfxEnabled, tierForRate } from '@/utils/sound/sfx'
+import { playSfx, isSfxEnabled, setSfxEnabled, reloadSfxEnabled, tierForRate } from '@/utils/sound/sfx'
 import { usePracticeStore } from '@/stores/practice'
 import { useStatsStore } from '@/stores/stats'
 import { storeToRefs } from 'pinia'
@@ -1007,6 +1007,13 @@ function handleDbBlocked() {
 }
 onMounted(() => window.addEventListener('psm:db-blocked', handleDbBlocked))
 onUnmounted(() => window.removeEventListener('psm:db-blocked', handleDbBlocked))
+
+/** 同步来的配置应用后：音效开关是模块级变量，需要重新读一次 */
+function handleSettingsApplied() {
+  sfxOn.value = reloadSfxEnabled()
+}
+onMounted(() => window.addEventListener('psm:settings-applied', handleSettingsApplied))
+onUnmounted(() => window.removeEventListener('psm:settings-applied', handleSettingsApplied))
 
 onMounted(async () => {
   // 恢复同步身份；已绑定则自动开始定时同步（不阻塞、失败只影响状态点）

@@ -26,6 +26,8 @@
  *   start     开始练习 —— G5→C6
  */
 
+import { writeSetting } from '@/utils/store/settingsRegistry'
+
 const STORAGE_KEY = 'psm_sfx_enabled'
 
 /** 同一音效的节流时间（毫秒）：连对时 correct 会连续触发，避免波形叠加变吵 */
@@ -61,9 +63,22 @@ export function isSfxEnabled() {
   return enabled
 }
 
+/**
+ * 重新从存储读取开关（同步把 `psm_sfx_enabled` 写进来后调用）
+ * 模块级 `enabled` 只在加载时读一次，不刷新的话界面会显示旧值。
+ */
+export function reloadSfxEnabled() {
+  enabled = readEnabled()
+  if (!enabled) {
+    try { ctx?.suspend?.() } catch { /* ignore */ }
+  }
+  return enabled
+}
+
 export function setSfxEnabled(on) {
   enabled = !!on
-  try { localStorage.setItem(STORAGE_KEY, enabled ? '1' : '0') } catch { /* 隐私模式忽略 */ }
+  // 走配置注册表：音效开关也参与多设备同步
+  writeSetting(STORAGE_KEY, enabled ? '1' : '0')
   if (!enabled) {
     // 关掉时挂起上下文，彻底静音
     try { ctx?.suspend?.() } catch { /* ignore */ }

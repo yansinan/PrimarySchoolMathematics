@@ -14,6 +14,8 @@
  *   - 写入做 debounce：deep watch 在拖滑块/连续输入时会高频触发，每次写盘没必要
  */
 
+import { writeSetting } from './settingsRegistry'
+
 const STORAGE_KEY = 'psm_form_state'
 const VERSION = 1
 const SAVE_DEBOUNCE_MS = 400
@@ -57,14 +59,15 @@ export function saveFormState(formData, paperList) {
   if (_timer) clearTimeout(_timer)
   _timer = setTimeout(() => {
     _timer = null
-    try {
-      const payload = {
-        version: VERSION,
-        formData: formData || {},
-        paperList: Array.isArray(paperList) ? paperList : [],
-      }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
-    } catch { /* 隐私模式 / 配额满：静默降级，不影响出题 */ }
+      try {
+        const payload = {
+          version: VERSION,
+          formData: formData || {},
+          paperList: Array.isArray(paperList) ? paperList : [],
+        }
+        // 走配置注册表：同时记写入时间，快照同步才能按时间合并
+        writeSetting(STORAGE_KEY, JSON.stringify(payload))
+      } catch { /* 隐私模式 / 配额满：静默降级，不影响出题 */ }
   }, SAVE_DEBOUNCE_MS)
 }
 

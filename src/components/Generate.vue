@@ -76,7 +76,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, unref, toRaw, getCurrentInstance, computed, watch } from 'vue';
+import { ref, onMounted, onUnmounted, unref, toRaw, getCurrentInstance, computed, watch } from 'vue';
 import { useRouter } from "vue-router";
 import { CustomFormulas, AutoGenerateFormulas, ConfigurationList } from "@/components/generate";
 import ConfigStorage from "@/utils/store/configStorage";
@@ -147,6 +147,21 @@ watch(
   () => saveFormState(toRaw(unref(formData)), toRaw(unref(paperList))),
   { deep: true }
 )
+
+/**
+ * 多设备同步把配置写进 localStorage 后（psm:settings-applied），
+ * 若出题抽屉没开着，就把表单换成最新配置；开着时不打断正在编辑的内容
+ * （下次打开抽屉会读到新值）。
+ */
+function handleSettingsApplied() {
+  if (practiceStore.generateDrawerVisible) return
+  const state = loadFormState()
+  if (!state) return
+  formData.value = { ...DEFAULT_FORM_DATA, ...state.formData }
+  paperList.value = state.paperList.map(p => ({ ...p }))
+}
+onMounted(() => window.addEventListener('psm:settings-applied', handleSettingsApplied))
+onUnmounted(() => window.removeEventListener('psm:settings-applied', handleSettingsApplied))
 
 const activeConfigurationId = ref('1')
 const refreshConfiguration = () => {

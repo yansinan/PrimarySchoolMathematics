@@ -16,8 +16,9 @@
  * @see ../../components/generate/OptionsDrawer.vue — 设置入口
  */
 
-const STORAGE_KEY = 'psm_challenge_enabled'
+import { writeSetting } from './settingsRegistry'
 
+const STORAGE_KEY = 'psm_challenge_enabled'
 /**
  * 读取挑战题开关
  * @returns {boolean} 默认 false（关闭）
@@ -33,19 +34,19 @@ export function loadChallengeEnabled() {
 
 /**
  * 保存挑战题开关
+ *
+ * 关也写 '0'（而不是删键）：删键的「关闭」在快照同步里传不出去，
+ * 另一台设备会一直保持开启。显式 '0' 才能被 lww 合并。
  * @param {boolean} enabled
  * @returns {boolean} 实际生效值
  */
 export function saveChallengeEnabled(enabled) {
   const value = !!enabled
-  try {
-    if (value) localStorage.setItem(STORAGE_KEY, '1')
-    else localStorage.removeItem(STORAGE_KEY)
-  } catch { /* 隐私模式 / 配额满：静默降级为不生效 */ }
+  writeSetting(STORAGE_KEY, value ? '1' : '0')
   return value
 }
 
 /** 清除设置（回到默认关闭） */
 export function clearChallengeSetting() {
-  try { localStorage.removeItem(STORAGE_KEY) } catch { /* ignore */ }
+  writeSetting(STORAGE_KEY, null)
 }

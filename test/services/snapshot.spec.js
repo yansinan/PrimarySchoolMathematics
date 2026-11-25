@@ -67,7 +67,7 @@ describe('exportSnapshot / importSnapshot', () => {
     const snap = await exportSnapshot()
 
     expect(snap.schemaVersion).toBe(SNAPSHOT_SCHEMA_VERSION)
-    expect(Object.keys(snap.stores).sort()).toEqual(['answers', 'practiceSessions'])
+    expect(Object.keys(snap.stores).sort()).toEqual(['answers', 'practiceSessions', 'settings'])
     expect(snap.stores.practiceSessions).toHaveLength(1)
     expect(snap.stores.answers).toHaveLength(3)
     for (const row of [...snap.stores.practiceSessions, ...snap.stores.answers]) {

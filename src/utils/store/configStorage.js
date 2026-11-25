@@ -1,4 +1,5 @@
 import { DEFAULT_CONFIG_ROW } from "../form/formDefaults"
+import { writeSetting } from './settingsRegistry'
 
 
 export default class {
@@ -14,7 +15,7 @@ export default class {
   }
 
   #setConfigurations(configurations) {
-    localStorage.setItem(this.key, JSON.stringify(configurations))
+    writeSetting(this.key, JSON.stringify(configurations))
   }
 
   /** @deprecated 空方法，无任何调用 → 后续 PR 删除 */
@@ -46,6 +47,6 @@ export default class {
   }
 
   clear() {
-    localStorage.removeItem(this.key)
+    writeSetting(this.key, null)
   }
 } 

@@ -14,6 +14,7 @@
  */
 import { ref } from 'vue'
 import { createSnapshotSync, createRequestId } from '@/sync/browser.js'
+import { mergeSnapshots } from '@/sync/merge.js'
 import { SYNC_BASE_URL, SYNC_PROJECT_ID, SYNC_USER_NAME } from '@/sync/config.js'
 import { exportSnapshot, importSnapshot, SNAPSHOT_POLICIES } from '@/services/snapshot.js'
 
@@ -87,6 +88,23 @@ async function exportAllForSync() {
   return snapshot
 }
 
+/**
+ * 合并函数：合并策略同 SNAPSHOT_POLICIES；首次绑定时额外打 `settingsReplace` 标记，
+ * 让 importSnapshot 用云端配置整体覆盖本机默认配置。
+ *
+ * 为什么需要：新设备启动时表单 watcher 会先把「默认配置」写进 localStorage，
+ * 时间戳比云端那条真实配置还新 —— 只靠 lww 会把云端配置挡掉。
+ */
+function mergeForSync(local, remote, context) {
+  const firstBind = context?.firstBind === true
+  const merged = mergeSnapshots(local, remote, {
+    policies: SNAPSHOT_POLICIES,
+    preferRemote: firstBind,
+  })
+  if (firstBind) merged.settingsReplace = true
+  return merged
+}
+
 function ensureSdk() {
   if (sdk) return sdk
   sdk = createSnapshotSync({
@@ -96,7 +114,7 @@ function ensureSdk() {
     storeToken: false,
     exportAll: exportAllForSync,
     importAll: importSnapshot,
-    policies: SNAPSHOT_POLICIES,
+    merge: mergeForSync,
     // 新配对的设备首次同步采用云端数据，而不是把本机旧数据推上去
     preferRemoteOnFirstBind: true,
     onChange: (next) => { status.value = next },

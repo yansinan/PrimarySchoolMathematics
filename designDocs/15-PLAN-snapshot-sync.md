@@ -252,7 +252,7 @@ extra_hosts:
 
 每阶段独立可合入：P0a/P0b/P0c/P1 无用户可见变化，P2/P3 才有。
 
-> **进度（2026-11-25）**：P0a / P0b / P0c、P1–P4 全部落地（分支 `feat/snapshot-sync`），实施记录见 [IMPLEMENTATION_HISTORY.md](./IMPLEMENTATION_HISTORY.md) §19–§23。后续可选：删除传播（墓碑）、浏览器级并发冲突演练、超限快照自动裁剪。
+> **进度（2026-11-25）**：P0a–P4 全部落地；另补 P5「配置同步」（localStorage 配置纳入快照），实施记录见 [IMPLEMENTATION_HISTORY.md](./IMPLEMENTATION_HISTORY.md) §19–§24。后续可选：删除传播（墓碑）、浏览器级并发冲突演练、超限快照自动裁剪。
 
 ---
 
