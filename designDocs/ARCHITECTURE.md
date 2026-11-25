@@ -75,6 +75,7 @@
   ├─ 业务规则, 可能被多处用, 需单测      → services/*
   ├─ 需要响应式状态 + 编排异步           → composables/*
   ├─ 跨组件共享字段                     → stores/*
+  ├─ 第三方 SDK（原样 vendored）         → sync/*
   └─ 渲染 UI                           → components/*
 ```
 
@@ -107,9 +108,11 @@ src/
 │  │                EquationSolver / psm /
 │  │                （Question/Answer/WrongAnswer 已迁至 services/）
 │  ├ form/          formDefaults / formValidation
-│  ├ store/         database / configStorage
+│  ├ store/         formPersistence / settingsRegistry / configStorage /
+│  │                levelCoefficients / levelOverride / challengeSetting / autoAdvance
 │  ├ time/          timeFormat / timeConstants
 │  ├ score.js       ⭐ sumAnswerScores + sumResponseTimes
+│  ├ id.js          ⭐ newUid（快照同步的稳定行键，含非安全上下文降级）
 │  └ index.js       ⭐ 兼容桶
 │
 ├── services/                             ⭐ S 层（顶层，与 utils/components 同级）
@@ -123,8 +126,14 @@ src/
 │  ├── chartBuilder.js                    ⭐ arch-v2.3 新建
 │  ├── operatorMap.js                     ⭐ arch-v2.3 新建
 │  ├── statsAggregator.js                 ⭐ 聚合统计
+│  ├── snapshot.js                        ⭐ 整库快照适配（exportSnapshot / importSnapshot / 合并策略）
 │  ├── databaseInit.js                    ⭐ DB schema + 骨架类
 │  └── index.js                           ✅ 桶导出（含 Question / Answer / WrongAnswer / DB / analysis / ...）
+│
+├── sync/                                 ⭐ 同步 SDK（vendored，不改）
+│  ├── browser.js / client.js / merge.js  indexDB-snapshot-sync 官方 SDK（与上游逐字节一致）
+│  ├── config.js                          baseUrl / projectId / userName（预置绑定）
+│  └── labels.js                          同步状态文案与视觉基调（面板/状态点共用）
 │
 ├ composables/                          C 层
 │  ├ useAdaptiveSession.js               ⭐ 含 completeGroup / afterAnswer / adjustNextQuestion
@@ -132,6 +141,7 @@ src/
 │  ├ useAbilityProfile.js                ⭐
 │  ├ usePracticeSaver.js                 ⭐ 含 savePerQuestion / saveAdaptiveFinal
 │  ├ usePracticeDialogs.js               ⭐
+│  ├ useSnapshotSync.js                  ⭐ 多设备同步编排（注册/配对/同步/状态/凭据丢失保护）
 │  ├ useDisplayStrategy.js               ⭐ PR-4.2
 │  ├ useAnswerBuilder.js                 ⭐ arch-v2.3 新建（V→U 整改）
 │  ├ useSubmitHandler.js                 ⭐ arch-v2.3 新建（V→C 整改）
@@ -148,7 +158,7 @@ src/
 │  ├ question/      HorizontalLayout / VerticalLayout / DigitInput
 │  ├ input/         NumberKeypad / OptionButtons
 │  ├ dialog/        PracticeSummaryDialog / SelfEvaluationDialog
-│  ├ stats/         StatsDrawer / SessionDetail
+│  ├ stats/         StatsDrawer / SessionDetail / SyncPanel / SyncIndicator
 │  ├ profile/       AbilityCard / StrengthV2Card / WeaknessV2Card / MidV2Card
 │  ├ generate/      Generate / AutoGenerateFormulas / ConfigurationList
 │  │                CustomFormulas / OptionsDrawer / PaperDownloadDialog / PrintPreviewDialog
@@ -172,6 +182,7 @@ src/
 | **不按"业务域"分** | 组件按角色 group，不按业务 |
 | **`utils/` 二次分类** | 按子域 (algorithm / form / store / time) |
 | **`services/` 顶层化** | 与 utils/components 同级 |
+| **`sync/` vendored SDK** | 第三方同步 SDK 原样存放，不参与分层改造；只被 `services/snapshot.js` 与 `useSnapshotSync` 引用 |
 | **dev 隔离** | `components/dev/` 放调试用 |
 | **顶层无 `components/index.js` 桶** | V 层走 `@/components/<role>/Foo.vue` |
 
@@ -227,12 +238,15 @@ src/
  `src/services/Question.js` / `Answer.js` / `WrongAnswer.js` (领域模型, 2026-06-12 迁入)
  `src/services/adaptiveEngine.js` (Engine 类)
  `src/services/statsAggregator.js` (聚合统计, 替代 useStatsQuery 内联)
+ `src/services/snapshot.js` (整库快照适配: exportSnapshot / importSnapshot / 合并策略)
+ `src/utils/store/settingsRegistry.js` (本地配置白名单 + 时间戳 + 墓碑)
 
 > **已删除死代理**：`src/utils/store/database.js` 和 `src/services/database.js` 已清理。所有调用方直引 `@/services/databaseInit`。
 - 现行 composable 样板: `src/composables/useAdaptiveSession.js` (358 行, 含 completeGroup / afterAnswer / adjustNextQuestion)
   `src/composables/useStatsDrawer.js` (102 行, V→M 整改样板)
   `src/composables/useSubmitHandler.js` (113 行, V→C 整改样板)
   `src/composables/useStatsQuery.js` (273 行, D2 抽 8 个 stats action)
+  `src/composables/useSnapshotSync.js` (多设备同步编排, 单例 SDK + 凭据缺失保护)
 - 现行常量样板: `src/constants/practice.js` (191 行)
 - P2 体系: [_ARCHIEVED_06-PLAN-v2-ability-analysis.md](./_ARCHIEVED_06-PLAN-v2-ability-analysis.md)
 - P0-P4 路线（archived）: [_ARCHIEVED_03-PLAN-v2-roadmap.md](./_ARCHIEVED_03-PLAN-v2-roadmap.md) → 业务阶段在 [v4-PLAN-error-injection.md](./v4-PLAN-error-injection.md)

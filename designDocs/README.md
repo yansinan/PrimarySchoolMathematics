@@ -4,7 +4,14 @@
 
 ---
 
-## 当前状态（2026-06-10）
+## 当前状态（2026-11-25）
+
+**多设备快照同步** ✅ — 接入自建 `indexDB-snapshot-sync`（分支 `feat/snapshot-sync`）：
+练习轮次/答案、出题配置（含练习量）、档位配比、起点档位、挑战题、自动升档、音效、保存的配置全部同步；
+双设备配对 + 首绑、自动同步 + 页头状态点、重置前断开同步。
+详见 [IMPLEMENTATION_HISTORY.md](./IMPLEMENTATION_HISTORY.md) §19–§24 与 [15-PLAN-snapshot-sync.md](./15-PLAN-snapshot-sync.md)。
+
+**升档方式** ✅ — 默认手动，家长点「升一档」才推进（[14-FIX-level-ladder.md](./14-FIX-level-ladder.md) §九）。
 
 **v3 架构调优** ✅ — A/B/C/D/E/F/G/H 8 大组完成，已合 ui。
 
@@ -32,7 +39,8 @@
 | 2 | **[DESIGN.md](./DESIGN.md)** | 产品设计 | 业务必读 — 出题流程、profile、stats 三套设计 |
 | 3 | **[IMPLEMENTATION_HISTORY.md](./IMPLEMENTATION_HISTORY.md)** | 实施过程 | 选读 — 了解 v2.3+v3 "过去怎么走到这" |
 | 4 | [v4-PLAN-error-injection.md](./v4-PLAN-error-injection.md) | v4 业务规划（错题注入 + L2.5）| 必读 — 当前活跃 |
-| 5 | [10-IdeaByUser.md](./10-IdeaByUser.md) | 用户原始创意 | 业务必读 |
+| 5 | [15-PLAN-snapshot-sync.md](./15-PLAN-snapshot-sync.md) | 多设备同步（规划 + 实施记录）| 必读 — 同步相关改动前 |
+| 6 | [10-IdeaByUser.md](./10-IdeaByUser.md) | 用户原始创意 | 业务必读 |
 
 **v3 调优计划完整版**（archived）：[_ARCHIEVED_05-PLAN-v3-architecture-tuning.md](./_ARCHIEVED_05-PLAN-v3-architecture-tuning.md)
 

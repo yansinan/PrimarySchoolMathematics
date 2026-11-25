@@ -1115,7 +1115,8 @@ P0–P4 全部落地：数据层（uid 迁移、快照适配）→ 通道（反�
 
 ## 24. 配置同步：localStorage 配置纳入快照（2026-11-25）
 
-> 用户反馈「练习的配置没有同步」。盘点全部本地存储后，把 6 个配置键接进快照。
+> 用户反馈「练习的配置没有同步」。盘点全部本地存储后，把 7 个配置键接进快照
+> （含 `640cf52` 新增的自动升档开关 `psm_auto_advance`）。
 
 ### 24.1 数据盘点（同步范围）
 
@@ -1136,7 +1137,7 @@ P0–P4 全部落地：数据层（uid 迁移、快照适配）→ 通道（反�
 ### 24.2 实现
 
 - `utils/store/settingsRegistry.js`：白名单 + 每键 `updatedAt`（元数据存 `psm_settings_meta`）+ 墓碑（`value:null` 表示显式清除，用于传播「关掉/清空」）+ `writeSetting / readSetting / exportSettingRows / applySettingRows / resetSettings`。
-- 6 个配置的写入口改走 `writeSetting`：formPersistence / levelCoefficients / levelOverride / challengeSetting / sfx / configStorage。
+- 7 个配置的写入口改走 `writeSetting`：formPersistence / levelCoefficients / levelOverride / challengeSetting / autoAdvance / sfx / configStorage。
 - **挑战题「关闭」改为显式写 `'0'`**：原来删键，删键的关闭在 lww 合并里传不出去，另一台会一直保持开启。
 - **内容没变不刷新时间戳**：每次启动表单 watcher 都会把「当前值」再写一遍；若也刷新时间戳，本机永远比另一台新，另一台真正的配置修改会被它覆盖。
 - 快照新增 `stores.settings`，策略 `lww(key='key', timeField='updatedAt')`；导入在 DB 事务**之后**应用（localStorage 不参与 IDB 事务）。
@@ -1148,10 +1149,50 @@ P0–P4 全部落地：数据层（uid 迁移、快照适配）→ 通道（反�
 
 | 测试 | 结果 |
 |------|------|
-| `npx vitest run` | 314/314 PASS ✅（新增注册表 10 例 + 快照配置 4 例） |
+| `npx vitest run` | 315/315 PASS ✅（新增注册表 11 例 + 快照配置 4 例） |
 | 浏览器 A/B 双设备（Playwright） | 10/10 ✅ |
 | — A | 改 5 项配置（表单/练习量、挑战题、起点档位、档位配比、音效）→ 同步 → 生成配对码 |
 | — B | 配对首绑 → 5 项配置全部收到；打开「出题 → 其他设置」看到同步后的卷子标题、挑战题开关为开 |
 | console | 零错误 ✅ |
 
 > 已知边界：配置的 lww 依赖设备时钟；同一毫秒的并发修改按「远端优先」收敛。
+
+---
+
+## 25. 当前状态收口（2026-11-25）
+
+> 本文档与代码现状对齐的最后一节。分支 `feat/snapshot-sync`（相对 origin/master 共 12 个提交，含用户在该分支上的音效与升档改动）。
+
+### 25.1 已落地
+
+| 范围 | 状态 |
+|------|------|
+| 数据层 | Dexie v6：`practiceSessions` / `answers` 加稳定 `uid`（唯一索引 + 回填自检，失败回滚） |
+| 快照适配 | `services/snapshot.js`：单事务导出、按 uid upsert、外键重映射、schemaVersion 校验、幂等 |
+| 同步通道 | `/sync` 同源反代（vite proxy + compose `SYNC_SERVER_URL`）、cookie 模式、预置 projectId |
+| 同步触发 | 每题 4s 防抖 / 组边界 1.5s / 整轮完成立即；自动调度 120s + online/可见恢复；页头状态点 |
+| 双设备 | 配对码加入同一用户、首绑采用云端；重置页「同时断开本机同步」 |
+| 配置同步 | 7 个 localStorage 配置键（表单/练习量、档位配比、起点档位、挑战题、自动升档、音效、保存的配置） |
+| 部署收敛 | 静态部署（GitHub Pages / 演示站）`VITE_SYNC_ENABLED=0` 关闭入口；快照体积提示；部署/备份文档 |
+
+### 25.2 数据范围（同步 / 不同步）
+
+- **同步**：`practiceSessions`、`answers`、`settings`（7 个配置键）。
+- **不同步**：`questions`（派生缓存）、`psm.snapshotSync.*`（本机凭据）、sessionStorage 打印临时数据。
+
+### 25.3 测试与验证
+
+| 项目 | 结果 |
+|------|------|
+| `npx vitest run` | 315/315 PASS ✅（29 个 spec 文件） |
+| 浏览器实测（Playwright + chromium） | P1 面板 7/7、P2 自动同步 6/6、P3 双设备 10/10、P4 两条部署路径 7/7、P5 配置同步 10/10、自动升档 6/6 |
+| 服务端核对 | 快照 revision / 配置行 / 首绑数据均按预期 |
+| console | 零错误 |
+
+### 25.4 已知边界
+
+- 删除不传播（阶段一）；重置前须断开同步。
+- 冲突收敛由单元测试（lww）覆盖，未做浏览器级并发冲突演练。
+- 快照上限 8MB（`questions` 已排除，按 ~250B/答案估算可存约 3 万题）；超限时面板提示。
+- DB 升到 v6 后不可降级（旧代码打开会 `VersionError`）。
+- 配置 lww 依赖设备时钟。

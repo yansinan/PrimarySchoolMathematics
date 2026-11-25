@@ -167,32 +167,67 @@ selfEval 5 → 升级只需 2 组好成绩，快速减少题量
 
 | 文件 | 职责 |
 |------|------|
-| `src/utils/diagnostic.js` | 能力评估引擎：生成诊断题、分析能力 |
-| `src/utils/adaptiveEngine.js` | 自适应练习引擎：三维调节、组管理、结束决策 |
+| `src/utils/algorithm/diagnostic.js` | 能力评估引擎：生成诊断题、分析能力 |
+| `src/services/adaptiveEngine.js` | 自适应练习引擎：三维调节、组管理、结束决策 |
+| `src/services/abilityProfile.js` | 能力画像：档位阶梯、强弱项、起点档位覆盖 |
 | `src/utils/paperGenerator.js` | 算式生成器：基于配置生成随机算式 |
-| `src/utils/EquationSolver.js` | 方程求解器：支持 `__` 空白求解 |
-| `src/utils/database.js` | IndexedDB 持久层：实践记录、评价存储 |
-| `src/stores/practice.js` | Pinia Store：练习状态、答题记录、DB 保存 |
+| `src/utils/algorithm/EquationSolver.js` | 方程求解器：支持 `__` 空白求解 |
+| `src/services/databaseInit.js` | IndexedDB 持久层：Dexie 实例、schema、导入导出 |
+| `src/services/PracticeSession.js` / `Answer.js` / `Question.js` | 领域类：轮次 / 答案 / 题目 + CRUD |
+| `src/services/snapshot.js` | 多设备同步：整库快照导出 / 导入 / 合并策略 |
+| `src/composables/useSnapshotSync.js` | 多设备同步编排：注册 / 配对 / 同步 / 状态 |
+| `src/stores/practice.js` | Pinia Store：练习状态、答题记录 |
+| `src/composables/usePracticeSaver.js` | 答题持久化：每题 / 组 checkpoint / 最终结算 |
 | `src/components/Practice.vue` | 练习主界面：答题交互、组管理、评价对话框 |
 | `src/components/Generate.vue` | 练习配置抽屉：参数设置、目标范围 |
-| `src/components/home/AutoGenerateFormulas.vue` | 自动出题配置表单 |
+| `src/components/generate/AutoGenerateFormulas.vue` | 自动出题配置表单 |
+| `src/components/stats/StatsDrawer.vue` | 练习统计：趋势、记录列表、导出/导入、同步面板 |
 
 ### 数据流
 
 ```
-配置参数 → paperGenerator → 算式列表 → EquationSolver求解
-  → diversifyBatch (穿插题型)
-    → Practice.vue (答题交互)
-      → evaluateGroup (评估表现)
-        → 下一组配置 + 是否结束
-          → 结束 → saveSessionToDB (含评价)
+配置参数 → paperGenerator → 算式列表 → EquationSolver 求解
+  → diversifyBatch（穿插题型）
+    → Practice.vue（答题交互，每题落库：usePracticeSaver.savePerQuestion）
+      → completeGroup（组结束：自我评价 → saveGroupCheckpoint）
+        → 下一组 或 整轮结束（saveSessionFinal，完成标记）
+          → markDirty → 快照同步（pull → merge → import → push）
 ```
 
 ---
 
-## 七、未来扩展方向
+## 七、多设备同步（已落地）
 
-1. **云端同步** — 预留了 `synced` / `updatedAt` 字段，可对接 Dexie Cloud
+自建 `indexDB-snapshot-sync` 服务（同工作区兄弟项目）承担同步；PSM 只负责整库快照与合并策略。
+规划与实施见 [designDocs/15-PLAN-snapshot-sync.md](./designDocs/15-PLAN-snapshot-sync.md)。
+
+### 原则
+
+- **本地优先**：答题、保存、统计全部先落本机 IndexedDB；同步失败不影响使用。
+- **整库快照**：每用户一份 JSON 快照，服务端只存不透明内容、按 revision 做 CAS；合并发生在客户端。
+- **只增不删**（阶段一）：同步不删除记录；`/reset` 前须断开本机同步，否则云端记录会被拉回。
+- **一个孩子一套数据**：`studentId` 仍固定 `default`，同步账号按「家庭」划分。
+
+### 同步内容
+
+| 数据 | 策略 |
+|---|---|
+| 练习轮次 `practiceSessions` | lww（`uid` + `updatedAt`） |
+| 答案 `answers` | lww（`uid` + `timestamp`；答错重试原地更新） |
+| 本地配置 `settings` | 逐键 lww（出题表单/练习量、档位配比、起点档位、挑战题、自动升档、音效、保存的配置） |
+| 题目 `questions` | 不同步（派生缓存） |
+| 同步凭据 | 永不同步（白名单外） |
+
+### 配对与状态
+
+- 首台设备用预置 projectId + 用户名一键启用；其它设备用一次性配对码加入同一用户，首绑直接采用云端数据。
+- 页头圆点显示同步状态（已同步 / 同步中 / 离线 / 需重新配对），点开可立即同步、生成配对码、解绑。
+
+---
+
+## 八、未来扩展方向
+
+1. **云端同步** — ✅ 已由自建 `indexDB-snapshot-sync` 实现（见 §七）；后续可做删除传播（墓碑）、并发冲突演练、超限快照裁剪
 2. **乘除法支持** — 当前引擎专注于加减法，可扩展乘除法难度阶梯
 3. **竖式计算** — 竖式布局已支持，可丰富竖式题型
 4. **定时模式** — 可增加限时挑战模式
