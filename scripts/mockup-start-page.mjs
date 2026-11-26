@@ -66,7 +66,12 @@ body{background:#eef4fb;font-family:"PingFang SC","Noto Sans CJK SC","Source Han
 .settings__label{font-size:14px;font-weight:600;color:#1e3c5c}
 .scope{font-size:11px;font-weight:500;color:#7f8c9b;background:#eef3f8;border-radius:6px;padding:2px 7px}
 .settings__summary{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-.rows{margin-top:12px;display:flex;flex-direction:column;gap:2px}
+.rows{margin-top:10px;display:flex;flex-direction:column;gap:0}
+.row--pair{gap:20px}
+.pair{flex:1 1 0;display:flex;align-items:center;gap:8px;min-width:0}
+.pair__label{font-size:14px;font-weight:500;color:#1e3c5c;white-space:nowrap}
+.pair__hint{font-size:12px;color:#9aa7b4;flex:1 1 auto;min-width:0}
+.row--readonly .row__value{color:#9aa7b4;font-size:13px}
 .row{display:flex;align-items:center;gap:10px;min-height:44px;padding:6px 0;border-bottom:1px solid #eef3f8}
 .row:last-child{border-bottom:none}
 .row__label{font-size:14px;font-weight:500;color:#1e3c5c;flex:0 0 auto}
@@ -88,8 +93,14 @@ body{background:#eef4fb;font-family:"PingFang SC","Noto Sans CJK SC","Source Han
   box-shadow:0 1px 3px rgba(0,0,0,.18)}
 .sw--on{background:#58cc71}
 .sw--on::after{left:22px}
-.more{width:100%;margin-top:2px;padding:10px 12px;border-radius:12px;background:#f6f9fc;border:1px solid #e6eef6;
+.more{width:100%;margin:0 0 8px;padding:10px 12px;border-radius:12px;background:#f6f9fc;border:1px solid #e6eef6;
   display:flex;flex-direction:column;gap:8px}
+.more__title{font-size:12px;font-weight:600;color:#7f8c9b}
+.more__row{display:flex;align-items:center;gap:8px}
+.more__label{font-size:13px;color:#5b6b7a;flex:0 0 auto}
+.more__hint{font-size:11.5px;color:#9aa7b4;flex:1 1 auto}
+.caretbtn{width:28px;height:28px;border-radius:8px;border:1px solid #dcdfe6;background:#fff;color:#909399;
+  display:inline-flex;align-items:center;justify-content:center}
 .sel{height:32px;border:1px solid #dcdfe6;border-radius:8px;background:#fff;display:flex;align-items:center;
   justify-content:space-between;padding:0 10px;font-size:13px;color:#5b6b7a;min-width:210px}
 .sel__caret{color:#c0c4cc}
@@ -222,31 +233,37 @@ function afterPanelExpanded() {
         <span class="scope">只影响本次练习</span>
       </div>
       <div class="rows">
+        <!-- 档位：一行 = 档位 + 升一档 -->
         <div class="row row--level">
           <span class="row__label">档位</span>
           <span class="row__value">Lv.10 乘法口诀·2~6 二上</span>
           <span class="btn btn--success">升一档</span>
-          <span class="btn btn--link">更多</span>
+          <span class="caretbtn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
         </div>
-        <div class="row">
-          <span class="row__label">挑战题（下一档）</span>
-          <span class="row__hint">下一档的题，默认不出</span>
-          ${SWITCH_OFF}
+        <!-- 出题范围：两个开关并排一行 -->
+        <div class="row row--pair">
+          <div class="pair">
+            <span class="pair__label">挑战题</span>
+            <span class="pair__hint">下一档的题</span>
+            ${SWITCH_OFF}
+          </div>
+          <div class="pair">
+            <span class="pair__label">自动升档</span>
+            <span class="pair__hint">练够再升</span>
+            ${SWITCH_OFF}
+          </div>
         </div>
+        <!-- 练习量：下限~上限，一行 -->
         <div class="row">
-          <span class="row__label">自动升档</span>
-          <span class="row__hint">手动，练够再升</span>
-          ${SWITCH_OFF}
-        </div>
-        <div class="row">
-          <span class="row__label">练习量</span>
+          <span class="row__label">题量</span>
+          <span class="row__hint">这一轮做几题</span>
           <span class="row__value"></span>
-          <span class="num">10</span><span class="row__unit">题</span>
-          <span class="num">30</span><span class="row__unit">题</span>
+          <span class="num">10</span><span class="row__unit">~</span><span class="num">30</span><span class="row__unit">题</span>
         </div>
-        <div class="row">
-          <span class="row__label">每组题量</span>
-          <span class="row__hint">按表现自动调整，不可手动改</span>
+        <!-- 每组题量：只读 -->
+        <div class="row row--readonly">
+          <span class="row__label">每组</span>
+          <span class="row__hint">按表现自动调整</span>
           <span class="row__value">4~10 题</span>
         </div>
       </div>
@@ -307,7 +324,7 @@ await shoot(page(`
     <div style="padding:28px 28px 0"><div class="card">${afterPanelCollapsed()}</div></div>
   </div></div>`), 'after-collapsed-1440.png', { width: 1024, height: 940 })
 
-/* 5) 新版 · 桌面 · 展开（设置区两列：左=档位，右=三个开关/练习量） */
+/* 5) 新版 · 桌面 · 展开（设置区：档位一行 + 下面两列） */
 const deskExpanded = afterPanelExpanded().replace(
   /<div class="rows">([\s\S]*?)<\/div>\s*<\/section>/,
   `<div class="rows deskrows">
@@ -315,11 +332,10 @@ const deskExpanded = afterPanelExpanded().replace(
        <span class="row__label">档位</span>
        <span class="row__value">Lv.10 乘法口诀·2~6 二上</span>
        <span class="btn btn--success">升一档</span>
-       <span class="btn btn--link">更多</span>
      </div>
      <div class="grid2">
        <div class="row">
-         <span class="row__label">挑战题（下一档）</span>
+         <span class="row__label">挑战题</span>
          <span class="row__hint">下一档的题，默认不出</span>
          ${SWITCH_OFF}
        </div>
@@ -329,23 +345,79 @@ const deskExpanded = afterPanelExpanded().replace(
          ${SWITCH_OFF}
        </div>
      </div>
-     <div class="row">
-       <span class="row__label">练习量</span>
-       <span class="row__value"></span>
-       <span class="num">10</span><span class="row__unit">题</span>
-       <span class="num">30</span><span class="row__unit">题</span>
-     </div>
-     <div class="row">
-       <span class="row__label">每组题量</span>
-       <span class="row__hint">按表现自动调整，不可手动改</span>
-       <span class="row__value">4~10 题</span>
+     <div class="grid2">
+       <div class="row">
+         <span class="row__label">题量</span>
+         <span class="row__hint">这一轮做几题</span>
+         <span class="row__value"></span>
+         <span class="num">10</span><span class="row__unit">~</span><span class="num">30</span><span class="row__unit">题</span>
+       </div>
+       <div class="row row--readonly">
+         <span class="row__label">每组</span>
+         <span class="row__hint">按表现自动调整</span>
+         <span class="row__value">4~10 题</span>
+       </div>
      </div>
    </div></section>`
 )
+
+/* 5b) 新版 · 手机 · 展开 + 「更多」面板展开 */
+const withMore = afterPanelExpanded().replace(
+  /(<div class="row row--level">[\s\S]*?<\/div>)/,
+  `$1
+        <div class="more">
+          <div class="more__title">更多档位控制</div>
+          <div class="more__row">
+            <span class="more__label">起点档位</span>
+            <span class="sel" style="min-width:0;flex:1">自动（按练习记录计算）<span class="sel__caret">▾</span></span>
+          </div>
+          <div class="more__row" style="justify-content:flex-end;gap:8px">
+            <span class="btn btn--ghost">恢复自动</span>
+            <span class="btn btn--success">应用</span>
+          </div>
+        </div>`
+)
 await shoot(page(`
-  <div class="dviewport"><div class="desktop">
-    <div style="padding:28px 28px 0"><div class="card">${deskExpanded}</div></div>
-  </div></div>`), 'after-expanded-1440.png', { width: 1024, height: 940 })
+  <div class="frame"><div class="phone">
+    <div class="statusbar"><span>9:41</span><span>●●● ⌁ ▮</span></div>
+    <div class="viewport">${withMore}</div>
+    <div class="sticky"><div class="startbtn">开始练习</div></div>
+  </div></div>`), 'after-more-390.png', { width: 430, height: 900 })
+
+/* 5c) 「更多」面板的局部说明图 */
+await shoot(page(`
+  <div style="padding:30px 24px;background:#f7fbff;min-height:560px">
+    <div style="max-width:390px;margin:0 auto">
+      <div style="font-size:12px;color:#7f8c9b;margin-bottom:10px">点档位行右侧 ▾ 之后：</div>
+      <div class="card" style="padding:14px">
+        <div class="row row--level" style="border-bottom:none;padding-bottom:8px">
+          <span class="row__label">档位</span>
+          <span class="row__value">Lv.10 乘法口诀·2~6 二上</span>
+          <span class="btn btn--success">升一档</span>
+          <span class="caretbtn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+        </div>
+        <div class="more">
+          <div class="more__title">更多档位控制</div>
+          <div class="more__row">
+            <span class="more__label">起点档位</span>
+            <span class="sel" style="min-width:0;flex:1">自动（按练习记录计算）<span class="sel__caret">▾</span></span>
+          </div>
+          <div class="more__row">
+            <span class="more__hint" style="flex:1 1 auto">指定后下次开始练习生效，不影响当前这一轮</span>
+          </div>
+          <div class="more__row" style="justify-content:flex-end;gap:8px">
+            <span class="btn btn--ghost">恢复自动</span>
+            <span class="btn btn--success">应用</span>
+          </div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:#7f8c9b;margin-top:14px;line-height:1.7">
+        · 「起点档位」：把练习钉在某一档开始（进度被跳过时用来拉回来）<br>
+        · 「恢复自动」：交回系统按答题记录算<br>
+        · 「应用」：确认后才生效，作用于下次开始练习
+      </div>
+    </div>
+  </div>`), 'more-panel.png', { width: 480, height: 640, deviceScaleFactor: 2 })
 
 /* 6) 对照页：现状 vs 新版 */
 await shoot(page(`
