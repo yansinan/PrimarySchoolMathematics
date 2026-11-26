@@ -4,56 +4,49 @@
       <el-radio-group v-model="formData.step" @change="changeStep">
         <el-radio-button v-for="o in stepOptions" :label="o.key" :disabled="o.disabled">{{ o.label }}</el-radio-button>
       </el-radio-group>
-      <ElButton type="primary" style="margin-left: 6px;" @click="openOptionsDrawer">其他设置</ElButton>
     </ElFormItem>
 
-    <template v-for="item, index in formData.formulaList">
+    <!-- 运算符号：每一步一行（必须至少选一个） -->
+    <template v-for="item, index in formData.formulaList" :key="`ops-${index}`">
       <ElFormItem v-if="item.operators" :label="`第${index}步运算符号选择`" :prop="`formulaList.${index}.operators`"
         :rules="requiredRule">
         <el-checkbox-group v-model="item.operators">
           <el-checkbox v-for="o in operatorOptions" :label="o.key">{{ o.label }}</el-checkbox>
         </el-checkbox-group>
       </ElFormItem>
-
-      <ElFormItem :label="`算数项${index + 1}`">
-        <ElRow :gutter="12">
-          <ElCol :xs="24" :sm="8">
-            <ElFormItem :prop="`formulaList.${index}.min`" :rules="requiredNumberRule">
-              <ElInput v-model.number="item.min">
-                <template #prepend>最小值</template>
-              </ElInput>
-            </ElFormItem>
-          </ElCol>
-          <ElCol :xs="24" :sm="8">
-            <ElFormItem :prop="`formulaList.${index}.max`" :rules="requiredNumberRule">
-              <ElInput v-model.number="item.max">
-                <template #prepend>最大值</template>
-              </ElInput>
-            </ElFormItem>
-          </ElCol>
-        </ElRow>
-      </ElFormItem>
     </template>
 
-    <ElFormItem label="运算结果">
-      <ElRow :gutter="12">
-        <ElCol :xs="24" :sm="8">
+    <!-- 数字范围：算数项 1/2… 与运算结果共用一列表头，紧凑成 3 行 -->
+    <ElFormItem class="range-table-item">
+      <div class="range-table">
+        <div class="range-table__head">
+          <span class="range-table__col-name">数字范围</span>
+          <span class="range-table__col">最小值</span>
+          <span class="range-table__col">最大值</span>
+        </div>
+        <div v-for="item, index in formData.formulaList" :key="`range-${index}`" class="range-table__line">
+          <span class="range-table__name">算数项 {{ index + 1 }}</span>
+          <ElFormItem :prop="`formulaList.${index}.min`" :rules="requiredNumberRule" class="range-table__cell">
+            <ElInput v-model.number="item.min" class="range-table__input" />
+          </ElFormItem>
+          <ElFormItem :prop="`formulaList.${index}.max`" :rules="requiredNumberRule" class="range-table__cell">
+            <ElInput v-model.number="item.max" class="range-table__input" />
+          </ElFormItem>
+        </div>
+        <div class="range-table__line">
+          <span class="range-table__name">运算结果</span>
           <ElFormItem prop="resultMinValue"
-            :rules="[{ required: true, message: '请填写运算结果最小值' }, { type: 'number', message: '请填写数字' }]">
-            <ElInput v-model.number="formData.resultMinValue">
-              <template #prepend>最小值</template>
-            </ElInput>
+            :rules="[{ required: true, message: '请填写运算结果最小值' }, { type: 'number', message: '请填写数字' }]"
+            class="range-table__cell">
+            <ElInput v-model.number="formData.resultMinValue" class="range-table__input" />
           </ElFormItem>
-        </ElCol>
-        <ElCol :xs="24" :sm="8">
           <ElFormItem prop="resultMaxValue"
-            :rules="[{ required: true, message: '请填写运算结果最大值' }, { type: 'number', message: '请填写数字' }]">
-            <ElInput v-model.number="formData.resultMaxValue">
-              <template #prepend>最大值</template>
-            </ElInput>
+            :rules="[{ required: true, message: '请填写运算结果最大值' }, { type: 'number', message: '请填写数字' }]"
+            class="range-table__cell">
+            <ElInput v-model.number="formData.resultMaxValue" class="range-table__input" />
           </ElFormItem>
-        </ElCol>
-      </ElRow>
+        </div>
+      </div>
     </ElFormItem>
 
     <ElFormItem prop="numberOfFormulas"
@@ -123,13 +116,73 @@
     </ElFormItem>
     -->
 
+    <!-- 出题规则（原「其他设置」二级抽屉，现内联折叠；折叠时用 badge 显示当前选择） -->
+    <ElFormItem class="rules-item">
+      <div class="rules-card">
+        <div class="rules-card__head" @click="rulesOpen = !rulesOpen">
+          <svg class="rules-card__caret" :class="{ 'rules-card__caret--open': rulesOpen }" viewBox="0 0 24 24"
+            fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+          <span class="rules-card__title">出题规则</span>
+          <span v-if="!rulesOpen" class="rules-card__badges">
+            <span v-for="b in ruleBadges" :key="b" class="rules-badge">{{ b }}</span>
+          </span>
+        </div>
+
+        <div v-if="rulesOpen" class="rules-card__body">
+          <div class="rules-row">
+            <span class="rules-row__label">题型</span>
+            <el-radio-group v-model="formData.whereIsResult">
+              <el-radio-button v-for="o in whereIsResultOptions" :label="o.key" :disabled="o.disabled">
+                {{ o.label }}
+              </el-radio-button>
+            </el-radio-group>
+          </div>
+          <div class="rules-row">
+            <span class="rules-row__label">括号</span>
+            <el-checkbox v-model="formData.enableBrackets">启用括号 ( )</el-checkbox>
+          </div>
+          <div class="rules-row">
+            <span class="rules-row__label">加法进位</span>
+            <el-radio-group v-model="formData.carry">
+              <el-radio-button label="1">随机进位</el-radio-button>
+              <el-radio-button label="2">必须进位</el-radio-button>
+              <el-radio-button label="3">不进位</el-radio-button>
+            </el-radio-group>
+          </div>
+          <div class="rules-row">
+            <span class="rules-row__label">减法退位</span>
+            <el-radio-group v-model="formData.abdication">
+              <el-radio-button label="1">随机退位</el-radio-button>
+              <el-radio-button label="2">必须退位</el-radio-button>
+              <el-radio-button label="3">不退位</el-radio-button>
+            </el-radio-group>
+          </div>
+          <div class="rules-row">
+            <span class="rules-row__label">除法</span>
+            <el-radio-group v-model="formData.remainder">
+              <el-radio-button v-for="o in remainderOptions" :label="o.key" :disabled="o.disabled">
+                {{ o.label }}
+              </el-radio-button>
+            </el-radio-group>
+          </div>
+          <div class="rules-row">
+            <span class="rules-row__label">解题方式</span>
+            <el-radio-group v-model="formData.solution">
+              <el-radio-button label="0">口算</el-radio-button>
+              <el-radio-button label="1">竖式</el-radio-button>
+            </el-radio-group>
+          </div>
+        </div>
+      </div>
+    </ElFormItem>
+
     <ElFormItem>
       <ElButton type="primary" @click="append">添加口算题</ElButton>
       <ElButton @click="clear">清空口算题</ElButton>
       <el-button type="success" @click="addConfiguration">将当前参数保存为配置</el-button>
     </ElFormItem>
-
-    <OptionsDrawer v-model:visible="optionsDrawerVisible" v-model:formulasFormData="formData" />
   </div>
 </template>
 
@@ -138,7 +191,6 @@ import { computed, ref, unref, toRaw, getCurrentInstance, watch } from 'vue';
 import { v4 as uuidv4 } from "uuid";
 import { cloneDeep } from "lodash";
 import ConfigStorage from '@/utils/store/configStorage';
-import { OptionsDrawer } from "@/components/generate";
 import { validateTargetRange, TARGET_LIMITS } from '@/utils/form/formDefaults';
 import { usePracticeStore } from '@/stores/practice';
 
@@ -317,10 +369,41 @@ const changeStep = (val) => {
   }
 }
 
-const optionsDrawerVisible = ref(false)
-const openOptionsDrawer = () => {
-  optionsDrawerVisible.value = true
-}
+/** 出题规则折叠状态（原「其他设置」二级抽屉，现在内联） */
+const rulesOpen = ref(false)
+
+/** 折叠时用 badge 显示当前选择，不点开也知道配了什么 */
+const ruleBadges = computed(() => {
+  const f = formData.value || {}
+  const whereIsResultText = f.whereIsResult == '1' ? '求算数项' : '求结果'
+  const carryMap = { '1': '随机进位', '2': '必须进位', '3': '不进位' }
+  const abdicationMap = { '1': '随机退位', '2': '必须退位', '3': '不退位' }
+  const out = [whereIsResultText]
+  if (f.enableBrackets) out.push('带括号')
+  out.push(carryMap[f.carry] || '随机进位')
+  out.push(abdicationMap[f.abdication] || '随机退位')
+  out.push(f.solution == '1' ? '竖式解题' : '口算解题')
+  return out
+})
+
+/** 题型选项：求算数项时不能有余数（沿用原 OptionsDrawer 规则） */
+const whereIsResultOptions = computed(() => {
+  const disabled = formData.value.remainder == '3'
+  return [
+    { key: '0', label: '求结果', disabled: false },
+    { key: '1', label: '求算数项', disabled },
+  ]
+})
+
+/** 除法选项：求算数项或多步运算时不能有余数（沿用原规则，当前只支持整除） */
+const remainderOptions = computed(() => {
+  const disabled = formData.value.whereIsResult == '1' || formData.value.step > 1
+  return [
+    { key: '1', label: '随机余数（暂不支持）', disabled: true },
+    { key: '2', label: '结果整除', disabled },
+    { key: '3', label: '结果余数（暂不支持）', disabled: true },
+  ]
+})
 
 const append = () => {
   props.refForm?.validate((valid) => {
@@ -456,4 +539,157 @@ const addConfiguration = () => {
     margin-bottom: 8px;
   }
 }
+
+/* ── 数字范围表格：算数项 1/2… 与运算结果共用一列表头 ── */
+.range-table-item :deep(.el-form-item__content) {
+  display: block;
+}
+
+.range-table {
+  width: 100%;
+  border: 1px solid #e6eef6;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.range-table__head,
+.range-table__line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px 92px;
+  gap: 8px;
+  align-items: center;
+}
+
+.range-table__head {
+  padding: 7px 12px;
+  background: #f6faff;
+  border-bottom: 1px solid #e9f1fa;
+  font-size: 11.5px;
+  color: #8794a2;
+}
+
+.range-table__head .range-table__col {
+  text-align: center;
+}
+
+.range-table__line {
+  padding: 7px 12px;
+  border-bottom: 1px solid #f2f7fc;
+}
+
+.range-table__line:last-child {
+  border-bottom: none;
+}
+
+.range-table__name {
+  font-size: 13px;
+  color: #3f4d5a;
+}
+
+/* 单元格里的 ElFormItem 只留输入框，错误信息绝对定位不撑行高 */
+.range-table__cell {
+  margin-bottom: 0;
+}
+
+.range-table__cell :deep(.el-form-item__content) {
+  margin-left: 0;
+  line-height: normal;
+}
+
+.range-table__cell :deep(.el-form-item__error) {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  font-size: 11px;
+  padding-top: 1px;
+  white-space: nowrap;
+}
+
+.range-table__input :deep(input) {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 出题规则（内联折叠，取代「其他设置」二级抽屉）── */
+.rules-item :deep(.el-form-item__content) {
+  display: block;
+}
+
+.rules-card {
+  width: 100%;
+  border: 1px solid #e6eef6;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.rules-card__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #f8fbff;
+  cursor: pointer;
+  user-select: none;
+}
+
+.rules-card__caret {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  color: #9aa7b4;
+  transition: transform 0.16s ease;
+}
+
+.rules-card__caret--open {
+  transform: rotate(90deg);
+}
+
+.rules-card__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e3c5c;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.rules-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rules-badge {
+  font-size: 11px;
+  color: #5b6b7a;
+  background: #eef3f8;
+  border-radius: 6px;
+  padding: 2px 7px;
+}
+
+.rules-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-top: 1px solid #eef3f8;
+}
+
+.rules-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rules-row__label {
+  font-size: 12.5px;
+  color: #7f8c9b;
+  flex: 0 0 64px;
+}
+
 </style>
