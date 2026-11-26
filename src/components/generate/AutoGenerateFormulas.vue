@@ -67,6 +67,15 @@
       </ElRow>
     </ElFormItem>
 
+    <!-- ════════════════════════════════════════════════════════════════
+         2026-11-26 隐藏（观察期一个月，2026-12-30 无回滚需求即整块删除）
+         自适应练习量 targetMin / targetMax
+         为什么：准备开始页的「本次练习设置 → 题量」已是同一个设置，这里再留一份就是
+                 两个入口改同一份数据（psm_form_state + practiceStore.adaptiveTarget）。
+         恢复：把本注释整体去掉即可。
+         删除时一并清掉：targetRangeError / targetMinError / targetMaxError 相关的
+                         computed、rules、以及 target-hint 样式。
+         ════════════════════════════════════════════════════════════════
     <ElFormItem label="自适应练习量" :error="targetRangeError" class="practice-amount-row">
       <ElRow :gutter="12">
         <ElCol :xs="12" :sm="12">
@@ -112,6 +121,7 @@
         </ElCol>
       </ElRow>
     </ElFormItem>
+    -->
 
     <ElFormItem>
       <ElButton type="primary" @click="append">添加口算题</ElButton>
