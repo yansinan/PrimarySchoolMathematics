@@ -206,3 +206,55 @@ else if (session.evaluations || cfg?.mode === 'adaptive') practiceType = '自适
 
 实测（3 卷 × 4 题）：
 `第 1/3 组 ✅0/4 → 1/4 → 4/4`（自评）`→ 第 2/3 组 ✅0/4 → 1/4` ✔
+
+---
+
+## 八、题目多时的进度展示（2026-11-26）
+
+问题：进度用逐题 steps 渲染，30 题就是 30 个「第N题」，**横向溢出卡片**。
+
+方案对比出图（[mockups/progress/](mockups/progress/)）：省略号窗口 / 细条 / 10 段格子。
+采纳的组合（dr 确认）：
+
+- **总题数 ≤ 10**：保持逐题展示（窄屏圆点、宽屏 el-steps）—— 这个量级一格一题最直观
+- **总题数 > 10**：换成**细条 + `当前 / 总数`**
+  - 每段按对错着色：绿 = 对、红 = 错、灰 = 未答
+  - 宽度与题数无关，30 题、100 题都不溢出
+
+实现收在 `components/layout/ProgressSteps.vue` 内部（`BAR_THRESHOLD = 10`），
+props 不变（total / current / answers / correctCount），练习页无需改动。
+
+实测：12 题 → `.bar-progress` 生效、文本 `1 / 12`、12 段、`scrollWidth-clientWidth = 0`。
+
+## 九、已添加题组的单个删除（2026-11-26）
+
+`Generate.vue` 的题组列表原本是只读字符串标签（`buildPaperDescriptionList`），没法删单组。
+
+改为对 `paperList` 按下标渲染 `<ElTag closable @close="removePaper(i)">`：
+
+- ElTag 自带的 ✕ 即「删除第 N 个题组」，hover 有 title 说明
+- 删完重新渲染，题组描述随索引更新
+- 删到空 → 提示「题组已清空，请重新添加口算题」
+
+实测：2 组 → 点第一个 ✕ → 剩 1 组且文本为第二组 ✔
+
+## 十、全键盘操作（2026-11-26）
+
+目标：整轮练习不碰鼠标也能走完（答题 → 自评 → 汇总）。
+
+| 位置 | 键位 | 说明 |
+|---|---|---|
+| 准备开始页 | `Enter` | 等于点「开始练习」（原有） |
+| 答题（数字键盘模式） | `0-9` / `Backspace` / `Enter` | 原有 |
+| 答题（选择题模式） | `←` `→` 移动 / `Enter`·`Space` 提交 / `1-9` 直选 | 原有 |
+| **自评弹窗** | `←` `→` 移动表情，`Enter`·`Space` 确认，`1-5` 直选 | 新增（`SelfEvaluationDialog`） |
+| **整轮汇总弹窗** | `←` `→` 在「首页 / 分析」间切换，`Enter`·`Space` 确认，`Esc` 关闭 | 新增（`PracticeSummaryDialog`，按钮带 `.is-key-focus` 焦点环） |
+
+实现要点：
+
+- 两个弹窗都在 `visible` 变为 true 时挂 `window.addEventListener('keydown', …, true)`（捕获阶段），关闭即移除
+- `Practice.vue` 的全局按键处理开头加守卫：`evalVisible || summaryVisible` 时直接返回，避免同一按键既操作弹窗又操作题目
+- 焦点态有可见样式（蓝框），不只是逻辑上的选中
+
+实测：自评弹窗默认停在「刚刚好」，`←←` 到「😩」、`→` 回「😟」、`Enter` 选择并进入第 2 组；
+汇总弹窗 `←` → 「🏠 首页」、`→` → 「📊 分析」、`Enter` → 跳首页并打开分析抽屉。

@@ -53,7 +53,14 @@
           <template v-if="paperDescriptionList && paperDescriptionList.length">
             <ElFormItem label="当前口算题包含的内容">
               <div class="paper-tags">
-                <ElTag v-for="p in paperDescriptionList" :key="p" class="paper-tag">{{ p }}</ElTag>
+                <ElTag
+                  v-for="(desc, i) in paperDescriptionList"
+                  :key="`paper-${i}`"
+                  class="paper-tag"
+                  closable
+                  :title="`删除第 ${i + 1} 个题组`"
+                  @close="removePaper(i)"
+                >{{ desc }}</ElTag>
               </div>
             </ElFormItem>
           </template>
@@ -283,6 +290,20 @@ const generate = () => {
   try { sessionStorage.setItem(key, JSON.stringify(papers)) } catch {}
   router.push({ path: '/print', query: { fileName, key } })
   paperList.value = []
+}
+
+/**
+ * 删除单个题组
+ * 题组与题目列表一一对应，删掉后其余题组的描述会重新编号（索引即来源）。
+ * @param {number} index
+ */
+function removePaper(index) {
+  if (index < 0 || index >= paperList.value.length) return
+  const next = paperList.value.slice()
+  next.splice(index, 1)
+  paperList.value = next
+  // 删到空 → 提示一下，避免误以为还有题组
+  if (!next.length) proxy.$message.info('题组已清空，请重新添加口算题')
 }
 
 const generateFormulas = () => {

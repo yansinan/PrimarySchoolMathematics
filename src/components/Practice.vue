@@ -1351,6 +1351,8 @@ watch(
 function handleKeydown(e) {
   // 带修饰键的组合交给浏览器（Ctrl+R / Cmd+Tab 等）
   if (e.ctrlKey || e.altKey || e.metaKey) return
+  // 弹窗自己处理键盘（自评 / 汇总），练习页不抢键
+  if (dialogs.evalVisible.value || dialogs.summaryVisible.value) return
   const tag = e.target?.tagName
   if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable) return
 

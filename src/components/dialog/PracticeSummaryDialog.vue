@@ -50,8 +50,10 @@
     <AbilityCard />
 
     <template #footer>
-      <el-button @click="handleSelect('cancel')">{{ cancelText }}</el-button>
-      <el-button type="primary" @click="handleSelect('confirm')">{{ confirmText }}</el-button>
+      <el-button :class="{ 'is-key-focus': focusedAction === 'cancel' }"
+        @click="handleSelect('cancel')">{{ cancelText }}</el-button>
+      <el-button type="primary" :class="{ 'is-key-focus': focusedAction === 'confirm' }"
+        @click="handleSelect('confirm')">{{ confirmText }}</el-button>
     </template>
   </el-dialog>
 </template>
@@ -74,7 +76,7 @@
  *  - update:visible (boolean)
  *  - select (action: 'confirm' | 'cancel' | 'close')
  */
-import { ref, watch } from 'vue'
+import { ref, watch, onUnmounted } from 'vue'
 import AbilityCard from '@/components/profile/AbilityCard.vue'
 import { useAbilityProfile } from '@/composables/useAbilityProfile'
 
@@ -128,6 +130,50 @@ function handleUpdate(val) {
   if (!val) emit('select', 'close')
   emit('update:visible', val)
 }
+
+/**
+ * 键盘：←/→ 在两个按钮间切换，Enter / 空格 确认当前按钮，Esc 关闭
+ * 目标：整轮练习从头到尾不碰鼠标也能走完（答题 → 自评 → 汇总）
+ */
+const KEY_ACTIONS = ['cancel', 'confirm']
+const focusedAction = ref('confirm')   // 默认停在强调按钮上
+
+function onKeydown(e) {
+  if (!props.visible) return
+  if (e.ctrlKey || e.altKey || e.metaKey) return
+
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    e.preventDefault()
+    e.stopPropagation()
+    const i = KEY_ACTIONS.indexOf(focusedAction.value)
+    const dir = e.key === 'ArrowRight' ? 1 : -1
+    focusedAction.value = KEY_ACTIONS[(i + dir + KEY_ACTIONS.length) % KEY_ACTIONS.length]
+    return
+  }
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault()
+    e.stopPropagation()
+    handleSelect(focusedAction.value)
+    return
+  }
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    handleSelect('close')
+  }
+}
+
+watch(() => props.visible, (v) => {
+  if (typeof window === 'undefined') return
+  if (v) {
+    focusedAction.value = 'confirm'
+    window.addEventListener('keydown', onKeydown, true)
+  } else {
+    window.removeEventListener('keydown', onKeydown, true)
+  }
+})
+onUnmounted(() => {
+  if (typeof window !== 'undefined') window.removeEventListener('keydown', onKeydown, true)
+})
 </script>
 
 <style scoped>
@@ -218,5 +264,11 @@ function handleUpdate(val) {
 @keyframes encourage-pop {
   0% { transform: scale(0.9); opacity: 0; }
   100% { transform: scale(1); opacity: 1; }
+}
+
+/* 键盘选中态：与鼠标 hover 区分开，说明「回车会点这个」 */
+:deep(.el-button.is-key-focus) {
+  outline: 2px solid #1cb0f6;
+  outline-offset: 2px;
 }
 </style>
