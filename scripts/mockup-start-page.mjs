@@ -158,7 +158,7 @@ function beforePanel() {
   </div>`
 }
 
-/** 新版：折叠态 */
+/** 新版：折叠态（取消「这次练什么」，信息并入设置摘要；「练习重点」上提） */
 function afterPanelCollapsed() {
   return `
   <div class="panel">
@@ -175,13 +175,6 @@ function afterPanelCollapsed() {
       </div>
     </section>
     <section>
-      <div class="section__title">这次练什么</div>
-      <div class="chips">
-        <span class="chip">10~30 题</span><span class="chip">每组 4~10 题</span>
-        <span class="chip">只练本档</span><span class="chip">升档：手动</span>
-      </div>
-    </section>
-    <section>
       <div class="section__title">练习重点</div>
       <div class="chips"><span class="chip chip--focus">进退位巩固</span></div>
     </section>
@@ -193,15 +186,16 @@ function afterPanelCollapsed() {
       </div>
       <div class="settings__summary">
         <span class="chip chip--summary">Lv.10 乘法口诀·2~6</span>
+        <span class="chip chip--summary">10~30 题</span>
+        <span class="chip chip--summary">每组 4~10 题</span>
         <span class="chip chip--summary">只练本档</span>
         <span class="chip chip--summary">手动升档</span>
-        <span class="chip chip--summary">10~30 题</span>
       </div>
     </section>
   </div>`
 }
 
-/** 新版：展开态 */
+/** 新版：展开态（取消「这次练什么」，信息并入设置区；「练习重点」上提） */
 function afterPanelExpanded() {
   return `
   <div class="panel">
@@ -215,13 +209,6 @@ function afterPanelExpanded() {
           <div class="metric__label">上次正确率</div></div>
         <div class="metric"><div class="metric__value">1<span class="metric__unit">天</span></div>
           <div class="metric__label">连续练习</div></div>
-      </div>
-    </section>
-    <section>
-      <div class="section__title">这次练什么</div>
-      <div class="chips">
-        <span class="chip">10~30 题</span><span class="chip">每组 4~10 题</span>
-        <span class="chip">只练本档</span><span class="chip">升档：手动</span>
       </div>
     </section>
     <section>
@@ -256,6 +243,11 @@ function afterPanelExpanded() {
           <span class="row__value"></span>
           <span class="num">10</span><span class="row__unit">题</span>
           <span class="num">30</span><span class="row__unit">题</span>
+        </div>
+        <div class="row">
+          <span class="row__label">每组题量</span>
+          <span class="row__hint">按表现自动调整，不可手动改</span>
+          <span class="row__value">4~10 题</span>
         </div>
       </div>
     </section>
@@ -343,6 +335,11 @@ const deskExpanded = afterPanelExpanded().replace(
        <span class="num">10</span><span class="row__unit">题</span>
        <span class="num">30</span><span class="row__unit">题</span>
      </div>
+     <div class="row">
+       <span class="row__label">每组题量</span>
+       <span class="row__hint">按表现自动调整，不可手动改</span>
+       <span class="row__value">4~10 题</span>
+     </div>
    </div></section>`
 )
 await shoot(page(`
@@ -360,8 +357,12 @@ await shoot(page(`
         只保留「目前学习情况」里的大号 Lv 卡（带年级徽标）。<br>
         <span class="tag">2</span><b>历史正确率 → 上次正确率</b>：数字从「全部历史平均」改为「最近一轮练习的正确率」，
         没有历史时显示 —。<br>
-        <span class="tag">3</span><b>自适应设置默认折叠</b>：折叠时只占一行标题 + 一行摘要 chip；
-        展开后是紧凑的设置行（档位/挑战题/自动升档/练习量），桌面两列、手机单列。
+        <span class="tag">3</span><b>取消「这次练什么」，并入设置摘要</b>：那一行的信息（题量 / 组量 / 只练本档 / 手动升档）
+        与「目前学习情况」重复 → 全部并入「本次练习设置」的折叠摘要；<br>
+        <span class="tag">4</span><b>「练习重点」上提</b>：放到「目前学习情况」正下方，作为孩子的关注点；
+        设置区（可改的控件）统一在页面底部。<br>
+        <span class="tag">5</span><b>自适应设置默认折叠</b>：折叠时一行标题 + 一行摘要 chip；
+        展开后是紧凑的设置行（档位/挑战题/自动升档/练习量/每组题量），桌面两列、手机单列。
       </p>
     </div>
     <div style="display:flex;gap:22px;justify-content:center;flex-wrap:wrap">
