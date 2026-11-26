@@ -216,7 +216,9 @@ else if (session.evaluations || cfg?.mode === 'adaptive') practiceType = '自适
 方案对比出图（[mockups/progress/](mockups/progress/)）：省略号窗口 / 细条 / 10 段格子。
 采纳的组合（dr 确认）：
 
-- **总题数 ≤ 10**：保持逐题展示（窄屏圆点、宽屏 el-steps）—— 这个量级一格一题最直观
+- **总题数 ≤ 10**：一排**数字小格**（`1 2 3 … 10`，对绿/错红/当前蓝）—— 这个量级一格一题最直观
+  - 早期用 `el-steps simple`，它在 8~10 题时会把「第1题」挤成**竖排三个字**（dr 报的"文字换行"），
+    已换成自绘小格，且去掉了按视口切换圆点/步骤的两套实现
 - **总题数 > 10**：换成**细条 + `当前 / 总数`**
   - 每段按对错着色：绿 = 对、红 = 错、灰 = 未答
   - 宽度与题数无关，30 题、100 题都不溢出
@@ -224,7 +226,10 @@ else if (session.evaluations || cfg?.mode === 'adaptive') practiceType = '自适
 实现收在 `components/layout/ProgressSteps.vue` 内部（`BAR_THRESHOLD = 10`），
 props 不变（total / current / answers / correctCount），练习页无需改动。
 
-实测：12 题 → `.bar-progress` 生效、文本 `1 / 12`、12 段、`scrollWidth-clientWidth = 0`。
+实测：
+- 12 题 → `.bar-progress` 生效、文本 `1 / 12`、12 段、`scrollWidth-clientWidth = 0`
+- 5 / 8 / 10 题 × 4 档宽度（390 / 768 / 900 / 1280）→ 进度区高度恒定（45 / 48 / 52px），
+  **零溢出、零换行**，数字小格始终单行
 
 ## 九、已添加题组的单个删除（2026-11-26）
 
