@@ -183,7 +183,8 @@ targetDraft → validateTargetRange() 校验
 
 点「生成卷子」→ 先挡掉空题单 / 超 1000 题 → 弹对话框（带上次填过的值）→ 确认后走原有 `generate()` 跳 `/print`。
 
-⚠️ **已知遗留（已记 TODO · U1）**：`generateFormulas`（开始练习）也乘 `numberOfPapers`，所以「卷子数量」现在仍影响练习长度。计划改成「几张卷子 = 几组练习」，练习与打印共用同一份分组配置，再把该字段移回共用区。
+✅ **已收口**：「卷子数量」已从对话框移回共用区（`AutoGenerateFormulas`，标签「卷子数量 · 份/组」），
+并成为练习的分组依据 —— **一张卷子 = 一组练习**，每组结束有一次自评。详见 [18-PLAN-manual-groups.md](./18-PLAN-manual-groups.md)。
 
 ## 九、出题抽屉紧凑化 + 干掉「其他设置」二级抽屉
 

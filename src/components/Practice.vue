@@ -7,7 +7,11 @@
 
       <el-card class="practice-card" shadow="never" v-if="currentQuestion !== null">
         <div class="practice-card__header">
-          <div class="stage-badge" :class="{ 'stage-badge--assessment': isAssessment }">{{ currentStage }}</div>
+          <div class="header-left">
+            <div class="stage-badge" :class="{ 'stage-badge--assessment': isAssessment }">{{ currentStage }}</div>
+            <!-- 多组自定义练习：复用阶段徽标样式，只多一个组序号 -->
+            <div v-if="groupBadgeText" class="stage-badge stage-badge--group">{{ groupBadgeText }}</div>
+          </div>
           <div class="header-right">
             <div class="streak-badge" v-if="session.streak > 0">🔥 {{ session.streak }}</div>
             <SyncIndicator @open="statsStore.openDrawer()" />
@@ -321,6 +325,8 @@ import { useSubmitHandler } from '@/composables/useSubmitHandler'
 import { useAdaptiveSession } from '@/composables/useAdaptiveSession'
 import { usePracticeDialogs } from '@/composables/usePracticeDialogs'
 import { usePracticeSaver } from '@/composables/usePracticeSaver'
+import { useManualSession } from '@/composables/useManualSession'
+import { isLastOfGroup, groupIndexOf, hasMultipleGroups } from '@/utils/groupPlan'
 import { useSnapshotSync } from '@/composables/useSnapshotSync'
 import { decideListPracticesTransition } from '@/utils/listPracticesGuard'
 import { useDisplayStrategy } from '@/composables/useDisplayStrategy'  // 🆕 PR-4.2 抽离 displayStats + applyDisplayModeForCurrentQuestion + generateOptions
@@ -655,7 +661,10 @@ const handleNext = () => {
   if (nextLocked.value) return
   nextLocked.value = true
 
-  if (!isLastQuestion.value) {
+  // 多组自定义练习：本组最后一题也要走收尾（组反馈 → 自评），而不是直接跳下一题
+  const atGroupEnd = isLastOfManualGroup.value
+
+  if (!isLastQuestion.value && !atGroupEnd) {
     practiceStore.nextQuestion()
     // 关键修复：调 initPractice（之前仅在 watch 路径调，handleNext 直接跳题时漏调）
     //  initPractice 重置 session.answers（每组只含本组）、currentIndex=0、displayStats
@@ -677,6 +686,15 @@ const handleNext = () => {
       // 只有自适应题单才走「组完成 → 评估 → 生成下一组」。
       // 手动出题的题单做完就是结束，不能被自适应引擎接管。
       fn = completeGroup
+    } else if (isMultiGroupManual.value) {
+      // 自定义练习分了多组：每一组结束都先走「组反馈 + 自评」，
+      // 最后一组自评完再出整轮总结（与自适应一致：末组也有自评）。
+      // 走到这里时一定刚好是本组最后一道题。
+      fn = async () => {
+        const result = await completeManualGroup()
+        if (result === 'continue') return result
+        return handlePracticeComplete()
+      }
     } else {
       fn = handlePracticeComplete
     }
@@ -700,6 +718,48 @@ const handleNext = () => {
 /** 开始新一轮自适应练习（已抽到 composables/useAdaptiveSession.js） */
 
 /** 正常练习完成 → 保存到 DB，弹出汇总弹窗，关闭后跳首页 */
+/** 自定义练习分组：组边界 → 自评 → 下一组（一张卷子 = 一组） */
+const {
+  manualGroupRanges,
+  manualGroupIndex,
+  setGroupPlan,
+  resetGroupPlan,
+  completeManualGroup,
+} = useManualSession({ dialogs, saver })   // 必须传入同一实例，否则弹窗状态与模板不互通
+
+/** Generate 侧写好分组计划 → 这里换算成题号区间 */
+watch(
+  () => practiceStore.manualGroupPlan,
+  (plan) => {
+    if (Array.isArray(plan) && plan.length > 1) setGroupPlan(plan)
+    else resetGroupPlan()
+  },
+  { immediate: true, deep: true }
+)
+
+/** 是否处于「多组自定义练习」中（决定收尾走组边界还是整轮） */
+const isMultiGroupManual = computed(
+  () => practiceStore.listSource === 'manual' && hasMultipleGroups(manualGroupRanges.value)
+)
+
+/** 当前处在第几组（1 基）；不是多组时返回 0 */
+const currentGroupNo = computed(() => {
+  if (!isMultiGroupManual.value) return 0
+  return groupIndexOf(manualGroupRanges.value, practiceStore.session.currentIndex) || 1
+})
+
+/** 多组时显示「第 2/3 组」 */
+const groupBadgeText = computed(() => {
+  if (!isMultiGroupManual.value) return ''
+  return `第 ${currentGroupNo.value}/${manualGroupRanges.value.length} 组`
+})
+
+/** 本次答题是否本组最后一题（多组自定义练习才成立） */
+const isLastOfManualGroup = computed(() => {
+  if (!isMultiGroupManual.value) return false
+  return isLastOfGroup(manualGroupRanges.value, practiceStore.session.currentIndex)
+})
+
 const handlePracticeComplete = async () => {
   const totalAns = totalQuestions.value
   const correctAns = correctCount.value
@@ -1879,6 +1939,20 @@ onMounted(async () => {
   gap: 12px;
   margin-bottom: 12px;
   flex-wrap: wrap;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 组徽标：与阶段徽标同尺寸同圆角，只换底色，避免多一套视觉语言 */
+.stage-badge--group {
+  color: #176ebf;
+  background: #e3f1ff;
+  border-color: #cfe6fb;
 }
 
 .stage-badge,

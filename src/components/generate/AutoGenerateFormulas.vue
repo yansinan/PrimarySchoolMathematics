@@ -60,6 +60,22 @@
       </ElRow>
     </ElFormItem>
 
+    <!-- 卷子数量 = 练习组数：打印是几份卷子，练习就是几组（每组结束自评一次） -->
+    <ElFormItem prop="numberOfPapers"
+      :rules="[{ required: true, message: '请填写卷子数量' }, { type: 'number', message: '请填写数字' }]">
+      <ElRow :gutter="12">
+        <ElCol :xs="24" :sm="14">
+          <ElInput v-model.number="formData.numberOfPapers">
+            <template #prepend>卷子数量</template>
+            <template #append>份 / 组</template>
+          </ElInput>
+        </ElCol>
+        <ElCol :xs="24" :sm="10" class="papers-hint-col">
+          <span class="papers-hint">练习按卷子分组，每组结束做一次自评</span>
+        </ElCol>
+      </ElRow>
+    </ElFormItem>
+
     <!-- ════════════════════════════════════════════════════════════════
          2026-11-26 隐藏（观察期一个月，2026-12-30 无回滚需求即整块删除）
          自适应练习量 targetMin / targetMax
@@ -684,6 +700,16 @@ const addConfiguration = () => {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.papers-hint-col {
+  display: flex;
+  align-items: center;
+}
+
+.papers-hint {
+  font-size: 12px;
+  color: #9aa7b4;
 }
 
 .rules-row__label {

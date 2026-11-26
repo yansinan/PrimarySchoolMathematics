@@ -1,6 +1,6 @@
 # 自定义练习分组 + 自评：可行性评估
 
-> 2026-11-26 · 状态：**评估（未实施）** · 关联 TODO U1
+> 2026-11-26 · 状态：**已实施**（见文末「实施结果」） · 关联 TODO U1
 > 目标：自定义练习（手动题单）分成 N 组（= N 张卷子）时，**每组结束的流程与自适应练习一致**：组反馈 → 自评 → 下一组；最后一组结束再出整轮总结。
 
 ## 一、现在的行为（代码事实）
@@ -151,3 +151,34 @@ else if (session.evaluations || cfg?.mode === 'adaptive') practiceType = '自适
 3. 最后加组徽标等 UI 细节
 
 > 需要动 UI 的部分只有「组徽标」一处，如果要做，先出一张设计图再动代码。
+
+---
+
+## 七、实施结果（2026-11-26）
+
+按本文顺序全部落地：
+
+| 步骤 | 提交内容 |
+|---|---|
+| R1 统计口径 | `PracticeSession.computeSessionStats`：`cfg.mode === 'manual'` → 「自定义」，优先于旧的 evaluations 推断；新增 `test/services/practiceType.spec.js`（5 条） |
+| 分组计划 | 新增 `src/utils/groupPlan.js`（buildGroupRanges / groupIndexOf / isLastOfGroup / rangeOfGroup / hasMultipleGroups）+ `test/utils/groupPlan.spec.js`（8 条） |
+| 组会话 | 新增 `src/composables/useManualSession.js`：`setGroupPlan` / `completeManualGroup`（组反馈 → 自评 → checkpoint → 跳到下一组，**不清 session.answers**、**不碰引擎**） |
+| 落库 | `usePracticeSaver.saveManualGroupCheckpoint`：evaluations 与自适应同格式 `[{group, score, count}]`，`completed:false`，同 pid |
+| 接线索 | `Generate.vue`：`setConfigSnapshot({...formData, mode:'manual'})` + `setManualGroupPlan(papers.map(p => p.formulas.length))` |
+| 组徽标 | `Practice.vue` 复用 `.stage-badge`：新增 `.stage-badge--group`（同尺寸同圆角，只换底色），文案 `第 2/3 组` |
+| 卷子数量 | 从对话框移回共用区（`AutoGenerateFormulas`），标签「卷子数量」，后缀「份 / 组」，提示「练习按卷子分组，每组结束做一次自评」 |
+
+**实测（真实 Chromium，3 张卷子 × 3 题）**
+
+- `第 1/3 组` → 答完 3 题 → 自评弹窗 → `第 2/3 组` → … → `第 3/3 组` → 自评 → 整轮汇总
+- 汇总：**9 共答 / 9 正确 / 100%**（三组之和，不是末组）
+- DB：同轮 **1 个 practiceSessionId、5 条记录**（1 条初始 + 3 条组 checkpoint + 1 条最终结算）
+- 类型：全部显示「自定义」，`config.mode === 'manual'` 已落库
+- 单张卷子（1 组）：`hasMultipleGroups=false` → 直接整轮汇总，不弹组间自评
+
+**踩到的两个坑（已在实现里注明）**
+
+1. `useManualSession()` 必须传入 Practice.vue 里同一个 `dialogs` / `saver` 实例 —— 否则自评弹窗的 ref 与模板不互通，弹窗永远不显示（`Practice.vue:408` 早有同类注释）。
+2. 收尾分支的判据是「**还有下一组**」，不是「不是本组最后一题」—— 走到收尾分支时一定已在本组最后一道，写成后者会直接跳到整轮总结。
+
+**遗留**：TODO U1 的「卷子数量与自定义练习共用分组」已顺带完成（一张卷子 = 一组）；剩下的是 `generateFormulas` 仍按 `numberOfPapers` 展平题单，分组语义已对齐，无需再改。

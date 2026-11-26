@@ -78,11 +78,6 @@
     <el-dialog v-model="paperDialogVisible" title="生成卷子" width="min(520px, calc(100vw - 32px))"
       append-to-body class="paper-dialog">
       <el-form label-width="96px" class="paper-dialog__form" @submit.prevent>
-        <el-form-item label="卷子数量">
-          <el-input-number v-model="formData.numberOfPapers" :min="1" :max="20" :step="1" controls-position="right"
-            class="paper-dialog__num" />
-          <span class="paper-dialog__hint">与「每行列数」一起决定版式</span>
-        </el-form-item>
         <el-form-item label="每行列数">
           <el-input-number v-model="formData.numberOfPagerColumns" :min="1" :max="6" :step="1"
             controls-position="right" class="paper-dialog__num" />
@@ -339,7 +334,9 @@ const generateFormulas = () => {
   // 必须在 setConfigSnapshot 之前 —— resetPracticeSession 会把 configSnapshot 清空。
   practiceStore.resetPracticeSession()
   // Capture config snapshot for stats tracking
-  practiceStore.setConfigSnapshot(toRaw(unref(formData)))
+  // mode:'manual' 是统计口径的显式标记：自定义练习分组后会写 evaluations，
+  // 没有这个标记的话 PracticeSession 会把该轮误判成「自适应」（见 18-PLAN R1）。
+  practiceStore.setConfigSnapshot({ ...toRaw(unref(formData)), mode: 'manual' })
 
   // Manual generation → switch to practice mode
   practiceStore.setPhase('practice')
@@ -348,6 +345,8 @@ const generateFormulas = () => {
   // 手动出题直接进题，不展示「准备开始」界面
   practiceStore.setReadyToStart(false)
 
+  // 一张卷子 = 一组练习：把每张卷子的题数交给练习页做组边界
+  practiceStore.setManualGroupPlan(papers.map(p => p.formulas?.length || 0))
   practiceStore.setGenerateDrawerVisible(false);
   practiceStore.setListPractices(listResult);
 }

@@ -147,8 +147,12 @@ export class PracticeSession extends SchemaSession {
     const completion = targetMax > 0 ? Math.min(1, total / targetMax) : 1
 
     // 练习类型
+    // 注意顺序：显式 mode 优先于「有 evaluations 就是自适应」的旧推断。
+    // 自定义练习分多组后会写 evaluations（每组一条自评），若沿用旧推断，
+    // 这些轮次会被误标成「自适应」。
     let practiceType = '普通'
-    if (session.evaluations || cfg?.mode === 'adaptive') practiceType = '自适应'
+    if (cfg?.mode === 'manual') practiceType = '自定义'
+    else if (session.evaluations || cfg?.mode === 'adaptive') practiceType = '自适应'
     else if (cfg?.diagnostic) practiceType = '诊断'
 
     return {
