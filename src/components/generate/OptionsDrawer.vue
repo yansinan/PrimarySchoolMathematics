@@ -86,7 +86,23 @@
         </el-input>
       </el-form-item>
 
-      <!-- 练习档位：把自适应练习的起点钉在指定档位（家长可干预） -->
+      <!-- ════════════════════════════════════════════════════════════════
+           2026-11-26 隐藏（观察期一个月，2026-12-30 无回滚需求即整块删除）
+           练习档位区：起点档位 / 挑战题 / 自动升档 / 升一档
+           为什么：这些入口已迁到「准备开始」页的「本次练习设置」（默认折叠）。
+                   出题抽屉再留一份就是两个入口改同一个设置，容易互相矛盾。
+           恢复：把本注释整体去掉即可（块内原本的两行小注释已并入本说明）。
+           删除时一并清掉：
+             script：levelOpen / levelDraft / groupedLevels / currentLevelText /
+                     overrideActive / applyLevelOverride / resetLevelOverride /
+                     promoteOneLevel / nextLevel / challengeEnabled /
+                     setChallengeEnabled / autoAdvanceOn / setAutoAdvance
+             样式： 「练习档位（起点档位手动指定）」与
+                    「练习档位：起点档位下拉 + 操作按钮」两段
+             依赖： constants/difficulty 与
+                    utils/store/{levelOverride,challengeSetting,autoAdvance}
+                    （确认别处不再引用后再删 import）
+           ════════════════════════════════════════════════════════════════
       <el-form-item>
         <el-collapse v-model="levelOpen" class="level-ratio">
           <el-collapse-item name="level">
@@ -174,6 +190,8 @@
           </el-collapse-item>
         </el-collapse>
       </el-form-item>
+
+      -->
 
       <!-- 档位配比：默认全不配置 = 与原有选题权重完全一致 -->
       <el-form-item>
