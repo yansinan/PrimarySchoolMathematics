@@ -181,7 +181,7 @@ targetDraft → validateTargetRange() 校验
 | 卷子标题 | 生成卷子对话框 |
 | 副标题 | 生成卷子对话框 |
 
-点「生成卷子」→ 先挡掉空题单 / 超 1000 题 → 弹对话框（带上次填过的值）→ 确认后走原有 `generate()` 跳 `/print`。
+点「生成卷子」→ 先挡掉空题单 / 超 1000 题 → 弹对话框（带上次填过的值）→ 确认后在**新窗口**打开 `/print`（见 §九之一）。
 
 ✅ **已收口**：「卷子数量」已从对话框移回共用区（`AutoGenerateFormulas`，标签「卷子数量 · 份/组」），
 并成为练习的分组依据 —— **一张卷子 = 一组练习**，每组结束有一次自评。详见 [18-PLAN-manual-groups.md](./18-PLAN-manual-groups.md)。
@@ -219,3 +219,24 @@ targetDraft → validateTargetRange() 校验
 
 - P2：按既有三段式计划拆「自定义练习 / 试卷 / 共用」三个区块（自定义练习先留空占位）；
 - 观察期到期（2026-12-30）：删掉抽屉里被注释的「练习档位区」与「自适应练习量」。
+
+## 九之一、打印页改为新窗口打开（2026-11-26）
+
+诉求：生成卷子后想再调参数，不希望离开配置页。
+
+**关键技术点**：原来打印数据走 `sessionStorage`，而 **sessionStorage 按标签页隔离** ——
+`window.open('/print?key=...')` 打开的新窗口读不到，会渲染成空白。
+
+改法：
+
+| 环节 | 改动 |
+|---|---|
+| 传输 | 改走 `localStorage`（同源跨标签页共享），key 仍是 `print_<时间戳>_<随机>` |
+| 打开方式 | `window.open(target, '_blank')` + 打开后手动清 `opener`（不能传 `noopener`：带它时返回 null，无法区分「被拦截」和「已打开」） |
+| 兜底 | `window.open` 返回 null（移动端常见拦截）→ 提示一句并回退同页 `router.push` |
+| 读取 | `Print.vue` 先读 localStorage、再回退 sessionStorage（兼容同页老路径），**读完即删**（两处都删） |
+| 清理 | 路由 `beforeEach` 与 `Print.vue` 的 `onUnmounted` 都清两个存储，双保险 |
+
+实测（真实 Chromium）：点生成卷子 → 新窗口打开 `/print`，标题「小学生口算题<时间戳>」，
+题目正常渲染；**主窗口仍停在 `/home`**，localStorage 无残留 key；
+直接访问 `/print?...&key=nope`（无数据）不崩，渲染空态。

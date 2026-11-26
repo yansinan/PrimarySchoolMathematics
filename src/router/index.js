@@ -41,6 +41,7 @@ export const router = createRouter({
 // (路径 4: sessionStorage + key in query)
 router.beforeEach((to, from) => {
     if (from.path === '/print' && from.query.key && to.path !== '/print') {
+        try { localStorage.removeItem(from.query.key) } catch {}
         try { sessionStorage.removeItem(from.query.key) } catch {}
     }
 })

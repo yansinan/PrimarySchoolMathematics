@@ -281,15 +281,36 @@ const generate = () => {
     return
   }
   const papers = createFormulasGenerator(toRaw(unref(formData)), toRaw(unref(paperList)))
-  // E3: sessionStorage + key in query 替代原 stores/app.js 跨页面 state
-  // (路径 4 — papers 大小无限制, URL 短, 刷新/前进后退恢复)
   const fileName = formData.value.fileNameGeneratedRule == fileNameGeneratedRuleEnum.baseOnTitleAndIndex.key
     ? formData.value.paperTitle
     : ""
   const key = `print_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-  try { sessionStorage.setItem(key, JSON.stringify(papers)) } catch {}
-  router.push({ path: '/print', query: { fileName, key } })
-  paperList.value = []
+
+  // 数据走 localStorage：新窗口与当前标签页共享，sessionStorage 不行（按标签页隔离）
+  try { localStorage.setItem(key, JSON.stringify(papers)) } catch { /* 存不下 → 回退下面的同页跳转 */ }
+
+  const target = router.resolve({ path: '/print', query: { fileName, key } }).href
+
+  /**
+   * 打印页开在新窗口里，当前页保持在配置界面（生成后想再调参数不用退回来）。
+   *
+   * 为什么不用 noopener：带 noopener 时 window.open 返回 null，无法区分
+   * 「被拦截」和「已成功打开」，会误触发同页回退。这里改为打开后手动清 opener。
+   */
+  let win = null
+  try {
+    win = window.open(target, '_blank')
+  } catch { /* 被拦截 / 环境不允许 → 走同页 */ }
+
+  if (win) {
+    try { win.opener = null } catch { /* 跨源限制，忽略 */ }
+    paperList.value = []
+  } else {
+    // 弹窗被拦截（常见于移动端浏览器）→ 退回原来的同页跳转
+    proxy.$message.info('浏览器拦截了新窗口，改为当前页打开打印预览')
+    router.push({ path: '/print', query: { fileName, key } })
+    paperList.value = []
+  }
 }
 
 /**
