@@ -61,7 +61,7 @@
 
         <div class="drawer-actions">
           <el-button :disabled="!paperList.length" size="large" :loading="buttonLoading"
-            @click="generate" class="action-btn">
+            @click="openPaperDialog" class="action-btn">
             <el-icon><Document /></el-icon> 生成卷子
           </el-button>
           <!-- 开始练习需要能力评估画像；做题/打印卷子不受此限制 -->
@@ -73,6 +73,38 @@
         </div>
       </div>
     </el-drawer>
+
+    <!-- 生成卷子：卷子独有的配置只在这里出现，抽屉里全是「自定义练习 + 卷子」共用项 -->
+    <el-dialog v-model="paperDialogVisible" title="生成卷子" width="min(520px, calc(100vw - 32px))"
+      append-to-body class="paper-dialog">
+      <el-form label-width="96px" class="paper-dialog__form" @submit.prevent>
+        <el-form-item label="卷子数量">
+          <el-input-number v-model="formData.numberOfPapers" :min="1" :max="20" :step="1" controls-position="right"
+            class="paper-dialog__num" />
+          <span class="paper-dialog__hint">与「每行列数」一起决定版式</span>
+        </el-form-item>
+        <el-form-item label="每行列数">
+          <el-input-number v-model="formData.numberOfPagerColumns" :min="1" :max="6" :step="1"
+            controls-position="right" class="paper-dialog__num" />
+          <span class="paper-dialog__hint">一行放几道题</span>
+        </el-form-item>
+        <el-form-item label="文件名规则">
+          <el-radio-group v-model="formData.fileNameGeneratedRule">
+            <el-radio-button v-for="o in fileNameRuleOptions" :key="o.key" :label="o.key">{{ o.label }}</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="卷子标题">
+          <el-input v-model="formData.paperTitle" placeholder="留空则不打印标题" />
+        </el-form-item>
+        <el-form-item label="副标题">
+          <el-input v-model="formData.paperSubTitle" placeholder="例如：2026-11-26 · 二年级上" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="paperDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="buttonLoading" @click="confirmGeneratePaper">生成卷子</el-button>
+      </template>
+    </el-dialog>
 </template>
 
 <script setup>
@@ -212,6 +244,32 @@ const selectedConfiguration = (configuration) => {
 }
 
 const buttonLoading = ref(false)
+
+/** 「生成卷子」对话框：卷子独有配置（数量/列数/文件名规则/标题/副标题）都在这里 */
+const paperDialogVisible = ref(false)
+const fileNameRuleOptions = computed(() =>
+  Object.entries(fileNameGeneratedRuleEnum).map(([, { key, text }]) => ({ key, label: text }))
+)
+
+/** 打开对话框前先挡掉明显的非法输入 */
+function openPaperDialog() {
+  const numberOfFormulas = paperList.value.reduce((prev, cur) => prev + parseInt(cur.numberOfFormulas, 10), 0)
+  if (!(numberOfFormulas >= 1)) {
+    proxy.$message.error('请先添加至少 1 道口算题')
+    return
+  }
+  if (numberOfFormulas * (formData.value.numberOfPapers || 1) > 1000) {
+    proxy.$message.error('题目总数不能超过1000题!')
+    return
+  }
+  paperDialogVisible.value = true
+}
+
+/** 对话框确认：关掉对话框再走原有生成流程（校验与报错都在 generate 里） */
+function confirmGeneratePaper() {
+  paperDialogVisible.value = false
+  generate()
+}
 
 // 生成卷子：生成试卷数据并跳转 /print 打印页
 const generate = () => {
@@ -420,5 +478,20 @@ const handleClose = (done) => {
       padding: 8px;
     }
   }
+}
+
+/* ── 生成卷子对话框：卷子独有配置 ── */
+.paper-dialog__form :deep(.el-form-item) {
+  margin-bottom: 14px;
+}
+
+.paper-dialog__num {
+  width: 108px;
+}
+
+.paper-dialog__hint {
+  margin-left: 10px;
+  font-size: 12px;
+  color: #9aa7b4;
 }
 </style>

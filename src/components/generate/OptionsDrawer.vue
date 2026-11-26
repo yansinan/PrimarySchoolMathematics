@@ -45,46 +45,8 @@
         </el-radio-group>
       </el-form-item>
 
-      <el-form-item>
-        <el-row :gutter="20">
-          <el-col :span="9">
-            <ElFormItem prop="numberOfPapers">
-              <el-input v-model.number="formData.numberOfPapers">
-                <template #prepend>生成的卷子数量</template>
-              </el-input>
-            </ElFormItem>
-          </el-col>
-          <el-col :span="8">
-            <ElFormItem prop="numberOfPagerColumns">
-              <el-input v-model.number="formData.numberOfPagerColumns">
-                <template #prepend>口算题列数</template>
-              </el-input>
-            </ElFormItem>
-          </el-col>
-        </el-row>
-      </el-form-item>
+      <!-- 卷子数量 / 每行列数 / 文件名规则 / 标题 / 副标题 → 已搬到「生成卷子」对话框（仅卷子需要） -->
 
-      <el-form-item label="文件名生成规则" prop="fileNameGeneratedRule">
-        <el-radio-group v-model="formData.fileNameGeneratedRule">
-          <el-radio-button v-for="o in fileNameGeneratedRuleOptions" :label="o.key">{{ o.label }}</el-radio-button>
-        </el-radio-group>
-      </el-form-item>
-
-      <el-form-item prop="paperTitle">
-        <el-row :gutter="8">
-          <el-col :span="24">
-            <el-input v-model="formData.paperTitle">
-              <template #prepend>卷子标题</template>
-            </el-input>
-          </el-col>
-        </el-row>
-      </el-form-item>
-
-      <el-form-item prop="paperSubTitle">
-        <el-input v-model="formData.paperSubTitle">
-          <template #prepend>卷子副标题</template>
-        </el-input>
-      </el-form-item>
 
       <!-- ════════════════════════════════════════════════════════════════
            2026-11-26 隐藏（观察期一个月，2026-12-30 无回滚需求即整块删除）
@@ -193,52 +155,8 @@
 
       -->
 
-      <!-- 档位配比：默认全不配置 = 与原有选题权重完全一致 -->
-      <el-form-item>
-        <el-collapse v-model="ratioOpen" class="level-ratio">
-          <el-collapse-item name="ratio">
-            <template #title>
-              <span class="level-ratio__title">
-                档位配比
-                <el-tag v-if="customCount" size="small" type="warning" effect="plain">
-                  {{ customCount }} 档已自定义
-                </el-tag>
-              </span>
-            </template>
-            <p class="level-ratio__hint">
-              不配置 = 按原有权重出题（默认）；0 = 该档不出；大于 1 = 提高占比。
-              只影响自适应练习里各档的出现比例，不改难度判定与升降级。
-            </p>
-            <div v-for="group in groupedLevels" :key="group.grade" class="level-ratio__group">
-              <div class="level-ratio__group-title">{{ group.grade }}</div>
-              <div v-for="lv in group.levels" :key="lv.idx" class="level-ratio__row">
-                <span class="level-ratio__label">
-                  <span class="level-ratio__idx">{{ lv.idx + 1 }}</span>{{ lv.label }}
-                </span>
-                <el-input-number
-                  :model-value="coefOf(lv.idx)"
-                  :min="0"
-                  :max="3"
-                  :step="0.1"
-                  :precision="1"
-                  size="small"
-                  controls-position="right"
-                  class="level-ratio__input"
-                  @update:model-value="(v) => setCoef(lv.idx, v)"
-                />
-              </div>
-            </div>
-            <el-button
-              v-if="customCount"
-              link
-              type="danger"
-              size="small"
-              class="level-ratio__reset"
-              @click="resetCoef"
-            >恢复全部默认</el-button>
-          </el-collapse-item>
-        </el-collapse>
-      </el-form-item>
+      <!-- 档位配比已搬到「准备开始」页的「本次练习设置 → 档位配比」 -->
+
     </ElForm>
   </el-drawer>
 </template>

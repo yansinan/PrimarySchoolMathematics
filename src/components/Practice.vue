@@ -215,6 +215,46 @@
                 <span class="setting-row__spacer"></span>
                 <span class="setting-row__value setting-row__value--muted">4~10 题</span>
               </div>
+
+              <!-- 档位配比：24 档太长，做成第二层折叠 + 限高内部滚动，收起设置区时整块不显示 -->
+              <div class="setting-row setting-row--ratio">
+                <span class="setting-row__label">档位配比</span>
+                <span v-if="ratioCustomCount" class="ratio-tag">{{ ratioCustomCount }} 档已自定义</span>
+                <el-popover trigger="click" placement="bottom-start" :width="260"
+                  content="不配置 = 按原有权重出题；0 = 该档不出；大于 1 = 提高占比。只影响各档出现比例，不改难度判定">
+                  <template #reference><span class="hint-btn">?</span></template>
+                </el-popover>
+                <span class="setting-row__spacer"></span>
+                <el-button link type="primary" size="small" @click="ratioOpen = !ratioOpen">
+                  {{ ratioOpen ? '收起' : '展开' }}
+                </el-button>
+              </div>
+
+              <div v-if="ratioOpen" class="ratio-panel">
+                <div class="ratio-panel__head">
+                  <span class="ratio-panel__title">各档出现比例</span>
+                  <span class="setting-row__spacer"></span>
+                  <span class="ratio-panel__hint">0 = 不出 · &gt;1 = 提高占比</span>
+                </div>
+                <div class="ratio-panel__body">
+                  <div v-for="group in groupedLevels" :key="group.grade" class="ratio-group">
+                    <div class="ratio-group__title">{{ group.grade }}</div>
+                    <div v-for="lv in group.levels" :key="lv.idx" class="ratio-line">
+                      <span class="ratio-line__name">
+                        <span class="ratio-line__idx">{{ lv.idx + 1 }}</span>{{ lv.label }}
+                      </span>
+                      <el-input :model-value="String(ratioOf(lv.idx))" size="small" class="ratio-line__input"
+                        @change="(v) => setRatio(lv.idx, v)" />
+                    </div>
+                  </div>
+                </div>
+                <div class="ratio-panel__foot">
+                  <span class="ratio-panel__hint">只影响各档出现比例，不改难度判定</span>
+                  <el-button v-if="ratioCustomCount" link type="danger" size="small" @click="resetRatio">
+                    恢复默认
+                  </el-button>
+                </div>
+              </div>
             </div>
           </section>
 
@@ -296,6 +336,14 @@ import { saveChallengeEnabled } from '@/utils/store/challengeSetting'
 import { saveAutoAdvance } from '@/utils/store/autoAdvance'
 import { validateTargetRange } from '@/utils/form/formDefaults'
 import { patchFormState } from '@/utils/store/formPersistence'
+import {
+  loadLevelCoefficients,
+  saveLevelCoefficients,
+  clearLevelCoefficients,
+  COEF_MIN,
+  COEF_MAX,
+  COEF_DEFAULT,
+} from '@/utils/store/levelCoefficients'
 
 /** 档位总数（0 基下标上界 = 长度 - 1） */
 const DIFFICULTY_LEVELS_LEN = DIFFICULTY_LEVELS.length
@@ -976,6 +1024,42 @@ const targetError = ref('')
 const levelDraft = ref(null)
 const levelOverrideActive = ref(false)
 
+/** 档位配比：第二层折叠 + 系数表（只落非默认值） */
+const ratioOpen = ref(false)
+const ratioMap = ref({})
+const ratioCustomCount = computed(() => Object.keys(ratioMap.value).length)
+
+/** 取某档系数（未配置显示默认 1.0） */
+function ratioOf(idx) {
+  const v = ratioMap.value[idx]
+  return typeof v === 'number' ? v.toFixed(1) : '1.0'
+}
+
+/** 改某档系数：非法 → 回退默认；等于默认 → 从表里删掉（保持表精简） */
+function setRatio(idx, raw) {
+  const num = Number(raw)
+  const next = { ...ratioMap.value }
+  if (!Number.isFinite(num)) {
+    delete next[idx]
+  } else {
+    const clamped = Math.min(COEF_MAX, Math.max(COEF_MIN, num))
+    if (clamped === COEF_DEFAULT) delete next[idx]
+    else next[idx] = Math.round(clamped * 10) / 10
+  }
+  ratioMap.value = next
+  saveLevelCoefficients(next)
+  practiceStore.bumpLevelOverride()
+  playSfx('tap')
+}
+
+/** 恢复全部默认 */
+function resetRatio() {
+  clearLevelCoefficients()
+  ratioMap.value = {}
+  practiceStore.bumpLevelOverride()
+  ElMessage.info('档位配比已恢复默认')
+}
+
 /** 档位升降的边界与禁用态 */
 const maxLevelIdx = DIFFICULTY_LEVELS_LEN - 1
 const levelDownDisabled = computed(() => startInfo.value.autoAdvance || startInfo.value.levelRaw <= 0)
@@ -1111,6 +1195,7 @@ async function loadStartInfo() {
   const override = loadLevelOverride()
   levelOverrideActive.value = !!override
   levelDraft.value = override ? override.levelIdx : null
+  ratioMap.value = loadLevelCoefficients()
 
   startInfo.value = {
     levelIdx: idx + 1,
@@ -1594,6 +1679,109 @@ onMounted(async () => {
   font-size: 11px;
   line-height: 1;
   cursor: pointer;
+}
+
+/* ── 档位配比（第二层折叠 + 限高内部滚动）── */
+.setting-row--ratio {
+  border-bottom: none;
+}
+
+.ratio-tag {
+  font-size: 11px;
+  color: #b7791f;
+  background: #fff7e6;
+  border: 1px solid #ffe1a8;
+  border-radius: 6px;
+  padding: 1px 6px;
+}
+
+.ratio-panel {
+  margin: 2px 0 8px;
+  border: 1px solid #e6eef6;
+  border-radius: 12px;
+  background: #f8fbff;
+  overflow: hidden;
+}
+
+.ratio-panel__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  background: #f2f8ff;
+  border-bottom: 1px solid #e6eef6;
+}
+
+.ratio-panel__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e3c5c;
+}
+
+.ratio-panel__hint {
+  font-size: 11px;
+  color: #9aa7b4;
+}
+
+/* 24 档不撑长页面：限高 + 内部滚动 */
+.ratio-panel__body {
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 4px 12px 8px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ratio-panel__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-top: 1px solid #e6eef6;
+  background: #fbfdff;
+}
+
+.ratio-group__title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #7f8c9b;
+  margin: 8px 0 2px;
+}
+
+.ratio-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+}
+
+.ratio-line__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  color: #5b6b7a;
+}
+
+.ratio-line__idx {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-right: 6px;
+  border-radius: 6px;
+  background: #eef3f8;
+  color: #7f8c9b;
+  font-size: 11px;
+}
+
+.ratio-line__input {
+  width: 64px;
+  flex: 0 0 64px;
+}
+
+.ratio-line__input :deep(input) {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .settings-error {
