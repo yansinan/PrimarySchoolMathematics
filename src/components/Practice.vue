@@ -28,9 +28,9 @@
         </div>
 
         <ProgressSteps
-          :total="totalQuestions"
-          :current="currentIndex + 1"
-          :answers="currentAnswers"
+          :total="progressTotal"
+          :current="progressCurrent"
+          :answers="progressAnswers"
           :correct-count="groupCorrectCount"
         />
 
@@ -326,7 +326,7 @@ import { useAdaptiveSession } from '@/composables/useAdaptiveSession'
 import { usePracticeDialogs } from '@/composables/usePracticeDialogs'
 import { usePracticeSaver } from '@/composables/usePracticeSaver'
 import { useManualSession } from '@/composables/useManualSession'
-import { isLastOfGroup, groupIndexOf, hasMultipleGroups } from '@/utils/groupPlan'
+import { isLastOfGroup, groupIndexOf, hasMultipleGroups, rangeOfGroup } from '@/utils/groupPlan'
 import { useSnapshotSync } from '@/composables/useSnapshotSync'
 import { decideListPracticesTransition } from '@/utils/listPracticesGuard'
 import { useDisplayStrategy } from '@/composables/useDisplayStrategy'  // 🆕 PR-4.2 抽离 displayStats + applyDisplayModeForCurrentQuestion + generateOptions
@@ -445,6 +445,33 @@ const currentInput = computed(() => inputComponents[session.value.displayMode.in
 const currentAnswers = computed(() =>
   isAssessment.value ? session.value.diagnosticAnswers : session.value.answers.slice(groupAnswerOffset.value)
 )
+
+/**
+ * 进度展示：多组自定义练习按「本组」算，与自适应一致
+ * （自适应每组的 listPractices 就是本组题，总题数天然是组大小）
+ */
+const progressRange = computed(() => {
+  if (!isMultiGroupManual.value) return null
+  return rangeOfGroup(manualGroupRanges.value, practiceStore.session.currentIndex)
+})
+
+const progressTotal = computed(() => {
+  const r = progressRange.value
+  return r ? r.end - r.start : totalQuestions.value
+})
+
+const progressCurrent = computed(() => {
+  const r = progressRange.value
+  return r ? practiceStore.session.currentIndex - r.start + 1 : currentIndex.value + 1
+})
+
+/** 进度点/步骤只统计本组答案，避免第 2 组还显示第 1 组的对错 */
+const progressAnswers = computed(() => {
+  const r = progressRange.value
+  const all = currentAnswers.value
+  if (!r) return all
+  return all.slice(r.start - groupAnswerOffset.value)
+})
 
 const inputProps = computed(() => {
   if (!currentQuestion.value) return { disabled: true }
