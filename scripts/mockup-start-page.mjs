@@ -30,11 +30,15 @@ body{background:#eef4fb;font-family:"PingFang SC","Noto Sans CJK SC","Source Han
 .desktop{width:100%;max-width:960px;background:#f7fbff;border-radius:20px;box-shadow:0 14px 40px rgba(23,110,191,.14);overflow:hidden}
 .statusbar{height:28px;background:#f7fbff;display:flex;align-items:center;justify-content:space-between;padding:0 16px;font-size:11px;color:#9aa7b4}
 .viewport{height:816px;overflow:hidden;background:linear-gradient(180deg,#f7fbff 0%,#eef6ff 100%);padding:16px 14px 0}
-.dviewport{height:900px;overflow:hidden;background:linear-gradient(180deg,#f7fbff 0%,#eef6ff 100%);padding:28px 24px 0;display:flex;justify-content:center}
+.dviewport{min-height:900px;overflow:hidden;background:linear-gradient(180deg,#f7fbff 0%,#eef6ff 100%);padding:28px 24px 0;display:flex;justify-content:center}
+.split{display:grid;grid-template-columns:minmax(280px,340px) minmax(0,1fr);gap:24px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr;gap:16px}}
 
 /* ── 卡片 ── */
 .card{background:rgba(255,255,255,.88);backdrop-filter:blur(12px);border-radius:24px;
   box-shadow:0 12px 32px rgba(23,110,191,.08);width:100%;max-width:560px}
+/* 宽屏：卡片随视口放宽（clamp），避免在大屏上孤零零一条 */
+@media(min-width:768px){.card{max-width:clamp(560px,72vw,880px)}}
 .panel{display:flex;flex-direction:column;gap:20px;padding:8px 4px 4px}
 .head{text-align:center}
 .title{font-size:26px;font-weight:700;color:#1e3c5c;line-height:1.3}
@@ -70,13 +74,19 @@ body{background:#eef4fb;font-family:"PingFang SC","Noto Sans CJK SC","Source Han
 .row--pair{gap:20px}
 .pair{flex:1 1 0;display:flex;align-items:center;gap:8px;min-width:0}
 .pair__label{font-size:14px;font-weight:500;color:#1e3c5c;white-space:nowrap}
-.pair__hint{font-size:12px;color:#9aa7b4;flex:1 1 auto;min-width:0}
+.pair__hint{display:none}
+.hintbtn{width:16px;height:16px;border-radius:50%;background:#dbe7f4;color:#7f8c9b;font-size:11px;
+  display:inline-flex;align-items:center;justify-content:center;flex:0 0 16px;cursor:help;line-height:1}
+.popover{position:absolute;z-index:20;background:#1e3c5c;color:#fff;font-size:12px;line-height:1.6;
+  padding:7px 10px;border-radius:8px;box-shadow:0 6px 18px rgba(30,60,92,.28);max-width:200px;white-space:normal}
+.popover::after{content:"";position:absolute;top:100%;left:14px;border:5px solid transparent;border-top-color:#1e3c5c}
+.rel{position:relative}
 .row--readonly .row__value{color:#9aa7b4;font-size:13px}
 .row{display:flex;align-items:center;gap:10px;min-height:44px;padding:6px 0;border-bottom:1px solid #eef3f8}
 .row:last-child{border-bottom:none}
 .row__label{font-size:14px;font-weight:500;color:#1e3c5c;flex:0 0 auto}
 .row__value{font-size:13px;color:#5b6b7a;flex:1 1 auto;min-width:0}
-.row__hint{font-size:12px;color:#9aa7b4;flex:1 1 auto}
+.row__hint{display:none}
 .row__unit{font-size:13px;color:#8794a2}
 .row--level{flex-wrap:wrap}
 .btn{display:inline-flex;align-items:center;justify-content:center;height:32px;padding:0 14px;border-radius:9px;
@@ -115,6 +125,10 @@ body{background:#eef4fb;font-family:"PingFang SC","Noto Sans CJK SC","Source Han
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 28px}
 .deskrows .grid2{gap:0 28px}
 .deskrows .grid2 .row{border-bottom:1px solid #eef3f8}
+/* 设置区在宽屏自动排成两列：grid-template-columns: repeat(auto-fit, minmax(300px, 1fr))
+   —— 不用媒体查询硬切，容器窄就自动回退一列 */
+.wide-rows{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:0 32px;align-items:start}
+.wide-rows > .row--level,.wide-rows > .row--pair{grid-column:1/-1}
 @media(max-width:560px){.grid2{grid-template-columns:1fr}}
 
 /* 标注（设计说明） */
@@ -244,26 +258,26 @@ function afterPanelExpanded() {
         <div class="row row--pair">
           <div class="pair">
             <span class="pair__label">挑战题</span>
-            <span class="pair__hint">下一档的题</span>
+            <span class="hintbtn">?</span>
             ${SWITCH_OFF}
           </div>
           <div class="pair">
             <span class="pair__label">自动升档</span>
-            <span class="pair__hint">练够再升</span>
+            <span class="hintbtn">?</span>
             ${SWITCH_OFF}
           </div>
         </div>
         <!-- 练习量：下限~上限，一行 -->
         <div class="row">
           <span class="row__label">题量</span>
-          <span class="row__hint">这一轮做几题</span>
+          <span class="hintbtn">?</span>
           <span class="row__value"></span>
           <span class="num">10</span><span class="row__unit">~</span><span class="num">30</span><span class="row__unit">题</span>
         </div>
         <!-- 每组题量：只读 -->
         <div class="row row--readonly">
           <span class="row__label">每组</span>
-          <span class="row__hint">按表现自动调整</span>
+          <span class="hintbtn">?</span>
           <span class="row__value">4~10 题</span>
         </div>
       </div>
@@ -318,48 +332,107 @@ await shoot(page(`
     <div class="sticky"><div class="startbtn">开始练习</div></div>
   </div></div>`), 'after-expanded-390.png', { width: 430, height: 900 })
 
-/* 4) 新版 · 桌面 · 折叠 */
+/* 4) 新版 · 桌面 · 折叠（宽屏分栏：左=学习情况+重点，右=设置） */
+const deskCollapsed = afterPanelCollapsed()
+  .replace('<section class="settings">', '<section class="settings" style="grid-column:1/-1">')
 await shoot(page(`
   <div class="dviewport"><div class="desktop">
-    <div style="padding:28px 28px 0"><div class="card">${afterPanelCollapsed()}</div></div>
+    <div style="padding:28px 28px 0">
+      <div class="card"><div class="panel split">
+        <div>
+          <section>
+            <div class="section__title">目前学习情况</div>
+            <div class="metrics" style="grid-template-columns:1fr">
+              <div class="metric"><div class="metric__value">Lv.10</div>
+                <div class="metric__label">乘法口诀·2~6 <span class="metric__grade">二上</span></div></div>
+              <div class="metric" style="display:flex;justify-content:space-between;align-items:center;text-align:left">
+                <div><div class="metric__value" style="font-size:20px">83<span class="metric__unit">%</span></div>
+                  <div class="metric__label">上次正确率</div></div>
+                <div style="text-align:right"><div class="metric__value" style="font-size:20px">1<span class="metric__unit">天</span></div>
+                  <div class="metric__label">连续练习</div></div>
+              </div>
+            </div>
+          </section>
+          <section>
+            <div class="section__title">练习重点</div>
+            <div class="chips"><span class="chip chip--focus">进退位巩固</span></div>
+          </section>
+        </div>
+        ${deskCollapsed.replace(/<section>[\s\S]*?<\/section>\s*<section class="settings"/, '<section class="settings"')}
+      </div></div>
+    </div>
   </div></div>`), 'after-collapsed-1440.png', { width: 1024, height: 940 })
 
-/* 5) 新版 · 桌面 · 展开（设置区：档位一行 + 下面两列） */
-const deskExpanded = afterPanelExpanded().replace(
+/* 5) 新版 · 桌面 · 展开（宽屏分栏 + 设置区自动两列） */
+const deskExpandedInner = afterPanelExpanded().replace(
   /<div class="rows">([\s\S]*?)<\/div>\s*<\/section>/,
-  `<div class="rows deskrows">
+  `<div class="rows wide-rows">
      <div class="row row--level">
        <span class="row__label">档位</span>
        <span class="row__value">Lv.10 乘法口诀·2~6 二上</span>
        <span class="btn btn--success">升一档</span>
+       <span class="caretbtn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
      </div>
-     <div class="grid2">
-       <div class="row">
-         <span class="row__label">挑战题</span>
-         <span class="row__hint">下一档的题，默认不出</span>
+     <div class="row row--pair rel">
+       <div class="pair">
+         <span class="pair__label">挑战题</span>
+         <span class="hintbtn">?</span>
+         <div class="popover" style="left:78px;top:-8px">打开后，这一轮会混入下一档的题（约占 15%）</div>
          ${SWITCH_OFF}
        </div>
-       <div class="row">
-         <span class="row__label">自动升档</span>
-         <span class="row__hint">手动，练够再升</span>
+       <div class="pair">
+         <span class="pair__label">自动升档</span>
+         <span class="hintbtn">?</span>
+         <div class="popover" style="left:78px;top:-8px">打开后，练够量且正确率达标就自动进下一档</div>
          ${SWITCH_OFF}
        </div>
      </div>
-     <div class="grid2">
-       <div class="row">
-         <span class="row__label">题量</span>
-         <span class="row__hint">这一轮做几题</span>
-         <span class="row__value"></span>
-         <span class="num">10</span><span class="row__unit">~</span><span class="num">30</span><span class="row__unit">题</span>
-       </div>
-       <div class="row row--readonly">
-         <span class="row__label">每组</span>
-         <span class="row__hint">按表现自动调整</span>
-         <span class="row__value">4~10 题</span>
-       </div>
+     <div class="row rel">
+       <span class="row__label">题量</span>
+       <span class="hintbtn">?</span>
+       <div class="popover" style="left:56px;top:-8px">这一轮做几题：最少 ~ 最多。答得好会提前结束</div>
+       <span class="row__value"></span>
+       <span class="num">10</span><span class="row__unit">~</span><span class="num">30</span><span class="row__unit">题</span>
+     </div>
+     <div class="row row--readonly rel">
+       <span class="row__label">每组</span>
+       <span class="hintbtn">?</span>
+       <div class="popover" style="left:56px;top:-8px">每组出几题，由表现自动调整，不可手动改</div>
+       <span class="row__value">4~10 题</span>
      </div>
    </div></section>`
 )
+const deskExpanded = deskExpandedInner.replace(
+  /<section>\s*<div class="section__title">目前学习情况<\/div>[\s\S]*?<\/section>\s*<section>\s*<div class="section__title">练习重点<\/div>[\s\S]*?<\/section>/,
+  `<section>
+            <div class="section__title">目前学习情况</div>
+            <div class="metrics" style="grid-template-columns:1fr">
+              <div class="metric"><div class="metric__value">Lv.10</div>
+                <div class="metric__label">乘法口诀·2~6 <span class="metric__grade">二上</span></div></div>
+              <div class="metric" style="display:flex;justify-content:space-between;align-items:center;text-align:left">
+                <div><div class="metric__value" style="font-size:20px">83<span class="metric__unit">%</span></div>
+                  <div class="metric__label">上次正确率</div></div>
+                <div style="text-align:right"><div class="metric__value" style="font-size:20px">1<span class="metric__unit">天</span></div>
+                  <div class="metric__label">连续练习</div></div>
+              </div>
+            </div>
+          </section>
+          <section>
+            <div class="section__title">练习重点</div>
+            <div class="chips"><span class="chip chip--focus">进退位巩固</span></div>
+          </section>`
+)
+await shoot(page(`
+  <div class="dviewport"><div class="desktop">
+    <div style="padding:28px 28px 0">
+      <div class="card"><div class="panel split">
+        <div>
+          ${deskExpanded.replace(/<section>[\s\S]*?<\/section>\s*<section>\s*<div class="section__title">练习重点<\/div>[\s\S]*?<\/section>\s*(<section class="settings")/, '$1')}
+        </div>
+        ${deskExpanded.replace(/^[\s\S]*?<section class="settings"/, '<section class="settings"').replace(/<\/section>\s*<\/div>\s*<\/div>/, '</section></div></div>')}
+      </div></div>
+    </div>
+  </div></div>`), 'after-expanded-1440.png', { width: 1024, height: 940 })
 
 /* 5b) 新版 · 手机 · 展开 + 「更多」面板展开 */
 const withMore = afterPanelExpanded().replace(
