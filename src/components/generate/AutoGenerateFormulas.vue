@@ -49,29 +49,26 @@
       </div>
     </ElFormItem>
 
-    <ElFormItem prop="numberOfFormulas"
-      :rules="[{ required: true, message: '请填写口算题数量' }, { type: 'number', message: '请填写数字' }]">
-      <ElRow :gutter="12">
-        <ElCol :xs="24" :sm="14">
-          <ElInput v-model.number="formData.numberOfFormulas">
-            <template #prepend>口算题数量</template>
-          </ElInput>
+    <!-- 题数 + 卷子数同一行：只留前置标签，输入区更宽 -->
+    <ElFormItem class="counts-item">
+      <ElRow :gutter="12" class="counts-row">
+        <ElCol :xs="12" :sm="12">
+          <ElFormItem prop="numberOfFormulas"
+            :rules="[{ required: true, message: '请填写口算题数量' }, { type: 'number', message: '请填写数字' }]"
+            class="counts-cell">
+            <ElInput v-model.number="formData.numberOfFormulas" class="counts-input">
+              <template #prepend>口算题数</template>
+            </ElInput>
+          </ElFormItem>
         </ElCol>
-      </ElRow>
-    </ElFormItem>
-
-    <!-- 卷子数量 = 练习组数：打印是几份卷子，练习就是几组（每组结束自评一次） -->
-    <ElFormItem prop="numberOfPapers"
-      :rules="[{ required: true, message: '请填写卷子数量' }, { type: 'number', message: '请填写数字' }]">
-      <ElRow :gutter="12">
-        <ElCol :xs="24" :sm="14">
-          <ElInput v-model.number="formData.numberOfPapers">
-            <template #prepend>卷子数量</template>
-            <template #append>份 / 组</template>
-          </ElInput>
-        </ElCol>
-        <ElCol :xs="24" :sm="10" class="papers-hint-col">
-          <span class="papers-hint">练习按卷子分组，每组结束做一次自评</span>
+        <ElCol :xs="12" :sm="12">
+          <ElFormItem prop="numberOfPapers"
+            :rules="[{ required: true, message: '请填写卷子份数' }, { type: 'number', message: '请填写数字' }]"
+            class="counts-cell">
+            <ElInput v-model.number="formData.numberOfPapers" class="counts-input">
+              <template #prepend>卷子份数</template>
+            </ElInput>
+          </ElFormItem>
         </ElCol>
       </ElRow>
     </ElFormItem>
@@ -702,14 +699,60 @@ const addConfiguration = () => {
   flex-wrap: wrap;
 }
 
-.papers-hint-col {
-  display: flex;
-  align-items: center;
+/* 题数 / 卷子数同一行：错误信息绝对定位，不撑高这一行 */
+.counts-item :deep(.el-form-item__content) {
+  display: block;
 }
 
-.papers-hint {
-  font-size: 12px;
-  color: #9aa7b4;
+.counts-cell {
+  margin-bottom: 0;
+}
+
+.counts-cell :deep(.el-form-item__content) {
+  margin-left: 0;
+  line-height: normal;
+}
+
+.counts-cell :deep(.el-form-item__error) {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  font-size: 11px;
+  padding-top: 1px;
+  white-space: nowrap;
+}
+
+/* 前置标签不挤输入区：定宽 + 居中，数字始终完整可见 */
+.counts-input :deep(.el-input-group__prepend) {
+  padding: 0 8px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.counts-input :deep(.el-input__inner) {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 480px) {
+  .counts-row {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  .counts-row > .el-col {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  .counts-row > .el-col + .el-col {
+    padding-left: 8px !important;
+  }
+
+  .counts-input :deep(.el-input-group__prepend) {
+    padding: 0 6px;
+    font-size: 12px;
+  }
 }
 
 .rules-row__label {

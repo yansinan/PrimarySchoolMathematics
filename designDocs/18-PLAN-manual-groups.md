@@ -166,7 +166,7 @@ else if (session.evaluations || cfg?.mode === 'adaptive') practiceType = '自适
 | 落库 | `usePracticeSaver.saveManualGroupCheckpoint`：evaluations 与自适应同格式 `[{group, score, count}]`，`completed:false`，同 pid |
 | 接线索 | `Generate.vue`：`setConfigSnapshot({...formData, mode:'manual'})` + `setManualGroupPlan(papers.map(p => p.formulas.length))` |
 | 组徽标 | `Practice.vue` 复用 `.stage-badge`：新增 `.stage-badge--group`（同尺寸同圆角，只换底色），文案 `第 2/3 组` |
-| 卷子数量 | 从对话框移回共用区（`AutoGenerateFormulas`），标签「卷子数量」，后缀「份 / 组」，提示「练习按卷子分组，每组结束做一次自评」 |
+| 卷子数量 | 从对话框移回共用区（`AutoGenerateFormulas`），与「口算题数」**并排同一行**：两个输入框各占一半，只保留前置标签（口算题数 / 卷子份数），不再加后缀与提示文字 |
 
 **实测（真实 Chromium，3 张卷子 × 3 题）**
 
@@ -182,3 +182,10 @@ else if (session.evaluations || cfg?.mode === 'adaptive') practiceType = '自适
 2. 收尾分支的判据是「**还有下一组**」，不是「不是本组最后一题」—— 走到收尾分支时一定已在本组最后一道，写成后者会直接跳到整轮总结。
 
 **遗留**：TODO U1 的「卷子数量与自定义练习共用分组」已顺带完成（一张卷子 = 一组）；剩下的是 `generateFormulas` 仍按 `numberOfPapers` 展平题单，分组语义已对齐，无需再改。
+
+### 收尾排版（同日追加）
+
+- 「口算题数」与「卷子份数」并排一行，`xs=12 / sm=12`，行高 32px（原先是两个整行 form-item）
+- 去掉后缀「题 / 份」和「练习按卷子分组」的提示文字：那行太占地方，语义改由练习中的 `第 2/3 组` 徽标体现
+- 输入区宽度：390px 下 ≈77px / 69px（数字完整可见），1280px 下 ≈144px
+- 校验照旧：两个单元格各自保留 `ElFormItem :prop/:rules`，错误信息绝对定位不撑行高
