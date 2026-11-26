@@ -81,9 +81,15 @@ export function useAdaptiveSession(options = {}) {
       return `能力评估 ${session.value.diagnosticAnswers.length}/${totalQuestions.value}`
     }
     if (adaptiveEngine.value) {
-      const label = adaptiveEngine.value.getDifficultyLabel()
+      const engine = adaptiveEngine.value
+      const label = engine.getDifficultyLabel()
       const groupIdx = adaptiveGroupIndex.value
-      return `${label} · 第${groupIdx}组`
+      // 自适应没有固定组数（练够本轮目标题量就结束，可能提前收尾），
+      // 所以不给「共 N 组」这种会变的估计值，改成显示本轮已完成题量。
+      const answered = engine.totalAnswered || 0
+      const target = engine.targetMax || 0
+      const round = target > 0 ? ` · ${Math.min(answered, target)}/${target} 题` : ''
+      return `${label} · 第 ${groupIdx} 组${round}`
     }
     return '一年级'
   })
