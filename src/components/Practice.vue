@@ -778,7 +778,7 @@ const currentGroupNo = computed(() => {
 /** 多组时显示「第 2/3 组」 */
 const groupBadgeText = computed(() => {
   if (!isMultiGroupManual.value) return ''
-  return `第 ${currentGroupNo.value}/${manualGroupRanges.value.length} 组`
+  return `第 ${currentGroupNo.value} 组，共 ${manualGroupRanges.value.length} 组`
 })
 
 /** 本次答题是否本组最后一题（多组自定义练习才成立） */
