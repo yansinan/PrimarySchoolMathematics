@@ -11,6 +11,7 @@
 | `mockup-start-page-wide2.mjs` | `start-page/wide-A/B/C-*.png` | 宽屏三方案对照 |
 | `mockup-ratio-title.mjs` | `ratio-title/A-*.png`、`B1/B2-*.png` | 档位配比归属 + 卷子标题两种归属方案 |
 | `mockup-drawer-compact.mjs` | `drawer-compact/N*.png`、`O*.png` | 数字范围表格化 + 出题规则内联 |
+| `mockup-progress.mjs` | `progress/progress-390.png`、`progress-1280.png` | 题目多时的进度展示三方案（省略号窗口 / 细条 / 分段格） |
 
 运行前确认依赖：
 
