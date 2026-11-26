@@ -71,6 +71,23 @@ export function saveFormState(formData, paperList) {
   }, SAVE_DEBOUNCE_MS)
 }
 
+/**
+ * 局部更新表单状态（读 → 合并 formData → 写回）
+ *
+ * 准备开始页改「练习量」时用：它不持有整份 formData，
+ * 直接整份覆盖会把出题抽屉里的其它设置冲掉。
+ *
+ * @param {object} partialFormData 需要合并进 formData 的字段
+ * @returns {boolean} 是否有可写的旧状态（无旧状态时不创建，避免用半份表单覆盖默认值）
+ */
+export function patchFormState(partialFormData) {
+  if (!partialFormData || typeof partialFormData !== 'object') return false
+  const current = loadFormState()
+  if (!current) return false
+  saveFormState({ ...current.formData, ...partialFormData }, current.paperList)
+  return true
+}
+
 let _timer = null
 
 /** 清空保存的表单状态（重置数据时用） */

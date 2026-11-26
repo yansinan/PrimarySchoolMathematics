@@ -163,6 +163,22 @@ function handleSettingsApplied() {
 onMounted(() => window.addEventListener('psm:settings-applied', handleSettingsApplied))
 onUnmounted(() => window.removeEventListener('psm:settings-applied', handleSettingsApplied))
 
+/**
+ * 准备开始页也能改「练习量」。抽屉打开时把 targetMin/Max 同步成已保存的值，
+ * 否则抽屉里还拿着挂载时的旧值，用户改别的设置时会把准备页的改动覆盖掉。
+ */
+watch(
+  () => practiceStore.generateDrawerVisible,
+  (visible) => {
+    if (!visible) return
+    const state = loadFormState()
+    const saved = state?.formData
+    if (!saved) return
+    if (saved.targetMin != null) formData.value.targetMin = saved.targetMin
+    if (saved.targetMax != null) formData.value.targetMax = saved.targetMax
+  }
+)
+
 const activeConfigurationId = ref('1')
 const refreshConfiguration = () => {
   configurations.value = new ConfigStorage().loadAll()

@@ -62,6 +62,9 @@ body{background:#eef4fb;font-family:"PingFang SC","Noto Sans CJK SC","Microsoft 
 .btn{display:inline-flex;align-items:center;justify-content:center;height:32px;padding:0 14px;border-radius:9px;
  font-size:13px;font-weight:600;border:1px solid transparent;white-space:nowrap}
 .btn--success{background:#58cc71;color:#fff}
+.btn--ghost{background:#f2f5f8;color:#5b6b7a;border-color:#e3e9ef}
+.level-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
+.btn--sm{height:30px;padding:0 10px;font-size:12.5px}
 .caretbtn{width:28px;height:28px;border-radius:8px;border:1px solid #dcdfe6;background:#fff;color:#909399;
  display:inline-flex;align-items:center;justify-content:center}
 .num{width:72px;height:32px;border:1px solid #dcdfe6;border-radius:8px;background:#fff;
@@ -81,6 +84,7 @@ body{background:#eef4fb;font-family:"PingFang SC","Noto Sans CJK SC","Microsoft 
 .sel{height:32px;border:1px solid #dcdfe6;border-radius:8px;background:#fff;display:flex;align-items:center;
  justify-content:space-between;padding:0 10px;font-size:13px;color:#5b6b7a;flex:1 1 auto}
 .sel__caret{color:#c0c4cc}
+@media(max-width:420px){.row--level{flex-wrap:wrap}.level-actions{width:100%;justify-content:flex-end;margin-left:0}}
 @media(max-width:480px){.card{padding:20px 18px 22px}.title{font-size:22px}.metric{padding:12px 6px}.metric__value{font-size:20px}}
 `
 const SW_OFF = '<div class="sw"></div>'
@@ -129,9 +133,12 @@ const settingsExpanded = `
     <div class="rows">
       <div class="row row--level">
         <span class="row__label">档位</span>
-        <span class="row__value">Lv.10 乘法口诀·2~6 二上</span>
-        <span class="btn btn--success">升一档</span>
-        ${CARET_BTN}
+        <span class="row__value">Lv.10</span>
+        <span class="level-actions">
+          <span class="btn btn--ghost btn--sm">降一档</span>
+          <span class="btn btn--success btn--sm">升一档</span>
+          ${CARET_BTN}
+        </span>
       </div>
       <div class="row row--pair">
         <div class="pair"><span class="pair__label">挑战题</span><span class="hintbtn">?</span>${SW_OFF}</div>
@@ -159,9 +166,12 @@ const settingsExpandedWithMore = `
     <div class="rows">
       <div class="row row--level">
         <span class="row__label">档位</span>
-        <span class="row__value">Lv.10 乘法口诀·2~6 二上</span>
-        <span class="btn btn--success">升一档</span>
-        ${CARET_BTN}
+        <span class="row__value">Lv.10</span>
+        <span class="level-actions">
+          <span class="btn btn--ghost btn--sm">降一档</span>
+          <span class="btn btn--success btn--sm">升一档</span>
+          ${CARET_BTN}
+        </span>
       </div>
       <div class="more">
         <div class="more__title">更多档位控制</div>
