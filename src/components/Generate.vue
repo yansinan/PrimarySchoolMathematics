@@ -23,14 +23,6 @@
       </template>
 
       <div class="drawer-scroll">
-        <!-- ── Configuration list (top, for quick reuse) ── -->
-        <div class="config-section">
-          <ConfigurationList v-model:active-index="activeConfigurationId" :configurations="configurations"
-            @removed="refreshConfiguration" @selected="selectedConfiguration" />
-        </div>
-
-        <el-divider />
-
         <!-- ── Form ── -->
         <ElForm ref="refForm" :model="formData" label-position="top" size="default">
           <ElFormItem label="题目来源">
@@ -43,6 +35,11 @@
 
           <!-- 自动生成 -->
           <template v-if="formData.generateMode == '1'">
+            <!-- 「已保存的配置」是自动生成这套参数的快照，只在这一页显示 -->
+            <div class="config-section">
+              <ConfigurationList v-model:active-index="activeConfigurationId" :configurations="configurations"
+                @removed="refreshConfiguration" @selected="selectedConfiguration" />
+            </div>
             <AutoGenerateFormulas v-model:formulas-form-data="formData" v-model:papers="paperList" :ref-form="refForm"
               :configurations="configurations" @add-configuration="addConfiguration" @valid-change="(v) => formValid = v" />
           </template>
