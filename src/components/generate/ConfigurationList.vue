@@ -55,12 +55,14 @@ const remove = async (id) => {
   }
 }
 
-const select = async (id) => {
-  try {
-    await proxy.$messageBox.confirm('确定加载吗? 注意未保存的参数将会丢失!', '提示', { type: 'warning' })
-    activeConfigurationId.value = id
-  } catch (error) {
-  }
+/**
+ * 选中配置：直接加载，不再弹「确定加载吗」确认框
+ *
+ * 原来的提示是「未保存的参数将会丢失」——现在抽屉里的参数本来就会自动落盘
+ * （psm_form_state deep watch），这句话已经不成立，多一次确认只是多一次点击。
+ */
+const select = (id) => {
+  activeConfigurationId.value = id
 }
 
 watch(() => props.activeIndex, async (val) => {

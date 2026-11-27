@@ -234,27 +234,13 @@ const addConfiguration = (newId) => {
   useSnapshotSync().markDirty(0)
 }
 const selectedConfiguration = (configuration) => {
-  if (import.meta.env.DEV) console.log(configuration);
-
-  const { data: config } = configuration
-  formData.value.step = config.step
-  formData.value.numberOfFormulas = config.numberOfFormulas
-  formData.value.whereIsResult = config.whereIsResult
-  formData.value.enableBrackets = config.enableBrackets
-  formData.value.carry = config.carry
-  formData.value.abdication = config.abdication
-  formData.value.remainder = config.remainder
-  formData.value.solution = config.solution
-  formData.value.numberOfPapers = config.numberOfPapers
-  formData.value.numberOfPagerColumns = config.numberOfPagerColumns
-  formData.value.paperTitle = config.paperTitle
-  formData.value.paperSubTitle = config.paperSubTitle
-  formData.value.formulaList = config.formulaList
-  formData.value.resultMinValue = config.resultMinValue
-  formData.value.resultMaxValue = config.resultMaxValue
-  formData.value.targetMin = config.targetMin ?? 10
-  // 用 applyConfigToFormData 替代 19 行手写赋值（含 targetMin/Max）
+  const { data: config } = configuration || {}
+  if (!config) return
+  // 配置里存的是「自动生成」那一套参数：应用前先切回该分页，
+  // 否则停在错题库 / 手动添加页时，用户看不到参数被载入（dr 反馈）
+  formData.value.generateMode = '1'
   applyConfigToFormData(formData.value, config, { includeAdaptive: true })
+  proxy.$message.success(`已载入配置「${configuration.name || ''}」`)
 }
 
 const buttonLoading = ref(false)
