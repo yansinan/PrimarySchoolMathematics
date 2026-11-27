@@ -33,9 +33,10 @@
 
         <!-- ── Form ── -->
         <ElForm ref="refForm" :model="formData" label-position="top" size="default">
-          <ElFormItem label="生成模式">
+          <ElFormItem label="题目来源">
             <el-radio-group v-model="formData.generateMode" class="mode-radio-group">
               <el-radio-button label="1">自动生成</el-radio-button>
+              <el-radio-button label="3">错题库</el-radio-button>
               <el-radio-button label="2">手动添加</el-radio-button>
             </el-radio-group>
           </ElFormItem>
@@ -44,6 +45,10 @@
           <template v-if="formData.generateMode == '1'">
             <AutoGenerateFormulas v-model:formulas-form-data="formData" v-model:papers="paperList" :ref-form="refForm"
               :configurations="configurations" @add-configuration="addConfiguration" @valid-change="(v) => formValid = v" />
+          </template>
+          <!-- 错题库 -->
+          <template v-if="formData.generateMode == '3'">
+            <WrongBookTab @start-practice="startWrongBookPractice" />
           </template>
           <!-- 手动输入 -->
           <template v-if="formData.generateMode == '2'">
@@ -66,7 +71,8 @@
           </template>
         </ElForm>
 
-        <div class="drawer-actions">
+        <!-- 错题库页自带「清空选择 / 开始互动练习」，这里不再重复出现 -->
+        <div v-if="formData.generateMode !== '3'" class="drawer-actions">
           <el-button :disabled="!paperList.length" size="large" :loading="buttonLoading"
             @click="openPaperDialog" class="action-btn">
             <el-icon><Document /></el-icon> 打印练习卷
@@ -112,7 +118,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, unref, toRaw, getCurrentInstance, computed, watch } from 'vue';
 import { useRouter } from "vue-router";
-import { CustomFormulas, AutoGenerateFormulas, ConfigurationList } from "@/components/generate";
+import { CustomFormulas, AutoGenerateFormulas, ConfigurationList, WrongBookTab } from "@/components/generate";
 import ConfigStorage from "@/utils/store/configStorage";
 import { fileNameGeneratedRuleEnum } from '@/utils/enum';
 import { usePracticeStore } from '@/stores/practice';
@@ -318,6 +324,24 @@ const generate = () => {
     router.push({ path: '/print', query: { fileName, key } })
     paperList.value = []
   }
+}
+
+/**
+ * 从「错题库」开练：选中即一组，直接进入互动练习
+ * @param {{ questions: Array<{equation:string, solution:number}> }} payload
+ */
+function startWrongBookPractice({ questions }) {
+  if (!Array.isArray(questions) || !questions.length) return
+  practiceStore.resetPracticeSession()
+  // 错题库也算自定义题单：统计口径标 manual，避免被误判成自适应
+  practiceStore.setConfigSnapshot({ ...toRaw(unref(formData)), mode: 'manual', source: 'wrongbook' })
+  practiceStore.setPhase('practice')
+  practiceStore.setListSource('manual')
+  practiceStore.setReadyToStart(false)
+  practiceStore.setManualGroupPlan([questions.length])   // 单组：不弹组间自评
+  practiceStore.setGenerateDrawerVisible(false)
+  practiceStore.setListPractices(questions)
+  router.push('/home')
 }
 
 /**

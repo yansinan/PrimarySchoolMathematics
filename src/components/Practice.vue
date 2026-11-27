@@ -336,7 +336,7 @@ import { usePracticeSaver } from '@/composables/usePracticeSaver'
 import { useManualSession } from '@/composables/useManualSession'
 import { isLastOfGroup, groupIndexOf, hasMultipleGroups, rangeOfGroup } from '@/utils/groupPlan'
 import { explainError } from '@/utils/algorithm/explainError'
-import { WrongAnswer } from '@/services'
+import { Answer, WrongAnswer } from '@/services'
 import { useSnapshotSync } from '@/composables/useSnapshotSync'
 import { decideListPracticesTransition } from '@/utils/listPracticesGuard'
 import { useDisplayStrategy } from '@/composables/useDisplayStrategy'  // 🆕 PR-4.2 抽离 displayStats + applyDisplayModeForCurrentQuestion + generateOptions
@@ -856,8 +856,11 @@ const isLastOfManualGroup = computed(() => {
 
 const handlePracticeComplete = async () => {
   const totalAns = totalQuestions.value
-  const correctAns = correctCount.value
-  const rate = Math.round((correctAns / totalAns) * 100)
+  // 注意：不能用 correctCount（= Answer.sumScores 的「掌握分」，重试后是 0.33 这类小数，
+  // 弹窗上会显示成 1.666666666667）。这里要的是「答对了几题」。
+  const doneAnswers = session.value.answers || []
+  const correctAns = doneAnswers.filter(a => (a instanceof Answer ? a.isCorrect : Answer.isCorrect(a))).length
+  const rate = totalAns > 0 ? Math.round((correctAns / totalAns) * 100) : 0
 
   // 非自适应练习完成时，传 finalProfileSnapshot（从 adaptiveEngine 或当前 profile 获取）
   // 注意：adaptiveEngine.profile 可能是 DB 原始行（没有 snapshot()），
