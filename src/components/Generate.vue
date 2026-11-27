@@ -48,7 +48,7 @@
           </template>
           <!-- 错题库 -->
           <template v-if="formData.generateMode == '3'">
-            <WrongBookTab @add-to-practice="addWrongBookPaper" />
+            <WrongBookTab @add-to-practice="addWrongBookPaper" @clear-papers="clearAllPapers" />
           </template>
           <!-- 手动输入 -->
           <template v-if="formData.generateMode == '2'">
@@ -71,7 +71,8 @@
           </template>
         </ElForm>
 
-        <div class="drawer-actions">
+        <div class="drawer-actions-wrap">
+          <div class="drawer-actions">
           <el-button :disabled="!paperList.length" size="large" :loading="buttonLoading"
             @click="openPaperDialog" class="action-btn">
             <el-icon><Document /></el-icon> 打印练习卷
@@ -81,7 +82,8 @@
             @click="generateFormulas" class="action-btn action-btn--primary">
             <el-icon><CaretRight /></el-icon> 开始互动练习
           </el-button>
-          <span v-else class="practice-locked-hint">先做完能力评估才能这里开练（出题和打印卷子可以直接用）</span>
+            <span v-else class="practice-locked-hint">先做完能力评估才能这里开练（出题和打印卷子可以直接用）</span>
+          </div>
         </div>
       </div>
     </el-drawer>
@@ -94,13 +96,6 @@
           <el-input-number v-model="formData.numberOfPagerColumns" :min="1" :max="6" :step="1"
             controls-position="right" class="paper-dialog__num" />
           <span class="paper-dialog__hint">一行放几道题</span>
-        </el-form-item>
-        <el-form-item label="解题方式">
-          <el-radio-group v-model="formData.solution">
-            <el-radio-button label="0">口算（一行一题）</el-radio-button>
-            <el-radio-button label="1">竖式（留竖式空位）</el-radio-button>
-          </el-radio-group>
-          <span class="paper-dialog__hint">影响打印版式，三种题目来源通用</span>
         </el-form-item>
         <el-form-item label="文件名规则">
           <el-radio-group v-model="formData.fileNameGeneratedRule">
@@ -318,6 +313,16 @@ const generate = () => {
   }
 }
 
+/** 清空所有题组（错题库页的「清空口算题」按钮） */
+function clearAllPapers() {
+  if (!paperList.value.length) {
+    proxy.$message.info('当前还没有题组')
+    return
+  }
+  paperList.value = []
+  proxy.$message.success('已清空全部题组')
+}
+
 /**
  * 错题库「加入练习」：把选中的题变成一条题组，和自动生成/手输的题组混排
  * 数据结构与「手动添加」一致（customFormulaList），打印与练习都走同一条链路。
@@ -498,11 +503,18 @@ const handleClose = (done) => {
   }
 }
 
-// ── Action buttons ──
+// ── Action buttons（与上方配置区分开：分隔线 + 浅底 + 同一左右边界）──
+.drawer-actions-wrap {
+  margin-top: 14px;
+  padding: 12px 0 2px;
+  border-top: 1px solid #dbe7f4;
+  background: linear-gradient(180deg, #fbfdff 0%, #f5faff 100%);
+  border-radius: 0 0 10px 10px;
+}
+
 .drawer-actions {
   display: flex;
   gap: 12px;
-  margin-top: 4px;
 
   .action-btn {
     flex: 1;

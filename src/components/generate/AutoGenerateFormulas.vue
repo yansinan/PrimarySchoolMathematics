@@ -103,6 +103,13 @@
               </el-radio-button>
             </el-radio-group>
           </div>
+          <div class="rules-row">
+            <span class="rules-row__label">解题方式</span>
+            <el-radio-group v-model="formData.solution">
+              <el-radio-button label="0">口算</el-radio-button>
+              <el-radio-button label="1">竖式</el-radio-button>
+            </el-radio-group>
+          </div>
         </div>
       </div>
     </ElFormItem>
@@ -398,6 +405,7 @@ const ruleBadges = computed(() => {
   if (f.enableBrackets) out.push('带括号')
   out.push(carryMap[f.carry] || '随机进位')
   out.push(abdicationMap[f.abdication] || '随机退位')
+  out.push(f.solution == '1' ? '竖式解题' : '口算解题')
   return out
 })
 
@@ -627,13 +635,20 @@ const addConfiguration = () => {
 }
 
 /* ── 出题规则（内联折叠，取代「其他设置」二级抽屉）── */
-/* 分组标题：灰色小字，与抽屉里其它区块同一套视觉 */
+/* 分组标题：浅色块 + 左侧色条，让一眼看出「这里是另一组配置」 */
 .section-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: #7f8c9b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0 10px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  background: #f2f8ff;
+  border-left: 3px solid #1cb0f6;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #176ebf;
   letter-spacing: 0.02em;
-  margin: 14px 0 6px;
 }
 
 .section-title:first-child {

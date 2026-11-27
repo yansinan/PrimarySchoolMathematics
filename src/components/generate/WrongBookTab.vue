@@ -64,11 +64,12 @@
     </div>
 
     <!-- 底部动作 -->
+    <!-- 与自动生成 / 手动添加同一组按钮：「添加口算题」把选中的题变成题组 -->
     <div class="wb-actions">
-      <el-button :disabled="!selectedCount" @click="clearSelection">清空选择</el-button>
       <el-button type="primary" :disabled="!selectedCount" @click="addToPractice">
-        加入练习（{{ selectedCount }} 题）
+        添加口算题（{{ selectedCount }} 题）
       </el-button>
+      <el-button @click="emit('clear-papers')">清空口算题</el-button>
     </div>
   </div>
 </template>
@@ -91,7 +92,7 @@ import { Answer, WrongAnswer } from '@/services'
 import { Profile } from '@/services/abilityProfile'
 import { explainError } from '@/utils/algorithm/explainError'
 
-const emit = defineEmits(['add-to-practice', 'start-practice'])
+const emit = defineEmits(['add-to-practice', 'clear-papers'])
 
 const loading = ref(true)
 const rows = ref([])
@@ -303,6 +304,11 @@ onMounted(load)
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.wb-sortrow > * {
+  white-space: nowrap;
 }
 
 .wb-sortlabel {
@@ -416,9 +422,17 @@ onMounted(load)
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: nowrap;
   padding: 8px 12px;
   background: #fbfdff;
   border-top: 1px solid #e6eef6;
+  overflow-x: auto;
+}
+
+.wb-listfoot .wb-link,
+.wb-listfoot .wb-sortlabel {
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .wb-link {
@@ -447,7 +461,8 @@ onMounted(load)
 
 @media (max-width: 480px) {
   .wb-sortselect {
-    width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
   }
 
   .wb-item {
