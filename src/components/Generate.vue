@@ -69,12 +69,12 @@
         <div class="drawer-actions">
           <el-button :disabled="!paperList.length" size="large" :loading="buttonLoading"
             @click="openPaperDialog" class="action-btn">
-            <el-icon><Document /></el-icon> 生成卷子
+            <el-icon><Document /></el-icon> 打印练习卷
           </el-button>
           <!-- 开始练习需要能力评估画像；做题/打印卷子不受此限制 -->
           <el-button v-if="practiceStore.hasRealProfile" :disabled="!paperList.length || !formValid" type="primary" size="large" :loading="buttonLoading"
             @click="generateFormulas" class="action-btn action-btn--primary">
-            <el-icon><CaretRight /></el-icon> 开始练习
+            <el-icon><CaretRight /></el-icon> 开始互动练习
           </el-button>
           <span v-else class="practice-locked-hint">先做完能力评估才能这里开练（出题和打印卷子可以直接用）</span>
         </div>
@@ -454,14 +454,31 @@ const handleClose = (done) => {
 .mode-radio-group {
   display: flex;
   width: 100%;
+  gap: 0;
 
+  /* 两个选项做成一个整体分段控件：无间隙、首尾圆角 */
   .el-radio-button {
-    flex: 1;
+    flex: 1 1 0;
+    min-width: 0;
   }
 
-  .el-radio-button__inner {
+  /* __inner 在子组件内部，scoped 样式够不到，必须 :deep() */
+  :deep(.el-radio-button__inner) {
     width: 100%;
+    display: flex;
+    align-items: center;
     justify-content: center;
+    border-radius: 0;
+    margin-left: -1px;      /* 边框重叠，避免 1px 缝 */
+  }
+
+  :deep(.el-radio-button:first-child .el-radio-button__inner) {
+    border-radius: 8px 0 0 8px;
+    margin-left: 0;
+  }
+
+  :deep(.el-radio-button:last-child .el-radio-button__inner) {
+    border-radius: 0 8px 8px 0;
   }
 }
 

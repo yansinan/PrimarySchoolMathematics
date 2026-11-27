@@ -49,6 +49,68 @@
       </div>
     </ElFormItem>
 
+    <!-- 出题规则（原「其他设置」二级抽屉，现内联折叠；折叠时用 badge 显示当前选择） -->
+    <ElFormItem class="rules-item">
+      <div class="rules-card">
+        <div class="rules-card__head" @click="rulesOpen = !rulesOpen">
+          <svg class="rules-card__caret" :class="{ 'rules-card__caret--open': rulesOpen }" viewBox="0 0 24 24"
+            fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+          <span class="rules-card__title">出题规则</span>
+          <span v-if="!rulesOpen" class="rules-card__badges">
+            <span v-for="b in ruleBadges" :key="b" class="rules-badge">{{ b }}</span>
+          </span>
+        </div>
+
+        <div v-if="rulesOpen" class="rules-card__body">
+          <div class="rules-row">
+            <span class="rules-row__label">题型</span>
+            <el-radio-group v-model="formData.whereIsResult">
+              <el-radio-button v-for="o in whereIsResultOptions" :label="o.key" :disabled="o.disabled">
+                {{ o.label }}
+              </el-radio-button>
+            </el-radio-group>
+          </div>
+          <div class="rules-row">
+            <span class="rules-row__label">括号</span>
+            <el-checkbox v-model="formData.enableBrackets">启用括号 ( )</el-checkbox>
+          </div>
+          <div class="rules-row">
+            <span class="rules-row__label">加法进位</span>
+            <el-radio-group v-model="formData.carry">
+              <el-radio-button label="1">随机进位</el-radio-button>
+              <el-radio-button label="2">必须进位</el-radio-button>
+              <el-radio-button label="3">不进位</el-radio-button>
+            </el-radio-group>
+          </div>
+          <div class="rules-row">
+            <span class="rules-row__label">减法退位</span>
+            <el-radio-group v-model="formData.abdication">
+              <el-radio-button label="1">随机退位</el-radio-button>
+              <el-radio-button label="2">必须退位</el-radio-button>
+              <el-radio-button label="3">不退位</el-radio-button>
+            </el-radio-group>
+          </div>
+          <div class="rules-row">
+            <span class="rules-row__label">除法</span>
+            <el-radio-group v-model="formData.remainder">
+              <el-radio-button v-for="o in remainderOptions" :label="o.key" :disabled="o.disabled">
+                {{ o.label }}
+              </el-radio-button>
+            </el-radio-group>
+          </div>
+          <div class="rules-row">
+            <span class="rules-row__label">解题方式</span>
+            <el-radio-group v-model="formData.solution">
+              <el-radio-button label="0">口算</el-radio-button>
+              <el-radio-button label="1">竖式</el-radio-button>
+            </el-radio-group>
+          </div>
+        </div>
+      </div>
+    </ElFormItem>
+
     <!-- 题数 + 卷子数同一行：只留前置标签，输入区更宽 -->
     <ElFormItem class="counts-item">
       <ElRow :gutter="12" class="counts-row">
@@ -129,72 +191,14 @@
     </ElFormItem>
     -->
 
-    <!-- 出题规则（原「其他设置」二级抽屉，现内联折叠；折叠时用 badge 显示当前选择） -->
-    <ElFormItem class="rules-item">
-      <div class="rules-card">
-        <div class="rules-card__head" @click="rulesOpen = !rulesOpen">
-          <svg class="rules-card__caret" :class="{ 'rules-card__caret--open': rulesOpen }" viewBox="0 0 24 24"
-            fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
-          <span class="rules-card__title">出题规则</span>
-          <span v-if="!rulesOpen" class="rules-card__badges">
-            <span v-for="b in ruleBadges" :key="b" class="rules-badge">{{ b }}</span>
-          </span>
-        </div>
-
-        <div v-if="rulesOpen" class="rules-card__body">
-          <div class="rules-row">
-            <span class="rules-row__label">题型</span>
-            <el-radio-group v-model="formData.whereIsResult">
-              <el-radio-button v-for="o in whereIsResultOptions" :label="o.key" :disabled="o.disabled">
-                {{ o.label }}
-              </el-radio-button>
-            </el-radio-group>
-          </div>
-          <div class="rules-row">
-            <span class="rules-row__label">括号</span>
-            <el-checkbox v-model="formData.enableBrackets">启用括号 ( )</el-checkbox>
-          </div>
-          <div class="rules-row">
-            <span class="rules-row__label">加法进位</span>
-            <el-radio-group v-model="formData.carry">
-              <el-radio-button label="1">随机进位</el-radio-button>
-              <el-radio-button label="2">必须进位</el-radio-button>
-              <el-radio-button label="3">不进位</el-radio-button>
-            </el-radio-group>
-          </div>
-          <div class="rules-row">
-            <span class="rules-row__label">减法退位</span>
-            <el-radio-group v-model="formData.abdication">
-              <el-radio-button label="1">随机退位</el-radio-button>
-              <el-radio-button label="2">必须退位</el-radio-button>
-              <el-radio-button label="3">不退位</el-radio-button>
-            </el-radio-group>
-          </div>
-          <div class="rules-row">
-            <span class="rules-row__label">除法</span>
-            <el-radio-group v-model="formData.remainder">
-              <el-radio-button v-for="o in remainderOptions" :label="o.key" :disabled="o.disabled">
-                {{ o.label }}
-              </el-radio-button>
-            </el-radio-group>
-          </div>
-          <div class="rules-row">
-            <span class="rules-row__label">解题方式</span>
-            <el-radio-group v-model="formData.solution">
-              <el-radio-button label="0">口算</el-radio-button>
-              <el-radio-button label="1">竖式</el-radio-button>
-            </el-radio-group>
-          </div>
-        </div>
+    <ElFormItem class="actions-item">
+      <div class="actions-row">
+        <ElButton type="primary" class="actions-row__btn" @click="append">添加口算题</ElButton>
+        <ElButton class="actions-row__btn" @click="clear">清空口算题</ElButton>
+        <el-button type="success" class="actions-row__btn actions-row__btn--wide" @click="addConfiguration">
+          将当前参数保存为配置
+        </el-button>
       </div>
-    </ElFormItem>
-
-    <ElFormItem>
-      <ElButton type="primary" @click="append">添加口算题</ElButton>
-      <ElButton @click="clear">清空口算题</ElButton>
-      <el-button type="success" @click="addConfiguration">将当前参数保存为配置</el-button>
     </ElFormItem>
   </div>
 </template>
@@ -752,6 +756,35 @@ const addConfiguration = () => {
   .counts-input :deep(.el-input-group__prepend) {
     padding: 0 6px;
     font-size: 12px;
+  }
+}
+
+/* 三个操作按钮：桌面一行平分，手机自动换行，不再互相挤错位 */
+.actions-item :deep(.el-form-item__content) {
+  display: block;
+}
+
+.actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+
+.actions-row__btn {
+  flex: 1 1 0;
+  min-width: 0;
+  margin-left: 0 !important;
+  white-space: nowrap;
+}
+
+.actions-row__btn--wide {
+  flex: 1 1 100%;
+}
+
+@media (min-width: 768px) {
+  .actions-row__btn--wide {
+    flex: 1 1 0;
   }
 }
 
