@@ -36,10 +36,13 @@
           <!-- 自动生成 -->
           <template v-if="formData.generateMode == '1'">
             <!-- 「已保存的配置」是自动生成这套参数的快照，只在这一页显示 -->
-            <div class="config-section">
-              <ConfigurationList v-model:active-index="activeConfigurationId" :configurations="configurations"
-                @removed="refreshConfiguration" @selected="selectedConfiguration" />
-            </div>
+            <section class="block-card config-section">
+              <header class="block-card__head">已保存的配置</header>
+              <div class="block-card__body config-section__body">
+                <ConfigurationList v-model:active-index="activeConfigurationId" :configurations="configurations"
+                  @removed="refreshConfiguration" @selected="selectedConfiguration" />
+              </div>
+            </section>
             <AutoGenerateFormulas v-model:formulas-form-data="formData" v-model:papers="paperList" :ref-form="refForm"
               :configurations="configurations" @add-configuration="addConfiguration" @valid-change="(v) => formValid = v" />
           </template>
@@ -463,9 +466,32 @@ const handleClose = (done) => {
   gap: 12px;
 }
 
-// ── Config section (top) ──
-.config-section {
-  // Minimal wrapper
+// ── 已保存的配置：与出题抽屉其它区块同一套卡片样式 ──
+.block-card {
+  border: 1px solid #e6eef6;
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.block-card__head {
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e3c5c;
+  background: #f8fbfe;
+  border-bottom: 1px solid #eef3f8;
+}
+
+.block-card__body {
+  padding: 12px;
+}
+
+.config-section__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 // ── Mode selector ──

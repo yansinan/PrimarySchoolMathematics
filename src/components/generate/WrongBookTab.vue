@@ -10,8 +10,6 @@
         :class="{ 'wb-chip--on': operatorFilter === op.key }"
         @click="operatorFilter = op.key"
       >{{ op.label }}</button>
-      <span class="wb-spacer"></span>
-      <span class="wb-count">已选 {{ selectedCount }} 题</span>
     </div>
 
     <!-- 排序 -->
@@ -292,12 +290,6 @@ onMounted(load)
 
 .wb-spacer {
   flex: 1 1 auto;
-}
-
-.wb-count {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: #176ebf;
 }
 
 .wb-sortrow {

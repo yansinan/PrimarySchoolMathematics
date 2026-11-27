@@ -141,7 +141,9 @@
         </ElRow>
 
         <div class="actions-row">
-          <ElButton type="primary" class="actions-row__btn" @click="append">添加口算题</ElButton>
+          <ElButton type="primary" class="actions-row__btn" @click="append">
+            添加口算题（{{ pendingCount }} 题）
+          </ElButton>
           <ElButton class="actions-row__btn" @click="clear">清空口算题</ElButton>
           <el-button type="success" class="actions-row__btn actions-row__btn--wide" @click="addConfiguration">
             将当前参数保存为配置
@@ -460,6 +462,9 @@ const append = () => {
     })
   })
 }
+
+/** 本次「添加口算题」会加进去的题数（= 口算题数） */
+const pendingCount = computed(() => Number(props.formulasFormData?.numberOfFormulas) || 0)
 
 const clear = () => {
   paperList.value = []
@@ -780,6 +785,11 @@ const addConfiguration = () => {
   margin-bottom: 0;
 }
 
+/* 题数行 → 按钮行：统一 12px 间距（原来是 0~10px 不稳定） */
+.counts-row {
+  margin-bottom: 12px;
+}
+
 .counts-cell :deep(.el-form-item__content) {
   margin-left: 0;
   line-height: normal;
@@ -848,6 +858,7 @@ const addConfiguration = () => {
   flex-wrap: wrap;
   gap: 8px;
   width: 100%;
+  margin-top: 0;
 }
 
 .actions-row__btn {

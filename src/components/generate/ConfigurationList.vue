@@ -1,7 +1,6 @@
 <template>
   <div>
-    <p class="config-heading">已保存的配置</p>
-    <ElCard v-for="c in configurations" :class="{ active: c.id == activeConfigurationId }" class="mb-3" :shadow="'hover'"
+    <ElCard v-for="c in configurations" :class="{ active: c.id == activeConfigurationId }" class="config-card" :shadow="'hover'"
       @click="select(c.id)">
       <div class="flex justify-between items-center cursor-pointer">
         <!-- 是否选中 -->
@@ -73,11 +72,8 @@ watch(() => props.activeIndex, async (val) => {
 </script>
 
 <style lang="scss" scoped>
-.config-heading {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1e3c5c;
-  margin: 0 0 10px 0;
+.config-card {
+  border-radius: 10px;
 }
 
 .el-card {
