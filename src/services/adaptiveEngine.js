@@ -104,7 +104,8 @@ function buildReviewQuestion(wa) {
   }
 }
 
-function pickInputMode(engine) {
+/** 按 assistLevel 概率选输入模式（导出以便单测；原来只有 scripts/verify-p0.mjs 手工复制概率表验证） */
+export function pickInputMode(engine) {
   if (engine.masteryCheck && engine.masteryCheck.active) return 'horizontal_keypad'
   const r = Math.random()
   const L = engine.assistLevel

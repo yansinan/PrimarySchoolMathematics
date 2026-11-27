@@ -1,7 +1,7 @@
 {
   "name": "primary-school-mathematics",
   "private": true,
-  "version": "2.2.0",
+  "version": "2.3.0",
   "type": "module",
   "scripts": {
     "stop": "pkill -f node",

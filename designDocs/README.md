@@ -51,6 +51,16 @@
 详见 [17-start-page-redesign.md](./17-start-page-redesign.md)、[18-PLAN-manual-groups.md](./18-PLAN-manual-groups.md)
 与 `mockups/{start-page,ratio-title,drawer-compact,progress,wrong-tab,review}/`。
 
+**出题抽屉信息架构定稿** ✅（2026-11-27，v2.3.0）：
+题目来源三段分页（错题库/自动生成/手动添加）；自动生成页 = 「已保存的配置」+「出题配置」两块平级；
+出题配置一张卡片内分段（几步运算 / 取值范围 / 出题规则 / 数量），不套娃；
+添加/清空口算题移到卡片外作为下一步操作；底部出口条独立（带份数/组数）；
+行距全量统一 12px；「已添加的题组（N）」取代原来裸标签行。
+详见 [17-start-page-redesign.md](./17-start-page-redesign.md) §十三/§十四 与
+[RELEASE-v2.3.0.md](./RELEASE-v2.3.0.md)。
+
+**上一版**：[RELEASE-v2.2.0.md](./RELEASE-v2.2.0.md)（准备开始页改版 + 分组自评 + 错因体系 + 错题库）
+
 **下一目标**：
 - **v4.2** P3 L2.5 难度等级
 - **v3.1** G3 端到端集成测试
