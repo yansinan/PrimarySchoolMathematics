@@ -95,6 +95,13 @@
             controls-position="right" class="paper-dialog__num" />
           <span class="paper-dialog__hint">一行放几道题</span>
         </el-form-item>
+        <el-form-item label="解题方式">
+          <el-radio-group v-model="formData.solution">
+            <el-radio-button label="0">口算（一行一题）</el-radio-button>
+            <el-radio-button label="1">竖式（留竖式空位）</el-radio-button>
+          </el-radio-group>
+          <span class="paper-dialog__hint">影响打印版式，三种题目来源通用</span>
+        </el-form-item>
         <el-form-item label="文件名规则">
           <el-radio-group v-model="formData.fileNameGeneratedRule">
             <el-radio-button v-for="o in fileNameRuleOptions" :key="o.key" :label="o.key">{{ o.label }}</el-radio-button>

@@ -1,5 +1,6 @@
 <template>
   <div>
+    <div class="section-title">出题方式</div>
     <ElFormItem label="几步运算?" class="step-row">
       <el-radio-group v-model="formData.step" @change="changeStep">
         <el-radio-button v-for="o in stepOptions" :label="o.key" :disabled="o.disabled">{{ o.label }}</el-radio-button>
@@ -16,11 +17,13 @@
       </ElFormItem>
     </template>
 
+    <div class="section-title">数字范围</div>
+
     <!-- 数字范围：算数项 1/2… 与运算结果共用一列表头，紧凑成 3 行 -->
     <ElFormItem class="range-table-item">
       <div class="range-table">
         <div class="range-table__head">
-          <span class="range-table__col-name">数字范围</span>
+          <span class="range-table__col-name">算数项</span>
           <span class="range-table__col">最小值</span>
           <span class="range-table__col">最大值</span>
         </div>
@@ -100,16 +103,11 @@
               </el-radio-button>
             </el-radio-group>
           </div>
-          <div class="rules-row">
-            <span class="rules-row__label">解题方式</span>
-            <el-radio-group v-model="formData.solution">
-              <el-radio-button label="0">口算</el-radio-button>
-              <el-radio-button label="1">竖式</el-radio-button>
-            </el-radio-group>
-          </div>
         </div>
       </div>
     </ElFormItem>
+
+    <div class="section-title">数量与题组</div>
 
     <!-- 题数 + 卷子数同一行：只留前置标签，输入区更宽 -->
     <ElFormItem class="counts-item">
@@ -125,10 +123,11 @@
         </ElCol>
         <ElCol :xs="12" :sm="12">
           <ElFormItem prop="numberOfPapers"
-            :rules="[{ required: true, message: '请填写卷子份数' }, { type: 'number', message: '请填写数字' }]"
+            :rules="[{ required: true, message: '请填写卷子份数（= 练习组数）' }, { type: 'number', message: '请填写数字' }]"
             class="counts-cell">
             <ElInput v-model.number="formData.numberOfPapers" class="counts-input">
-              <template #prepend>卷子份数</template>
+              <template #prepend>卷子/练习</template>
+              <template #append>份</template>
             </ElInput>
           </ElFormItem>
         </ElCol>
@@ -399,7 +398,6 @@ const ruleBadges = computed(() => {
   if (f.enableBrackets) out.push('带括号')
   out.push(carryMap[f.carry] || '随机进位')
   out.push(abdicationMap[f.abdication] || '随机退位')
-  out.push(f.solution == '1' ? '竖式解题' : '口算解题')
   return out
 })
 
@@ -629,6 +627,19 @@ const addConfiguration = () => {
 }
 
 /* ── 出题规则（内联折叠，取代「其他设置」二级抽屉）── */
+/* 分组标题：灰色小字，与抽屉里其它区块同一套视觉 */
+.section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #7f8c9b;
+  letter-spacing: 0.02em;
+  margin: 14px 0 6px;
+}
+
+.section-title:first-child {
+  margin-top: 0;
+}
+
 .rules-item :deep(.el-form-item__content) {
   display: block;
 }
@@ -742,6 +753,17 @@ const addConfiguration = () => {
   .counts-row {
     margin-left: 0 !important;
     margin-right: 0 !important;
+  }
+
+  /* 390 宽度下「卷子/练习」+「份」约占 100px，收紧内边距保证数字可见 */
+  .counts-input :deep(.el-input-group__prepend),
+  .counts-input :deep(.el-input-group__append) {
+    padding: 0 4px;
+    font-size: 11.5px;
+  }
+
+  .counts-input :deep(input) {
+    min-width: 0;
   }
 
   .counts-row > .el-col {
