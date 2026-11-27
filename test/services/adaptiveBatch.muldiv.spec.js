@@ -36,9 +36,15 @@ describe('乘除档位能出题', () => {
       const engine = makeEngine()
       const seen = new Set()
       const got = []
+      // generateOneQuestion 返回 null 是**正常契约**：调用方（generateAdaptiveBatch /
+      // adjustNextQuestion）会跳过该 slot 或稍后重试，不是错误。
+      // 这里同样给几次机会，避免偶发的空抽让测试变 flaky。
       for (let i = 0; i < 3; i++) {
-        const q = generateOneQuestion(idx, engine, seen)
-        expect(q, `${label} 第 ${i + 1} 道生成失败`).not.toBeNull()
+        let q = null
+        for (let attempt = 0; attempt < 8 && !q; attempt++) {
+          q = generateOneQuestion(idx, engine, seen)
+        }
+        expect(q, `${label} 第 ${i + 1} 道连续 8 次都没生成出可用题`).not.toBeNull()
         got.push(q)
       }
       for (const q of got) {

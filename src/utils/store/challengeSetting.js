@@ -13,7 +13,7 @@
  *
  * @see services/adaptiveEngine.js — pickStrongLevel 的 MAX_ADVANCE
  * @see utils/algorithm/adaptiveBatch.js — pickLevelForSlot 的 challenge 分支
- * @see ../../components/generate/OptionsDrawer.vue — 设置入口
+ * @see ../../components/Practice.vue — 设置入口（准备开始页「本次练习设置」）
  */
 
 import { writeSetting } from './settingsRegistry'

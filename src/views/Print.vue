@@ -40,19 +40,29 @@ const route = useRoute()
 const router = useRouter()
 
 /**
- * 读 sessionStorage 的 papers. key 来自 query.
- * 兼容历史: 若 query 没 key (例如直链访问), 返回空数组.
+ * 读本轮 papers，key 来自 query。
+ *
+ * 为什么要读两处：
+ *  - localStorage：跨标签页共享。生成页用 window.open 开新窗口打印时，只有它能读到数据
+ *    （sessionStorage 按标签页隔离，新窗口拿到的是空）
+ *  - sessionStorage：同标签页跳转的旧路径，保留兼容（老 key / 直链回退）
+ *
+ * 读完即删（两种存储都删），避免残留 + 数据泄在浏览器里。
  */
-const printPapers = computed(() => {
-  const key = route.query.key
+function readPapersOnce(key) {
   if (!key) return []
-  try {
-    const raw = sessionStorage.getItem(key)
-    return raw ? JSON.parse(raw) : []
-  } catch {
-    return []
+  for (const store of ['localStorage', 'sessionStorage']) {
+    try {
+      const raw = window[store].getItem(key)
+      if (!raw) continue
+      window[store].removeItem(key)
+      return JSON.parse(raw)
+    } catch { /* 隐私模式 / 数据损坏 → 试下一个 */ }
   }
-})
+  return []
+}
+
+const printPapers = ref([])
 
 const sheets = computed(() => {
   return printPapers.value.map(p => {
@@ -75,6 +85,9 @@ const sheets = computed(() => {
 })
 
 onMounted(() => {
+  // 数据只读一次：读完即从存储里删掉
+  printPapers.value = readPapersOnce(route.query.key)
+
   // 修改网页标题以作为打印时文件的文件名
   document.title = route.query.fileName + formatTimestampForFilename()
 
@@ -95,9 +108,9 @@ onMounted(() => {
 // onUnmounted 不一定在浏览器关 tab 时触发, 但同 tab 内的 router 跳转通常会触发
 onUnmounted(() => {
   const key = route.query.key
-  if (key) {
-    try { sessionStorage.removeItem(key) } catch {}
-  }
+  if (!key) return
+  try { localStorage.removeItem(key) } catch {}
+  try { sessionStorage.removeItem(key) } catch {}
 })
 
 const goBack = () => {

@@ -4,7 +4,7 @@
 
 ---
 
-## 当前状态（2026-11-25）
+## 当前状态（2026-11-27）
 
 **多设备快照同步** ✅ — 接入自建 `indexDB-snapshot-sync`（分支 `feat/snapshot-sync`）：
 练习轮次/答案、出题配置（含练习量）、档位配比、起点档位、挑战题、自动升档、音效、保存的配置全部同步；
@@ -24,6 +24,43 @@
 
 详见 [IMPLEMENTATION_HISTORY.md](./IMPLEMENTATION_HISTORY.md) §8 和 [v4-PLAN-error-injection.md](./v4-PLAN-error-injection.md)。
 
+**准备开始页改版 + 分组练习** ✅（2026-11-26，分支 `feat/start-page-redesign`）：
+- 准备开始页：去重复（删「这次练什么」）、历史正确率→**上次正确率**、自适应设置进页内（默认折叠）、
+  档位 **降/升一档**、档位配比迁入设置区（24 档限高滚动）、灰说明改 ⓘ 气泡
+- 出题抽屉：练习档位区 / 自适应练习量隐藏（观察期到 2026-12-30）、「其他设置」二级抽屉**删除**
+  （出题规则内联）、数字范围表格化、卷子五项进「生成卷子」对话框、口算题数+卷子份数同一行
+- 自定义练习**按卷子分组**：一张卷子 = 一组，每组结束自评一次，进度按本组算（与自适应对齐）
+- 题目多时进度改**细条**（≤10 题用数字小格，>10 用细条）；题组可单个删除；练习全流程**可全键盘操作**
+- 选择题干扰项按**真实错因**生成（忘进位 / 忘退位 / 口诀串行 / 把×当+ / 余数当商 …）
+- 生成卷子改为**新窗口**打开打印页（数据经 localStorage 跨标签页传递），配置页留在原处
+- 清理：删除从未被引用的 `PrintPreviewDialog.vue` / `PaperDownloadDialog.vue`
+
+**错因体系 + 错题库** ✅（2026-11-27，同一分支）：
+- `utils/algorithm/explainError.js`：按「算式 + 正确答案 + 孩子答案」反推错因
+  （忘进位 / 忘退位 / 看成加减法 / 口诀串行 / 试商偏差 / 余数当商 …），与干扰项模块同源
+- 答题时**答错即时给错因**：题目下方常驻错因条（留到答对或换题）+ toast；
+  文字输入 / 竖式 / **选择题**三种题型都覆盖
+- 错题复习**整题高亮**：当前题命中错题历史 → 橙色渐变底 + 描边 + 「重点复习」徽标
+- **错题库分页**：题目来源分页 = 错题库 / 自动生成 / 手动添加；
+  行显示「算式 + 划掉的错误答案 + 错因 + 掌握度(历史正确率)」，
+  运算符筛选、4 种排序（默认最该练）、点击/Shift 连选/全选/选 N 题自动选择，
+  「加入练习」产出题组，可与其它题组混排后统一打印或开练
+- 修 `paperGenerator` 丢自定义题组的老 bug（手动添加 / 错题库的题此前不进卷子也不进练习）
+- 点「已保存的配置」自动切回「自动生成」页并载入参数（去掉多余确认框）
+
+详见 [17-start-page-redesign.md](./17-start-page-redesign.md)、[18-PLAN-manual-groups.md](./18-PLAN-manual-groups.md)
+与 `mockups/{start-page,ratio-title,drawer-compact,progress,wrong-tab,review}/`。
+
+**出题抽屉信息架构定稿** ✅（2026-11-27，v2.3.0）：
+题目来源三段分页（错题库/自动生成/手动添加）；自动生成页 = 「已保存的配置」+「出题配置」两块平级；
+出题配置一张卡片内分段（几步运算 / 取值范围 / 出题规则 / 数量），不套娃；
+添加/清空口算题移到卡片外作为下一步操作；底部出口条独立（带份数/组数）；
+行距全量统一 12px；「已添加的题组（N）」取代原来裸标签行。
+详见 [17-start-page-redesign.md](./17-start-page-redesign.md) §十三/§十四 与
+[RELEASE-v2.3.0.md](./RELEASE-v2.3.0.md)。
+
+**上一版**：[RELEASE-v2.2.0.md](./RELEASE-v2.2.0.md)（准备开始页改版 + 分组自评 + 错因体系 + 错题库）
+
 **下一目标**：
 - **v4.2** P3 L2.5 难度等级
 - **v3.1** G3 端到端集成测试
@@ -41,6 +78,8 @@
 | 4 | [v4-PLAN-error-injection.md](./v4-PLAN-error-injection.md) | v4 业务规划（错题注入 + L2.5）| 必读 — 当前活跃 |
 | 5 | [15-PLAN-snapshot-sync.md](./15-PLAN-snapshot-sync.md) | 多设备同步（规划 + 实施记录）| 必读 — 同步相关改动前 |
 | 6 | [10-IdeaByUser.md](./10-IdeaByUser.md) | 用户原始创意 | 业务必读 |
+| 7 | [17-start-page-redesign.md](./17-start-page-redesign.md) | 准备开始页改版 + 抽屉调整 | 近期改动必读 |
+| 8 | [18-PLAN-manual-groups.md](./18-PLAN-manual-groups.md) | 自定义练习分组 + 自评 + 进度 + 键盘 | 练习流程改动必读 |
 
 **v3 调优计划完整版**（archived）：[_ARCHIEVED_05-PLAN-v3-architecture-tuning.md](./_ARCHIEVED_05-PLAN-v3-architecture-tuning.md)
 
@@ -58,7 +97,12 @@ designDocs/
 │
 ├── 业务规划（活跃）
 │   ├── v4-PLAN-error-injection.md       v4.1 错题注入 + v4.2 L2.5 难度
-│   └── 15-PLAN-snapshot-sync.md         多设备快照同步（可行性 + 阶段计划）
+│   ├── 15-PLAN-snapshot-sync.md         多设备快照同步（可行性 + 阶段计划）
+│   ├── 17-start-page-redesign.md        准备开始页改版 + 出题抽屉调整
+│   └── 18-PLAN-manual-groups.md         自定义练习分组 + 自评 + 进度 + 全键盘
+│
+├── 设计图（PNG，随改动一起更新）
+│   └── mockups/{start-page,ratio-title,drawer-compact,progress}/
 └── 实施历史（参考）
     └── IMPLEMENTATION_HISTORY.md          v2.3+v3 实施过程（合并历史）
 

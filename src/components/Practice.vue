@@ -7,7 +7,11 @@
 
       <el-card class="practice-card" shadow="never" v-if="currentQuestion !== null">
         <div class="practice-card__header">
-          <div class="stage-badge" :class="{ 'stage-badge--assessment': isAssessment }">{{ currentStage }}</div>
+          <div class="header-left">
+            <div class="stage-badge" :class="{ 'stage-badge--assessment': isAssessment }">{{ currentStage }}</div>
+            <!-- 多组自定义练习：复用阶段徽标样式，只多一个组序号 -->
+            <div v-if="groupBadgeText" class="stage-badge stage-badge--group">{{ groupBadgeText }}</div>
+          </div>
           <div class="header-right">
             <div class="streak-badge" v-if="session.streak > 0">🔥 {{ session.streak }}</div>
             <SyncIndicator @open="statsStore.openDrawer()" />
@@ -24,9 +28,9 @@
         </div>
 
         <ProgressSteps
-          :total="totalQuestions"
-          :current="currentIndex + 1"
-          :answers="currentAnswers"
+          :total="progressTotal"
+          :current="progressCurrent"
+          :answers="progressAnswers"
           :correct-count="groupCorrectCount"
         />
 
@@ -42,12 +46,20 @@
             :focus-slot="digitFocusIdx"
             :class="{
               'correct-flash': session.feedbackType === 'correct',
-              'wrong-flash': session.feedbackType === 'wrong'
+              'wrong-flash': session.feedbackType === 'wrong',
+              'review-question': isReviewQuestion
             }"
             @update:user-answer="handleInput"
             @submit-answer="handleSubmit"
             @focus="digitFocusIdx = $event"
           />
+        </div>
+
+        <!-- 答错后常驻的错因条：toast 一闪而过，孩子看不到；这里留到下一题 -->
+        <!-- 答错后一直留到「答对」或「换题」，不再跟着 feedback 计时消失 -->
+        <div v-if="wrongReasonText" class="wrong-reason">
+          <span class="wrong-reason__label">{{ wrongReasonText || '再算一遍试试' }}</span>
+          <span class="wrong-reason__ans">正确答案 <b>{{ currentQuestion.solution }}</b></span>
         </div>
 
         <div class="input-area">
@@ -87,10 +99,10 @@
               </div>
               <div class="metric">
                 <div class="metric__value">
-                  {{ startInfo.accuracy === null ? '—' : startInfo.accuracy }}<span
-                    v-if="startInfo.accuracy !== null" class="metric__unit">%</span>
+                  {{ startInfo.lastAccuracy === null ? '—' : startInfo.lastAccuracy }}<span
+                    v-if="startInfo.lastAccuracy !== null" class="metric__unit">%</span>
                 </div>
-                <div class="metric__label">历史正确率</div>
+                <div class="metric__label">上次正确率</div>
               </div>
               <div class="metric">
                 <div class="metric__value">{{ startInfo.streak || '—' }}<span
@@ -100,20 +112,7 @@
             </div>
           </section>
 
-          <section class="start-section">
-            <div class="start-section__title">这次练什么</div>
-            <div class="start-chips">
-              <span class="chip">{{ startInfo.targetMin }}~{{ startInfo.targetMax }} 题</span>
-              <span class="chip">每组 4~10 题</span>
-              <span class="chip">{{ startInfo.challengeEnabled ? '含挑战题·下一档' : '只练本档' }}</span>
-              <span v-if="!startInfo.autoAdvance" class="chip">升档：手动</span>
-              <span class="chip chip--level">
-                {{ startInfo.levelLabel }}
-                <span v-if="startInfo.grade" class="chip__grade">{{ startInfo.grade }}</span>
-              </span>
-            </div>
-          </section>
-
+          <!-- 练习重点：孩子该关注什么，放在状态下面 -->
           <section v-if="startInfo.focus.length" class="start-section">
             <div class="start-section__title">练习重点</div>
             <div class="start-chips">
@@ -121,9 +120,161 @@
             </div>
           </section>
 
-          <el-button type="primary" size="large" class="start-btn" @click="handleStartPractice">
-            开始练习
-          </el-button>
+          <!-- 本次练习设置：默认折叠，只占一行标题 + 一行摘要 -->
+          <section class="start-section start-section--settings">
+            <div class="settings-head" @click="settingsOpen = !settingsOpen">
+              <svg class="settings-caret" :class="{ 'settings-caret--open': settingsOpen }"
+                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+                stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+              <span class="settings-label">本次练习设置</span>
+              <span class="scope-badge">只影响本次练习</span>
+            </div>
+
+            <!-- 折叠态摘要 -->
+            <div v-if="!settingsOpen" class="settings-summary">
+              <span class="chip chip--summary">Lv.{{ startInfo.levelIdx }} {{ startInfo.levelLabel }}</span>
+              <span class="chip chip--summary">{{ startInfo.targetMin }}~{{ startInfo.targetMax }} 题</span>
+              <span class="chip chip--summary">每组 4~10 题</span>
+              <span class="chip chip--summary">{{ startInfo.challengeEnabled ? '含挑战题' : '只练本档' }}</span>
+              <span class="chip chip--summary">{{ startInfo.autoAdvance ? '自动升档' : '手动升档' }}</span>
+            </div>
+
+            <!-- 展开态：5 行紧凑设置 -->
+            <div v-else class="settings-rows">
+              <div class="setting-row setting-row--level">
+                <span class="setting-row__label">档位</span>
+                <span class="setting-row__value">Lv.{{ startInfo.levelIdx }}</span>
+                <span class="level-actions">
+                  <el-button size="small" class="level-btn" :disabled="levelDownDisabled"
+                    :title="levelDownTitle" @click="shiftLevel(-1)">降一档</el-button>
+                  <el-button size="small" type="success" class="level-btn" :disabled="levelUpDisabled"
+                    :title="levelUpTitle" @click="shiftLevel(1)">升一档</el-button>
+                  <el-button size="small" class="level-more-btn" :title="moreOpen ? '收起更多档位控制' : '更多档位控制'"
+                    @click="moreOpen = !moreOpen">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </el-button>
+                </span>
+              </div>
+
+              <!-- 更多档位控制（低频：起点档位 / 恢复自动） -->
+              <div v-if="moreOpen" class="settings-more">
+                <div class="settings-more__title">更多档位控制</div>
+                <div class="settings-more__row">
+                  <span class="settings-more__label">起点档位</span>
+                  <el-select v-model="levelDraft" clearable size="small" class="settings-more__select"
+                    placeholder="自动（按练习记录计算）" popper-class="level-pick__popper">
+                    <el-option-group v-for="group in groupedLevels" :key="group.grade" :label="group.grade">
+                      <el-option v-for="lv in group.levels" :key="lv.idx"
+                        :label="`Lv.${lv.idx + 1} ${lv.label}`" :value="lv.idx" />
+                    </el-option-group>
+                  </el-select>
+                </div>
+                <div class="settings-more__hint">指定后下次开始练习生效，不影响当前这一轮</div>
+                <div class="settings-more__actions">
+                  <el-button size="small" :disabled="!levelOverrideActive" @click="resetLevelOverride">恢复自动</el-button>
+                  <el-button size="small" type="success" :disabled="levelDraft == null" @click="applyLevelOverride">应用</el-button>
+                </div>
+              </div>
+
+              <div class="setting-row setting-row--pair">
+                <div class="setting-pair">
+                  <span class="setting-row__label">挑战题</span>
+                  <el-popover trigger="click" placement="bottom-start" :width="220"
+                    content="打开后，这一轮会混入下一档的题（约 15%）">
+                    <template #reference><span class="hint-btn">?</span></template>
+                  </el-popover>
+                  <el-switch :model-value="startInfo.challengeEnabled"
+                    @update:model-value="setChallengeEnabled" />
+                </div>
+                <div class="setting-pair">
+                  <span class="setting-row__label">自动升档</span>
+                  <el-popover trigger="click" placement="bottom-start" :width="240"
+                    content="打开后，练够量且正确率达标就自动进下一档；此时降/升档不可用">
+                    <template #reference><span class="hint-btn">?</span></template>
+                  </el-popover>
+                  <el-switch :model-value="startInfo.autoAdvance"
+                    @update:model-value="setAutoAdvance" />
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <span class="setting-row__label">题量</span>
+                <el-popover trigger="click" placement="bottom-start" :width="220"
+                  content="这一轮做几题：最少 ~ 最多。答得好会提前结束">
+                  <template #reference><span class="hint-btn">?</span></template>
+                </el-popover>
+                <span class="setting-row__spacer"></span>
+                <el-input v-model.number="targetDraft.min" type="number" inputmode="numeric"
+                  class="target-input" @change="saveAdaptiveAmount" />
+                <span class="setting-row__unit">~</span>
+                <el-input v-model.number="targetDraft.max" type="number" inputmode="numeric"
+                  class="target-input" @change="saveAdaptiveAmount" />
+                <span class="setting-row__unit">题</span>
+              </div>
+              <div v-if="targetError" class="settings-error">{{ targetError }}</div>
+
+              <div class="setting-row setting-row--readonly">
+                <span class="setting-row__label">每组</span>
+                <el-popover trigger="click" placement="bottom-start" :width="240"
+                  content="每组出几题，由表现自动调整，不可手动改">
+                  <template #reference><span class="hint-btn">?</span></template>
+                </el-popover>
+                <span class="setting-row__spacer"></span>
+                <span class="setting-row__value setting-row__value--muted">4~10 题</span>
+              </div>
+
+              <!-- 档位配比：24 档太长，做成第二层折叠 + 限高内部滚动，收起设置区时整块不显示 -->
+              <div class="setting-row setting-row--ratio">
+                <span class="setting-row__label">档位配比</span>
+                <span v-if="ratioCustomCount" class="ratio-tag">{{ ratioCustomCount }} 档已自定义</span>
+                <el-popover trigger="click" placement="bottom-start" :width="260"
+                  content="不配置 = 按原有权重出题；0 = 该档不出；大于 1 = 提高占比。只影响各档出现比例，不改难度判定">
+                  <template #reference><span class="hint-btn">?</span></template>
+                </el-popover>
+                <span class="setting-row__spacer"></span>
+                <el-button link type="primary" size="small" @click="ratioOpen = !ratioOpen">
+                  {{ ratioOpen ? '收起' : '展开' }}
+                </el-button>
+              </div>
+
+              <div v-if="ratioOpen" class="ratio-panel">
+                <div class="ratio-panel__head">
+                  <span class="ratio-panel__title">各档出现比例</span>
+                  <span class="setting-row__spacer"></span>
+                  <span class="ratio-panel__hint">0 = 不出 · &gt;1 = 提高占比</span>
+                </div>
+                <div class="ratio-panel__body">
+                  <div v-for="group in groupedLevels" :key="group.grade" class="ratio-group">
+                    <div class="ratio-group__title">{{ group.grade }}</div>
+                    <div v-for="lv in group.levels" :key="lv.idx" class="ratio-line">
+                      <span class="ratio-line__name">
+                        <span class="ratio-line__idx">{{ lv.idx + 1 }}</span>{{ lv.label }}
+                      </span>
+                      <el-input :model-value="String(ratioOf(lv.idx))" size="small" class="ratio-line__input"
+                        @change="(v) => setRatio(lv.idx, v)" />
+                    </div>
+                  </div>
+                </div>
+                <div class="ratio-panel__foot">
+                  <span class="ratio-panel__hint">只影响各档出现比例，不改难度判定</span>
+                  <el-button v-if="ratioCustomCount" link type="danger" size="small" @click="resetRatio">
+                    恢复默认
+                  </el-button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <div class="start-cta">
+            <el-button type="primary" size="large" class="start-btn" @click="handleStartPractice">
+              开始练习
+            </el-button>
+          </div>
         </div>
       </el-card>
 
@@ -182,6 +333,10 @@ import { useSubmitHandler } from '@/composables/useSubmitHandler'
 import { useAdaptiveSession } from '@/composables/useAdaptiveSession'
 import { usePracticeDialogs } from '@/composables/usePracticeDialogs'
 import { usePracticeSaver } from '@/composables/usePracticeSaver'
+import { useManualSession } from '@/composables/useManualSession'
+import { isLastOfGroup, groupIndexOf, hasMultipleGroups, rangeOfGroup } from '@/utils/groupPlan'
+import { explainError } from '@/utils/algorithm/explainError'
+import { Answer, WrongAnswer } from '@/services'
 import { useSnapshotSync } from '@/composables/useSnapshotSync'
 import { decideListPracticesTransition } from '@/utils/listPracticesGuard'
 import { useDisplayStrategy } from '@/composables/useDisplayStrategy'  // 🆕 PR-4.2 抽离 displayStats + applyDisplayModeForCurrentQuestion + generateOptions
@@ -191,6 +346,23 @@ import { playSfx, isSfxEnabled, setSfxEnabled, reloadSfxEnabled, tierForRate } f
 import { usePracticeStore } from '@/stores/practice'
 import { useStatsStore } from '@/stores/stats'
 import { storeToRefs } from 'pinia'
+import { DIFFICULTY_LEVELS } from '@/constants/difficulty'
+import { saveLevelOverride, clearLevelOverride } from '@/utils/store/levelOverride'
+import { saveChallengeEnabled } from '@/utils/store/challengeSetting'
+import { saveAutoAdvance } from '@/utils/store/autoAdvance'
+import { validateTargetRange } from '@/utils/form/formDefaults'
+import { patchFormState } from '@/utils/store/formPersistence'
+import {
+  loadLevelCoefficients,
+  saveLevelCoefficients,
+  clearLevelCoefficients,
+  COEF_MIN,
+  COEF_MAX,
+  COEF_DEFAULT,
+} from '@/utils/store/levelCoefficients'
+
+/** 档位总数（0 基下标上界 = 长度 - 1） */
+const DIFFICULTY_LEVELS_LEN = DIFFICULTY_LEVELS.length
 
 // ── 汇总弹窗 HTML 已抽到 utils/practiceSummary.js ──
 
@@ -283,6 +455,33 @@ const currentInput = computed(() => inputComponents[session.value.displayMode.in
 const currentAnswers = computed(() =>
   isAssessment.value ? session.value.diagnosticAnswers : session.value.answers.slice(groupAnswerOffset.value)
 )
+
+/**
+ * 进度展示：多组自定义练习按「本组」算，与自适应一致
+ * （自适应每组的 listPractices 就是本组题，总题数天然是组大小）
+ */
+const progressRange = computed(() => {
+  if (!isMultiGroupManual.value) return null
+  return rangeOfGroup(manualGroupRanges.value, practiceStore.session.currentIndex)
+})
+
+const progressTotal = computed(() => {
+  const r = progressRange.value
+  return r ? r.end - r.start : totalQuestions.value
+})
+
+const progressCurrent = computed(() => {
+  const r = progressRange.value
+  return r ? practiceStore.session.currentIndex - r.start + 1 : currentIndex.value + 1
+})
+
+/** 进度点/步骤只统计本组答案，避免第 2 组还显示第 1 组的对错 */
+const progressAnswers = computed(() => {
+  const r = progressRange.value
+  const all = currentAnswers.value
+  if (!r) return all
+  return all.slice(r.start - groupAnswerOffset.value)
+})
 
 const inputProps = computed(() => {
   if (!currentQuestion.value) return { disabled: true }
@@ -414,6 +613,7 @@ const handleSubmit = (answer) => {
     // 连对越多，音效越高（不给文字也能听出「连击」）
     playSfx('correct', { streak: session.value.streak })
     session.value.feedbackType = 'correct'
+    wrongReason.value = null
     updateStats(true)
     ElMessage.success({
       message: '✓ 正确！',
@@ -428,8 +628,22 @@ const handleSubmit = (answer) => {
   // ── 答错 ──
   playSfx('wrong', { attempt: result.attemptCount })
   session.value.feedbackType = 'wrong'
+  // 错因：用错误模型推出「这一步是怎么错的」，比只报正确答案更有教学价值
+  const reason = explainError({
+    equation: currentQuestion.value.equation,
+    solution: currentQuestion.value.solution,
+    // 选择题走 handleSubmit(option)：answer 才是孩子选的项，currentAnswer 此时通常为空
+    userAnswer: result.userAnswer ?? answer ?? session.value.currentAnswer,
+    operator: currentQuestion.value.operator,
+  })
+  // toast 一闪而过 → 同时记进常驻条（wrongReasonText 会渲染在题目下方）
+  wrongReason.value = reason
+  void loadWrongHistory()      // 刚错过的题立刻进入「复习」高亮
+  const reasonText = reason.label
+    ? `${reason.label}${reason.hint ? '（' + reason.hint + '）' : ''} · `
+    : (reason.hint ? `${reason.hint} · ` : '')
   ElMessage.error({
-    message: `✗ 正确答案是 ${currentQuestion.value.solution}`,
+    message: `✗ ${reasonText}正确答案是 ${currentQuestion.value.solution}`,
     duration: FEEDBACK_DELAYS.wrong,
     offset: 100,
     customClass: 'feedback-message',
@@ -482,6 +696,45 @@ const handleSubmit = (answer) => {
 /** 选择题的键盘焦点项下标（← → 移动） */
 const optionFocusIdx = ref(0)
 
+/**
+ * 答错原因（答错时算一次，常驻显示到下一题）
+ * @type {import('vue').Ref<{code:string,label:string,hint:string}|null>}
+ */
+const wrongReason = ref(null)
+const wrongReasonText = computed(() => {
+  const r = wrongReason.value
+  if (!r) return ''
+  return [r.label, r.hint].filter(Boolean).join(' · ')
+})
+
+/**
+ * 当前题是否属于「错题复习」（历史上错过）
+ * 用一张按算式缓存的错题表判断，避免每题都查库。
+ */
+const wrongHistory = ref({})          // { equation: { wrongCount } }
+const isReviewQuestion = computed(() => {
+  const eq = currentQuestion.value?.equation
+  return !!(eq && wrongHistory.value[eq])
+})
+const reviewWrongCount = computed(() => {
+  const eq = currentQuestion.value?.equation
+  return eq ? (wrongHistory.value[eq]?.wrongCount || 0) : 0
+})
+
+/** 载入错题历史（进入练习时刷一次；错一题后再刷） */
+async function loadWrongHistory() {
+  try {
+    const rows = await WrongAnswer.getWrongAnswers({ days: 365, limit: 400 })
+    const map = {}
+    for (const row of WrongAnswer.dedup(rows)) {
+      const eq = row.equation
+      if (!eq) continue
+      map[eq] = { wrongCount: row.wrongCount || 1 }
+    }
+    wrongHistory.value = map
+  } catch { /* 读不到就当没有错题历史 */ }
+}
+
 /** 音效开关（存在 localStorage，默认开） */
 const sfxOn = ref(isSfxEnabled())
 
@@ -492,14 +745,21 @@ function toggleSfx() {
 }
 
 // 每换一题把焦点回到第一项
-watch(currentQuestion, () => { optionFocusIdx.value = 0 })
+watch(currentQuestion, () => {
+  optionFocusIdx.value = 0
+  // 换到新题：上一题的错因条不再适用（同一题重试时 currentQuestion 不变，条会留着）
+  wrongReason.value = null
+})
 
 /** 进入下一题；当前是最后一题时按阶段收尾 */
 const handleNext = () => {
   if (nextLocked.value) return
   nextLocked.value = true
 
-  if (!isLastQuestion.value) {
+  // 多组自定义练习：本组最后一题也要走收尾（组反馈 → 自评），而不是直接跳下一题
+  const atGroupEnd = isLastOfManualGroup.value
+
+  if (!isLastQuestion.value && !atGroupEnd) {
     practiceStore.nextQuestion()
     // 关键修复：调 initPractice（之前仅在 watch 路径调，handleNext 直接跳题时漏调）
     //  initPractice 重置 session.answers（每组只含本组）、currentIndex=0、displayStats
@@ -521,6 +781,15 @@ const handleNext = () => {
       // 只有自适应题单才走「组完成 → 评估 → 生成下一组」。
       // 手动出题的题单做完就是结束，不能被自适应引擎接管。
       fn = completeGroup
+    } else if (isMultiGroupManual.value) {
+      // 自定义练习分了多组：每一组结束都先走「组反馈 + 自评」，
+      // 最后一组自评完再出整轮总结（与自适应一致：末组也有自评）。
+      // 走到这里时一定刚好是本组最后一道题。
+      fn = async () => {
+        const result = await completeManualGroup()
+        if (result === 'continue') return result
+        return handlePracticeComplete()
+      }
     } else {
       fn = handlePracticeComplete
     }
@@ -544,10 +813,55 @@ const handleNext = () => {
 /** 开始新一轮自适应练习（已抽到 composables/useAdaptiveSession.js） */
 
 /** 正常练习完成 → 保存到 DB，弹出汇总弹窗，关闭后跳首页 */
+/** 自定义练习分组：组边界 → 自评 → 下一组（一张卷子 = 一组） */
+const {
+  manualGroupRanges,
+  manualGroupIndex,
+  setGroupPlan,
+  resetGroupPlan,
+  completeManualGroup,
+} = useManualSession({ dialogs, saver })   // 必须传入同一实例，否则弹窗状态与模板不互通
+
+/** Generate 侧写好分组计划 → 这里换算成题号区间 */
+watch(
+  () => practiceStore.manualGroupPlan,
+  (plan) => {
+    if (Array.isArray(plan) && plan.length > 1) setGroupPlan(plan)
+    else resetGroupPlan()
+  },
+  { immediate: true, deep: true }
+)
+
+/** 是否处于「多组自定义练习」中（决定收尾走组边界还是整轮） */
+const isMultiGroupManual = computed(
+  () => practiceStore.listSource === 'manual' && hasMultipleGroups(manualGroupRanges.value)
+)
+
+/** 当前处在第几组（1 基）；不是多组时返回 0 */
+const currentGroupNo = computed(() => {
+  if (!isMultiGroupManual.value) return 0
+  return groupIndexOf(manualGroupRanges.value, practiceStore.session.currentIndex) || 1
+})
+
+/** 多组时显示「第 2/3 组」 */
+const groupBadgeText = computed(() => {
+  if (!isMultiGroupManual.value) return ''
+  return `第 ${currentGroupNo.value} 组，共 ${manualGroupRanges.value.length} 组`
+})
+
+/** 本次答题是否本组最后一题（多组自定义练习才成立） */
+const isLastOfManualGroup = computed(() => {
+  if (!isMultiGroupManual.value) return false
+  return isLastOfGroup(manualGroupRanges.value, practiceStore.session.currentIndex)
+})
+
 const handlePracticeComplete = async () => {
   const totalAns = totalQuestions.value
-  const correctAns = correctCount.value
-  const rate = Math.round((correctAns / totalAns) * 100)
+  // 注意：不能用 correctCount（= Answer.sumScores 的「掌握分」，重试后是 0.33 这类小数，
+  // 弹窗上会显示成 1.666666666667）。这里要的是「答对了几题」。
+  const doneAnswers = session.value.answers || []
+  const correctAns = doneAnswers.filter(a => (a instanceof Answer ? a.isCorrect : Answer.isCorrect(a))).length
+  const rate = totalAns > 0 ? Math.round((correctAns / totalAns) * 100) : 0
 
   // 非自适应练习完成时，传 finalProfileSnapshot（从 adaptiveEngine 或当前 profile 获取）
   // 注意：adaptiveEngine.profile 可能是 DB 原始行（没有 snapshot()），
@@ -850,55 +1164,217 @@ if (typeof window !== 'undefined') {
 // 开始练习界面（有画像进入时不立刻出题，先给学生看这轮练什么）
 // ─────────────────────────────────────────────────────────────
 const startInfo = ref({
-  levelIdx: 0, levelLabel: '', accuracy: 0, streak: 0,
+  levelIdx: 0,           // 1 基，用于展示 Lv.N
+  levelRaw: 0,           // 0 基，用于升降档计算
+  levelLabel: '', grade: '',
+  lastAccuracy: null, lastAnswered: 0, streak: 0,
   targetMin: 10, targetMax: 30, challengeEnabled: false, autoAdvance: false, focus: []
 })
 
+/** 设置区展开状态（默认折叠，不持久化） */
+const settingsOpen = ref(false)
+/** 「更多档位控制」面板 */
+const moreOpen = ref(false)
+/** 练习量草稿（改完即时保存） */
+const targetDraft = ref({ min: 10, max: 30 })
+const targetError = ref('')
+/** 起点档位下拉草稿（点了「应用」才写） */
+const levelDraft = ref(null)
+const levelOverrideActive = ref(false)
+
+/** 档位配比：第二层折叠 + 系数表（只落非默认值） */
+const ratioOpen = ref(false)
+const ratioMap = ref({})
+const ratioCustomCount = computed(() => Object.keys(ratioMap.value).length)
+
+/** 取某档系数（未配置显示默认 1.0） */
+function ratioOf(idx) {
+  const v = ratioMap.value[idx]
+  return typeof v === 'number' ? v.toFixed(1) : '1.0'
+}
+
+/** 改某档系数：非法 → 回退默认；等于默认 → 从表里删掉（保持表精简） */
+function setRatio(idx, raw) {
+  const num = Number(raw)
+  const next = { ...ratioMap.value }
+  if (!Number.isFinite(num)) {
+    delete next[idx]
+  } else {
+    const clamped = Math.min(COEF_MAX, Math.max(COEF_MIN, num))
+    if (clamped === COEF_DEFAULT) delete next[idx]
+    else next[idx] = Math.round(clamped * 10) / 10
+  }
+  ratioMap.value = next
+  saveLevelCoefficients(next)
+  practiceStore.bumpLevelOverride()
+  playSfx('tap')
+}
+
+/** 恢复全部默认 */
+function resetRatio() {
+  clearLevelCoefficients()
+  ratioMap.value = {}
+  practiceStore.bumpLevelOverride()
+  ElMessage.info('档位配比已恢复默认')
+}
+
+/** 档位升降的边界与禁用态 */
+const maxLevelIdx = DIFFICULTY_LEVELS_LEN - 1
+const levelDownDisabled = computed(() => startInfo.value.autoAdvance || startInfo.value.levelRaw <= 0)
+const levelUpDisabled = computed(() => startInfo.value.autoAdvance || startInfo.value.levelRaw >= maxLevelIdx)
+const levelDownTitle = computed(() => {
+  if (startInfo.value.autoAdvance) return '自动升档已开启，档位会按表现自动变化'
+  if (startInfo.value.levelRaw <= 0) return '已是最低档'
+  return `降到 Lv.${startInfo.value.levelIdx - 1} ${DIFFICULTY_LEVELS[startInfo.value.levelRaw - 1]?.label || ''}`
+})
+const levelUpTitle = computed(() => {
+  if (startInfo.value.autoAdvance) return '自动升档已开启，档位会按表现自动变化'
+  if (startInfo.value.levelRaw >= maxLevelIdx) return '已是最后一档'
+  return `升到 Lv.${startInfo.value.levelIdx + 1} ${DIFFICULTY_LEVELS[startInfo.value.levelRaw + 1]?.label || ''}`
+})
+
+/** 档位下拉的分组（按年级） */
+const groupedLevels = computed(() => {
+  const groups = []
+  for (let idx = 0; idx < DIFFICULTY_LEVELS_LEN; idx++) {
+    const lv = DIFFICULTY_LEVELS[idx]
+    const grade = lv.grade || '未分组'
+    let g = groups.find(x => x.grade === grade)
+    if (!g) { g = { grade, levels: [] }; groups.push(g) }
+    g.levels.push({ idx, label: lv.label })
+  }
+  return groups
+})
+
+/**
+ * 降/升一档：写「起点档位」覆盖 + 刷新
+ * @param {number} delta -1 降 / +1 升
+ */
+function shiftLevel(delta) {
+  const from = startInfo.value.levelRaw
+  const target = Math.min(maxLevelIdx, Math.max(0, from + delta))
+  if (target === from) return
+  const saved = saveLevelOverride(target)
+  if (!saved) return
+  levelOverrideActive.value = true
+  levelDraft.value = target
+  practiceStore.bumpLevelOverride()
+  refreshStartInfo()
+  playSfx(delta > 0 ? 'levelup' : 'tap')
+}
+
+/** 挑战题开关 */
+function setChallengeEnabled(value) {
+  saveChallengeEnabled(!!value)
+  refreshStartInfo()
+}
+
+/** 自动升档开关 */
+function setAutoAdvance(value) {
+  saveAutoAdvance(!!value)
+  refreshStartInfo()
+}
+
+/** 练习量：校验通过才写（store 实时 + 表单合并写，刷新后保留） */
+function saveAdaptiveAmount() {
+  const { min, max } = targetDraft.value
+  const result = validateTargetRange(min, max)
+  if (!result.valid) {
+    targetError.value = result.message
+    return
+  }
+  targetError.value = ''
+  practiceStore.setAdaptiveTarget(min, max)
+  patchFormState({ targetMin: min, targetMax: max })
+  refreshStartInfo()
+}
+
+/** 应用手动指定的起点档位 */
+function applyLevelOverride() {
+  if (levelDraft.value == null) return
+  const saved = saveLevelOverride(levelDraft.value)
+  if (!saved) return
+  levelOverrideActive.value = true
+  practiceStore.bumpLevelOverride()
+  refreshStartInfo()
+  ElMessage.success(`起点档位已设为 Lv.${saved.levelIdx + 1} ${DIFFICULTY_LEVELS[saved.levelIdx].label}，下次开始练习生效`)
+}
+
+/** 恢复自动（清除起点档位覆盖） */
+function resetLevelOverride() {
+  clearLevelOverride()
+  levelOverrideActive.value = false
+  levelDraft.value = null
+  practiceStore.bumpLevelOverride()
+  refreshStartInfo()
+  ElMessage.info('已恢复自动升档（按练习记录计算）')
+}
+
+/** 刷新准备界面（不重置输入态，只重算数据） */
+function refreshStartInfo() {
+  if (readyToStart.value && !currentQuestion.value) loadStartInfo()
+}
+
 async function loadStartInfo() {
   const { Profile } = await import('@/services/abilityProfile')
-  const { DIFFICULTY_LEVELS } = await import('@/constants/difficulty')
-  const { Answer } = await import('@/services/Answer')
   const { loadChallengeEnabled } = await import('@/utils/store/challengeSetting')
   const { loadAutoAdvance } = await import('@/utils/store/autoAdvance')
+  const { loadLevelOverride } = await import('@/utils/store/levelOverride')
+  const { getLastSessionAccuracy } = await import('@/services/statsAggregator')
   const profile = await Profile.load()
   const idx = profile?.difficultyIdx ?? 0
   const level = DIFFICULTY_LEVELS[idx] || DIFFICULTY_LEVELS[0]
-  // 正确率/连续天数：直接按全部答题记录算。
-  // 不用 getAggregatedStats —— 它按 practiceSessionId 统计，诊断答案没有 sessionId，
-  // 刚做完诊断会显示 0%，与实际不符。
-  let accuracy = null
-  let answered = 0
-  let streak = 0
+
+  // 上次正确率：最近一轮有答题的练习（不是历史平均）
+  let lastAccuracy = null
+  let lastAnswered = 0
   try {
-    const all = await Answer.getAllByStudent()
-    answered = all.length
-    // getAllByStudent 返回的是数据库原始行（没有 isCorrect getter），要用静态方法判对错
-    if (answered) accuracy = Math.round(all.filter(a => Answer.isCorrect(a)).length / answered * 100)
+    const last = await getLastSessionAccuracy()
+    lastAccuracy = last?.accuracy ?? null
+    lastAnswered = last?.total ?? 0
   } catch { /* 读不到就当无数据 */ }
+
+  let streak = 0
   try {
     const { getAggregatedStats } = await import('@/services/statsAggregator')
     const agg = await getAggregatedStats()
     streak = agg?.dailyStreak || 0
   } catch { /* 统计失败不阻塞 */ }
-  // 练习量优先级：adaptiveTarget（抽屉里当前设置，实时）> adaptiveConfig（诊断快照）> configSnapshot
+
+  // 练习量优先级：adaptiveTarget（抽屉里当前设置，实时）> adaptiveConfig（诊断快照）
+  // > configSnapshot > psm_form_state（上次保存）> 默认 10/30
   const liveTarget = practiceStore.session.adaptiveTarget
   const cfg = practiceStore.session.adaptiveConfig || practiceStore.session.configSnapshot || {}
+  const { loadFormState } = await import('@/utils/store/formPersistence')
+  const savedForm = loadFormState()?.formData || {}
+  const targetMin = liveTarget?.targetMin ?? cfg.targetMin ?? savedForm.targetMin ?? 10
+  const targetMax = liveTarget?.targetMax ?? cfg.targetMax ?? savedForm.targetMax ?? 30
+  // 起点档位（手动覆盖）
+  const override = loadLevelOverride()
+  levelOverrideActive.value = !!override
+  levelDraft.value = override ? override.levelIdx : null
+  ratioMap.value = loadLevelCoefficients()
+
   startInfo.value = {
     levelIdx: idx + 1,
+    levelRaw: idx,
     levelLabel: level?.label || '起步',
     grade: level?.grade || '',
-    accuracy,
-    answered,
+    lastAccuracy,
+    lastAnswered,
     streak,
-    targetMin: liveTarget?.targetMin ?? cfg.targetMin ?? 10,
-    targetMax: liveTarget?.targetMax ?? cfg.targetMax ?? 30,
-    // 挑战题由家长在设置里手动开关（默认关闭 → 只出当前档及以下）
+    targetMin,
+    targetMax,
+    // 挑战题由家长手动开关（默认关闭 → 只出当前档及以下）
     challengeEnabled: loadChallengeEnabled(),
-    // 升档方式：默认手动（停在当前档，家长点「升一档」才推进）
+    // 升档方式：默认手动（停在当前档，家长点「升/降一档」才推进）
     autoAdvance: loadAutoAdvance(),
     // 练习重点只列当前档位及以下的弱项：更高档位这轮不会出题（见 Profile#getFocusLevels）
     focus: profile?.getFocusLevels ? profile.getFocusLevels() : [],
   }
+  // 练习量草稿跟随最新值（避免输入框显示旧值）
+  targetDraft.value = { min: targetMin, max: targetMax }
+  targetError.value = ''
 }
 
 /** 点「开始练习」才真正出题 */
@@ -946,6 +1422,8 @@ watch(
 function handleKeydown(e) {
   // 带修饰键的组合交给浏览器（Ctrl+R / Cmd+Tab 等）
   if (e.ctrlKey || e.altKey || e.metaKey) return
+  // 弹窗自己处理键盘（自评 / 汇总），练习页不抢键
+  if (dialogs.evalVisible.value || dialogs.summaryVisible.value) return
   const tag = e.target?.tagName
   if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable) return
 
@@ -1011,11 +1489,14 @@ onUnmounted(() => window.removeEventListener('psm:db-blocked', handleDbBlocked))
 /** 同步来的配置应用后：音效开关是模块级变量，需要重新读一次 */
 function handleSettingsApplied() {
   sfxOn.value = reloadSfxEnabled()
+  // 档位/挑战题/升档方式可能被另一台设备改了 → 准备界面跟着刷新
+  refreshStartInfo()
 }
 onMounted(() => window.addEventListener('psm:settings-applied', handleSettingsApplied))
 onUnmounted(() => window.removeEventListener('psm:settings-applied', handleSettingsApplied))
 
 onMounted(async () => {
+  void loadWrongHistory()
   // 恢复同步身份；已绑定则自动开始定时同步（不阻塞、失败只影响状态点）
   void snapshotSync.init()
   if (listPractices.value.length > 0) return  // 已有题目，不干预
@@ -1180,6 +1661,360 @@ onMounted(async () => {
   letter-spacing: 0.08em;
 }
 
+/* 主按钮吸底：内容再长也点得到（渐变防止文字透出） */
+.start-cta {
+  position: sticky;
+  bottom: 0;
+  padding-top: 10px;
+  padding-bottom: 2px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0), #fff 42%);
+}
+
+/* ── 本次练习设置（默认折叠）─────────────────────────────── */
+.start-section--settings {
+  border-top: 1px solid #dbe7f4;
+  padding-top: 14px;
+  margin-top: 2px;
+}
+
+.settings-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.settings-caret {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  color: #9aa7b4;
+  transition: transform 0.16s ease;
+}
+
+.settings-caret--open {
+  transform: rotate(90deg);
+}
+
+.settings-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e3c5c;
+}
+
+.scope-badge {
+  font-size: 11px;
+  font-weight: 500;
+  color: #7f8c9b;
+  background: #eef3f8;
+  border-radius: 6px;
+  padding: 2px 7px;
+}
+
+.settings-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.chip--summary {
+  font-size: 12px;
+  font-weight: 500;
+  color: #5b6b7a;
+  background: #eef3f8;
+  padding: 4px 10px;
+}
+
+.settings-rows {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 0;
+  border-bottom: 1px solid #eef3f8;
+}
+
+.setting-row:last-child {
+  border-bottom: none;
+}
+
+.setting-row__label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1e3c5c;
+  flex: 0 0 auto;
+}
+
+.setting-row__value {
+  font-size: 13px;
+  color: #5b6b7a;
+}
+
+.setting-row__value--muted {
+  color: #9aa7b4;
+}
+
+.setting-row__unit {
+  font-size: 13px;
+  color: #8794a2;
+}
+
+/* 把右侧控件推到行尾 */
+.setting-row__spacer {
+  flex: 1 1 auto;
+}
+
+.setting-row--pair {
+  gap: 18px;
+}
+
+/* 档位行：放不下时按钮组整体换到第二行右对齐 */
+.setting-row--level {
+  flex-wrap: wrap;
+}
+
+.setting-pair {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.level-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.level-btn {
+  height: 34px;
+  padding: 0 10px;
+  font-size: 13px;
+  border-radius: 9px;
+}
+
+.level-more-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 8px;
+  color: #909399;
+}
+
+.target-input {
+  width: 72px;
+}
+
+.target-input :deep(input) {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+}
+
+.target-input :deep(input)::-webkit-outer-spin-button,
+.target-input :deep(input)::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.hint-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  border-radius: 50%;
+  background: #dbe7f4;
+  color: #7f8c9b;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* ── 档位配比（第二层折叠 + 限高内部滚动）── */
+.setting-row--ratio {
+  border-bottom: none;
+}
+
+.ratio-tag {
+  font-size: 11px;
+  color: #b7791f;
+  background: #fff7e6;
+  border: 1px solid #ffe1a8;
+  border-radius: 6px;
+  padding: 1px 6px;
+}
+
+.ratio-panel {
+  margin: 2px 0 8px;
+  border: 1px solid #e6eef6;
+  border-radius: 12px;
+  background: #f8fbff;
+  overflow: hidden;
+}
+
+.ratio-panel__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  background: #f2f8ff;
+  border-bottom: 1px solid #e6eef6;
+}
+
+.ratio-panel__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e3c5c;
+}
+
+.ratio-panel__hint {
+  font-size: 11px;
+  color: #9aa7b4;
+}
+
+/* 24 档不撑长页面：限高 + 内部滚动 */
+.ratio-panel__body {
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 4px 12px 8px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ratio-panel__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-top: 1px solid #e6eef6;
+  background: #fbfdff;
+}
+
+.ratio-group__title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #7f8c9b;
+  margin: 8px 0 2px;
+}
+
+.ratio-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+}
+
+.ratio-line__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  color: #5b6b7a;
+}
+
+.ratio-line__idx {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-right: 6px;
+  border-radius: 6px;
+  background: #eef3f8;
+  color: #7f8c9b;
+  font-size: 11px;
+}
+
+.ratio-line__input {
+  width: 64px;
+  flex: 0 0 64px;
+}
+
+.ratio-line__input :deep(input) {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-error {
+  font-size: 12px;
+  color: #e6a23c;
+  padding: 4px 0 0 2px;
+}
+
+.settings-more {
+  margin: 2px 0 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f6f9fc;
+  border: 1px solid #e6eef6;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.settings-more__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #7f8c9b;
+}
+
+.settings-more__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-more__label {
+  font-size: 13px;
+  color: #5b6b7a;
+  flex: 0 0 auto;
+}
+
+.settings-more__select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.settings-more__hint {
+  font-size: 11.5px;
+  color: #9aa7b4;
+}
+
+.settings-more__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* 小屏（≤360）：两个开关各占一行、题量输入再收窄，避免挤压 */
+@media (max-width: 360px) {
+  .setting-row {
+    gap: 6px;
+  }
+
+  .setting-row--pair {
+    flex-wrap: wrap;
+  }
+
+  .setting-pair {
+    flex: 1 1 100%;
+  }
+
+  .target-input {
+    width: 64px;
+  }
+}
+
 @media (max-width: 480px) {
   .start-panel {
     gap: 18px;
@@ -1205,6 +2040,20 @@ onMounted(async () => {
   gap: 12px;
   margin-bottom: 12px;
   flex-wrap: wrap;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 组徽标：与阶段徽标同尺寸同圆角，只换底色，避免多一套视觉语言 */
+.stage-badge--group {
+  color: #176ebf;
+  background: #e3f1ff;
+  border-color: #cfe6fb;
 }
 
 .stage-badge,
@@ -1464,5 +2313,60 @@ onMounted(async () => {
   font-weight: bold !important;
   text-align: center !important;
   z-index: 9999 !important;
+}
+
+/* ── 答错常驻错因条（toast 一闪而过，这条留到下一题）── */
+.wrong-reason {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 8px auto 0;
+  max-width: var(--interaction-width, 100%);
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #fff4f4;
+  border: 1px solid #ffd6d6;
+}
+
+.wrong-reason__label {
+  font-size: 13px;
+  color: #d94848;
+  font-weight: 600;
+}
+
+.wrong-reason__ans {
+  margin-left: auto;
+  font-size: 12.5px;
+  color: #7f8c9b;
+  white-space: nowrap;
+}
+
+.wrong-reason__ans b {
+  color: #1e3c5c;
+  font-size: 15px;
+}
+
+/* ── 错题复习：整块题目显著区分（背景 + 描边 + 左侧色条）── */
+.review-question {
+  position: relative;
+  background: linear-gradient(135deg, #fff8ef 0%, #fff2e2 100%) !important;
+  border: 2px solid #ffb13c !important;
+  border-radius: 16px;
+  box-shadow: 0 6px 18px rgba(255, 177, 60, 0.22);
+}
+
+.review-question::before {
+  content: "重点复习";
+  position: absolute;
+  top: -10px;
+  left: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #ffb13c;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 </style>

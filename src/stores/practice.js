@@ -29,6 +29,12 @@ export const usePracticeStore = defineStore('practice', {
     /** 自适应阶段累计答题（按题号追加，跨组不去重） */
     adaptiveAnswers: [],
     /**
+     * 自定义练习的分组计划（每组的题数，一张卷子 = 一组）。
+     * 由 Generate.generateFormulas 写入，Practice.vue watch 后换算成题号区间。
+     * 长度 ≤1 时按「整轮一组」的旧行为处理。
+     */
+    manualGroupPlan: [],
+    /**
      * 等待用户点「开始练习」的准备态。
      * 有画像进入练习页时不立刻出题，先展示学习情况/本次设置/练习重点。
      * 手动出题（Generate.vue 生成题单）会把它置 false 直接进题。
@@ -149,6 +155,11 @@ export const usePracticeStore = defineStore('practice', {
     /** 设置题单来源：'adaptive' | 'manual' | 'diagnostic' */
     setListSource(source) {
       this.listSource = source
+    },
+
+    /** 设置自定义练习的分组计划（每组题数） */
+    setManualGroupPlan(plan) {
+      this.manualGroupPlan = Array.isArray(plan) ? [...plan] : []
     },
     /** 启动诊断模式并载入诊断题 */
     startAssessment(questions) {

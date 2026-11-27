@@ -141,7 +141,9 @@ export function buildPaperDescriptionList(paperList) {
   const OP_TEXT = { 1: '+', 2: '-', 3: '×', 4: '÷' }
   return paperList.map(p => {
     if (p.customFormulaList && p.customFormulaList.length) {
-      return `自定义口算题${p.numberOfFormulas}道`
+      return p.kind === 'wrongbook'
+        ? `错题重现·${p.numberOfFormulas}道`
+        : `自定义口算题${p.numberOfFormulas}道`
     }
 
     // 运算符从各步的 operators 取（第一步通常是算数项，operators 为 null）

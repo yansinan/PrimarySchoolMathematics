@@ -80,11 +80,12 @@
  *  - update:visible
  *  - select (score: 1|2|3|4|5)
  */
-import { ref, watch } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { useAbilityProfile } from '@/composables/useAbilityProfile'
 import WeaknessV2Card from '@/components/profile/WeaknessV2Card.vue'
 import StrengthV2Card from '@/components/profile/StrengthV2Card.vue'
 import { EVAL_FACES, EVAL_SCORE_LABELS, DEFAULT_EVAL_SCORE, SELECT_CONFIRM_DELAY_MS } from '@/constants'
+import { playSfx } from '@/utils/sound/sfx'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -119,6 +120,61 @@ const faces = EVAL_FACES
 
 // 评分标签 — 来自 constants/evaluation.js
 const scoreLabels = EVAL_SCORE_LABELS
+
+/** 表情按分数升序（←/→ 的移动顺序） */
+const facesByScore = computed(() => [...faces].sort((a, b) => a.score - b.score))
+
+/**
+ * 键盘操作：←/→ 移动选择，Enter / 空格 确认，数字 1~5 直选
+ * 弹窗打开时挂到 window，关闭时移除 —— 与 Practice 的全局按键处理互补。
+ */
+function onKeydown(e) {
+  if (!props.visible) return
+  if (e.ctrlKey || e.altKey || e.metaKey) return
+
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    e.preventDefault()
+    e.stopPropagation()
+    const list = facesByScore.value
+    const cur = list.findIndex(f => f.score === selectedScore.value)
+    const dir = e.key === 'ArrowRight' ? 1 : -1
+    const next = list[(cur + dir + list.length) % list.length]
+    selectedScore.value = next.score
+    playSfx('tap')
+    return
+  }
+
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault()
+    e.stopPropagation()
+    playSfx('keyConfirm')
+    selectScore(selectedScore.value)
+    return
+  }
+
+  if (/^[1-9]$/.test(e.key)) {
+    const hit = facesByScore.value[Number(e.key) - 1]
+    if (hit) {
+      e.preventDefault()
+      e.stopPropagation()
+      selectScore(hit.score)
+    }
+  }
+}
+
+/** 打开时接管键盘，关闭后交还 */
+watch(() => props.visible, (v) => {
+  if (typeof window === 'undefined') return
+  if (v) window.addEventListener('keydown', onKeydown, true)
+  else window.removeEventListener('keydown', onKeydown, true)
+})
+onUnmounted(() => {
+  if (typeof window !== 'undefined') window.removeEventListener('keydown', onKeydown, true)
+})
+
+/** 当前选中的表情（键盘移动后高亮同步） */
+const selectedFaceEmoji = computed(() =>
+  (facesByScore.value.find(f => f.score === selectedScore.value) || {}).emoji || '')
 
 function selectScore(score) {
   selectedScore.value = score

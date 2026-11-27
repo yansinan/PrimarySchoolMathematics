@@ -123,6 +123,35 @@ export function usePracticeSaver(profileRef = null) {
   }
 
   /**
+   * 2b) 自定义练习一组完成：group checkpoint（手动路径用）
+   *
+   * 与自适应的区别：手动没有引擎 history，评价由调用方直接给出；
+   * 落库格式与自适应保持一致（evaluations JSON: [{group, score, count}]），
+   * 这样记录详情页按组展开、统计口径都不用分叉。
+   *
+   * @param {object} opts
+   * @param {number} opts.groupIndex 组序号（1 基）
+   * @param {number} opts.score      自评分数 1~5
+   * @param {number} opts.count      本组题数（记录详情页按它对答案切片）
+   * @param {number} [opts.correctRate] 本组正确率（0~100，仅留档）
+   */
+  async function saveManualGroupCheckpoint({ groupIndex, score, count, correctRate = null } = {}) {
+    const evaluations = JSON.stringify([
+      { group: groupIndex, score, count, ...(correctRate == null ? {} : { rate: correctRate }) },
+    ])
+    const pid = getPracticeSessionId()
+    await PracticeSession.create({
+      practiceSessionId: pid,
+      configSnapshot: practiceStore.session.configSnapshot,
+      evaluations,
+      // checkpoint 不是最终结算
+      profileSnapshot: null,
+      completed: false,
+    })
+    sync.markDirty(1500)
+  }
+
+  /**
    * 3) 练习完成：保存 evaluations + 最终用户快照（合并 adaptive/manual 路径）
    * @param {Object} [opts]
    * @param {string} [opts.evaluations] — JSON 字符串（adaptive 有，manual 无）
@@ -148,6 +177,7 @@ export function usePracticeSaver(profileRef = null) {
 
   return {
     savePerQuestion,
+    saveManualGroupCheckpoint,
     saveGroupCheckpoint,
     saveSessionFinal,
   }

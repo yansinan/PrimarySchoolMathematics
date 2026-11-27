@@ -81,9 +81,15 @@ export function useAdaptiveSession(options = {}) {
       return `能力评估 ${session.value.diagnosticAnswers.length}/${totalQuestions.value}`
     }
     if (adaptiveEngine.value) {
-      const label = adaptiveEngine.value.getDifficultyLabel()
+      const engine = adaptiveEngine.value
+      const label = engine.getDifficultyLabel()
       const groupIdx = adaptiveGroupIndex.value
-      return `${label} · 第${groupIdx}组`
+      // 自适应没有固定组数（练够本轮目标题量就结束，可能提前收尾），
+      // 所以不给「共 N 组」这种会变的估计值，改成显示本轮已完成题量。
+      const answered = engine.totalAnswered || 0
+      const target = engine.targetMax || 0
+      const round = target > 0 ? ` · ${Math.min(answered, target)}/${target} 题` : ''
+      return `${label} · 第 ${groupIdx} 组${round}`
     }
     return '一年级'
   })
@@ -321,7 +327,8 @@ export function useAdaptiveSession(options = {}) {
     if (result.done || forceDone) {
       // ── 整轮完成：先算汇总（纯内存）→ 立即落库 → 最后弹总结 ──
       const finalAnswers = allAnswers
-      const totalCorrect = Math.round(Answer.sumScores(finalAnswers))
+      // 要「答对几题」，不是掌握分（sumScores 会给出 1.666 这类小数）
+      const totalCorrect = finalAnswers.filter(a => (a instanceof Answer ? a.isCorrect : Answer.isCorrect(a))).length
       // 用时用「整轮开始时间 → 现在」的墙上时间，而不是逐题 responseTime 之和。
       // 后者不含组间自我评价弹窗、页面生成等待，家长看到的数比真实耗时要短。
       const startedAt = practiceStore.session.sessionStartTime

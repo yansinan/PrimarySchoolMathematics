@@ -194,6 +194,51 @@ export async function getAggregatedStats(studentId = 'default') {
   }
 }
 
+/**
+ * 上一轮练习的正确率（最近一轮「有答题记录」的练习）
+ *
+ * 与 getAggregatedStats 的 overallAccuracy（全部历史平均）区分：
+ * 准备开始页展示的是「上次做得怎么样」，不是「历史总平均」。
+ *
+ * 规则：
+ *  - 轮次来自 PracticeSession.list（已按时间倒序、同一 practiceSessionId 只留最新一条）
+ *  - 从最近往前找，跳过没有答案的轮次（诊断答案不挂 session，天然不会被计入）
+ *  - 正确率用 Answer#isCorrect getter，去重键与 getAggregatedStats 一致
+ *
+ * @param {string} [studentId='default']
+ * @param {number} [maxRounds=10] 最多往前找几轮
+ * @returns {Promise<{accuracy: number|null, total: number, correct: number, at: string|null}>}
+ *   accuracy 为 0~100 的整数；没有任何历史练习时为 null
+ */
+export async function getLastSessionAccuracy(studentId = 'default', maxRounds = 10) {
+  const empty = { accuracy: null, total: 0, correct: 0, at: null }
+  try {
+    const rounds = await PracticeSession.list(studentId, maxRounds)
+    for (const round of rounds) {
+      const raw = round.practiceSessionId
+        ? await Answer.findByPracticeSessionId(round.practiceSessionId)
+        : await Answer.findBySession(round.id)
+      // 去重兜底：同一题重试会更新同一条记录，但历史脏数据可能重复
+      const seen = new Set()
+      const unique = raw.filter(a => {
+        const key = `${a.sessionId || 0}_${a.equation}_${a.solution}_${a.questionIndex ?? ''}`
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      if (!unique.length) continue
+      const correct = unique.filter(a => a.isCorrect).length
+      return {
+        accuracy: Math.round((correct / unique.length) * 100),
+        total: unique.length,
+        correct,
+        at: round.createdAt || null,
+      }
+    }
+  } catch { /* 读不到统计不阻塞准备页 */ }
+  return empty
+}
+
 function emptyStats() {
   return {
     totalSessions: 0,

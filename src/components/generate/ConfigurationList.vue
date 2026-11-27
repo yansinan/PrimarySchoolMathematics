@@ -1,7 +1,6 @@
 <template>
   <div>
-    <p class="config-heading">已保存的配置</p>
-    <ElCard v-for="c in configurations" :class="{ active: c.id == activeConfigurationId }" class="mb-3" :shadow="'hover'"
+    <ElCard v-for="c in configurations" :class="{ active: c.id == activeConfigurationId }" class="config-card" :shadow="'hover'"
       @click="select(c.id)">
       <div class="flex justify-between items-center cursor-pointer">
         <!-- 是否选中 -->
@@ -55,12 +54,14 @@ const remove = async (id) => {
   }
 }
 
-const select = async (id) => {
-  try {
-    await proxy.$messageBox.confirm('确定加载吗? 注意未保存的参数将会丢失!', '提示', { type: 'warning' })
-    activeConfigurationId.value = id
-  } catch (error) {
-  }
+/**
+ * 选中配置：直接加载，不再弹「确定加载吗」确认框
+ *
+ * 原来的提示是「未保存的参数将会丢失」——现在抽屉里的参数本来就会自动落盘
+ * （psm_form_state deep watch），这句话已经不成立，多一次确认只是多一次点击。
+ */
+const select = (id) => {
+  activeConfigurationId.value = id
 }
 
 watch(() => props.activeIndex, async (val) => {
@@ -71,11 +72,8 @@ watch(() => props.activeIndex, async (val) => {
 </script>
 
 <style lang="scss" scoped>
-.config-heading {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1e3c5c;
-  margin: 0 0 10px 0;
+.config-card {
+  border-radius: 10px;
 }
 
 .el-card {

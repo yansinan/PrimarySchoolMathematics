@@ -29,6 +29,7 @@ import {
 import { DIFFICULTY_LEVELS } from '@/constants/difficulty'
 import { Question, Answer, WrongAnswer } from '@/services'
 import { generateOneQuestion } from '@/utils/algorithm/adaptiveBatch'
+import { buildErrorDistractors } from '@/utils/algorithm/distractors'
 import { loadLevelCoefficients } from '@/utils/store/levelCoefficients'
 import { loadChallengeEnabled } from '@/utils/store/challengeSetting'
 import { loadAutoAdvance } from '@/utils/store/autoAdvance'
@@ -49,10 +50,11 @@ function weightedRandom(items, weights) {
   return items[items.length - 1]
 }
 
-function generateDistractors(correct, count, wrongPool = [], equation = '') {
+export function generateDistractors(correct, count, wrongPool = [], equation = '', operator = null) {
   const distractors = new Set()
   if (correct == null || isNaN(correct) || correct <= 0) return []
-  // 优先错题库：取同一算式（含交换律/事实家族）的历史错误答案
+
+  // ① 错题库优先：孩子自己在同一算式上错过的答案，教学价值最高
   if (wrongPool.length && equation) {
     const matches = WrongAnswer.findByEquation(wrongPool, equation, { exact: false })
     for (const w of matches) {
@@ -61,18 +63,24 @@ function generateDistractors(correct, count, wrongPool = [], equation = '') {
       if (distractors.size >= count) return Array.from(distractors).slice(0, count)
     }
   }
-  // 算法填充
-  const candidates = [
-    correct + 1, correct - 1,
-    correct + 2, correct - 2,
-    correct + 5, correct - 5,
-    correct + 10, correct - 10,
-    Math.abs(correct - 1),
-    correct + (correct > 5 ? -3 : 3),
-  ]
-  for (const c of candidates) {
-    if (c !== correct && c > 0 && !distractors.has(c)) distractors.add(c)
+
+  // ② 按错误模型补：忘进位 / 忘退位 / 口诀串行 / 把×当+ …（每种错因对应一个选项）
+  const modeled = buildErrorDistractors({
+    solution: correct,
+    equation,
+    operator,
+    count: count * 2,          // 多要一点，过滤掉与错题库重复的之后仍够用
+  })
+  for (const v of modeled) {
     if (distractors.size >= count) break
+    if (v !== correct && v > 0) distractors.add(v)
+  }
+
+  // ③ 兜底：邻近值（错误模型解析不出算式时才会走到）
+  const fallback = [correct + 1, correct - 1, correct + 2, correct - 2, correct + 10, correct - 10]
+  for (const c of fallback) {
+    if (distractors.size >= count) break
+    if (c !== correct && c > 0 && !distractors.has(c)) distractors.add(c)
   }
   while (distractors.size < count) {
     const r = Math.max(1, correct + Math.floor(Math.random() * 10) - 5)
@@ -96,7 +104,8 @@ function buildReviewQuestion(wa) {
   }
 }
 
-function pickInputMode(engine) {
+/** 按 assistLevel 概率选输入模式（导出以便单测；原来只有 scripts/verify-p0.mjs 手工复制概率表验证） */
+export function pickInputMode(engine) {
   if (engine.masteryCheck && engine.masteryCheck.active) return 'horizontal_keypad'
   const r = Math.random()
   const L = engine.assistLevel
@@ -228,7 +237,7 @@ export class Engine {
       }
       if (modeConfig.input === 'options' && modeConfig.optionCount > 0) {
         const count = modeConfig.optionCount
-        const distractors = generateDistractors(solution, count - 1, this.wrongAnswerPool, q.equation)
+        const distractors = generateDistractors(solution, count - 1, this.wrongAnswerPool, q.equation, q.operator)
         options = [solution, ...distractors].sort(() => Math.random() - 0.5)
         if (!options.includes(solution)) {
           options = [solution]

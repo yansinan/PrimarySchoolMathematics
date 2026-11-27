@@ -14,7 +14,7 @@
  * 一致，都是「本机设置」，不写进练习题数据表。
  *
  * @see ../services/abilityProfile.js — loadSessionLevels / computeDifficultyIdx
- * @see ../../components/generate/OptionsDrawer.vue — 设置入口
+ * @see ../../components/Practice.vue — 设置入口（准备开始页「本次练习设置」）
  */
 
 import { DIFFICULTY_LEVELS } from '@/constants/difficulty'

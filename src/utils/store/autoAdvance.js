@@ -14,7 +14,7 @@
  *
  * @see services/abilityProfile.js — computeDifficultyIdx 的 promote 参数
  * @see services/adaptiveEngine.js — evaluateGroup / adjustNextQuestion 的升降档
- * @see ../../components/generate/OptionsDrawer.vue — 设置入口
+ * @see ../../components/Practice.vue — 设置入口（准备开始页「本次练习设置」）
  */
 
 import { readSetting, writeSetting } from './settingsRegistry'
