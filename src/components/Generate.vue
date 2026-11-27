@@ -35,8 +35,8 @@
         <ElForm ref="refForm" :model="formData" label-position="top" size="default">
           <ElFormItem label="题目来源">
             <el-radio-group v-model="formData.generateMode" class="mode-radio-group">
-              <el-radio-button label="1">自动生成</el-radio-button>
               <el-radio-button label="3">错题库</el-radio-button>
+              <el-radio-button label="1">自动生成</el-radio-button>
               <el-radio-button label="2">手动添加</el-radio-button>
             </el-radio-group>
           </ElFormItem>
@@ -48,7 +48,7 @@
           </template>
           <!-- 错题库 -->
           <template v-if="formData.generateMode == '3'">
-            <WrongBookTab @start-practice="startWrongBookPractice" />
+            <WrongBookTab @add-to-practice="addWrongBookPaper" />
           </template>
           <!-- 手动输入 -->
           <template v-if="formData.generateMode == '2'">
@@ -71,8 +71,7 @@
           </template>
         </ElForm>
 
-        <!-- 错题库页自带「清空选择 / 开始互动练习」，这里不再重复出现 -->
-        <div v-if="formData.generateMode !== '3'" class="drawer-actions">
+        <div class="drawer-actions">
           <el-button :disabled="!paperList.length" size="large" :loading="buttonLoading"
             @click="openPaperDialog" class="action-btn">
             <el-icon><Document /></el-icon> 打印练习卷
@@ -327,21 +326,14 @@ const generate = () => {
 }
 
 /**
- * 从「错题库」开练：选中即一组，直接进入互动练习
- * @param {{ questions: Array<{equation:string, solution:number}> }} payload
+ * 错题库「加入练习」：把选中的题变成一条题组，和自动生成/手输的题组混排
+ * 数据结构与「手动添加」一致（customFormulaList），打印与练习都走同一条链路。
+ * @param {{ kind: string, customFormulaList: Array<{formula:string}>, numberOfFormulas: number }} paper
  */
-function startWrongBookPractice({ questions }) {
-  if (!Array.isArray(questions) || !questions.length) return
-  practiceStore.resetPracticeSession()
-  // 错题库也算自定义题单：统计口径标 manual，避免被误判成自适应
-  practiceStore.setConfigSnapshot({ ...toRaw(unref(formData)), mode: 'manual', source: 'wrongbook' })
-  practiceStore.setPhase('practice')
-  practiceStore.setListSource('manual')
-  practiceStore.setReadyToStart(false)
-  practiceStore.setManualGroupPlan([questions.length])   // 单组：不弹组间自评
-  practiceStore.setGenerateDrawerVisible(false)
-  practiceStore.setListPractices(questions)
-  router.push('/home')
+function addWrongBookPaper(paper) {
+  if (!paper?.customFormulaList?.length) return
+  paperList.value = [...paperList.value, { ...paper }]
+  proxy.$message.success(`已加入 ${paper.numberOfFormulas} 道错题，可继续添加其它题组`)
 }
 
 /**

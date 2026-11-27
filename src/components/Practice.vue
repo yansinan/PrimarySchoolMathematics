@@ -632,11 +632,12 @@ const handleSubmit = (answer) => {
   const reason = explainError({
     equation: currentQuestion.value.equation,
     solution: currentQuestion.value.solution,
-    userAnswer: result.userAnswer ?? session.value.currentAnswer,
+    // 选择题走 handleSubmit(option)：answer 才是孩子选的项，currentAnswer 此时通常为空
+    userAnswer: result.userAnswer ?? answer ?? session.value.currentAnswer,
     operator: currentQuestion.value.operator,
   })
   // toast 一闪而过 → 同时记进常驻条（wrongReasonText 会渲染在题目下方）
-  wrongReason.value = (reason.code !== 'unknown' || reason.hint) ? reason : null
+  wrongReason.value = reason
   void loadWrongHistory()      // 刚错过的题立刻进入「复习」高亮
   const reasonText = reason.label
     ? `${reason.label}${reason.hint ? '（' + reason.hint + '）' : ''} · `

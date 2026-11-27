@@ -66,8 +66,8 @@
     <!-- 底部动作 -->
     <div class="wb-actions">
       <el-button :disabled="!selectedCount" @click="clearSelection">清空选择</el-button>
-      <el-button type="primary" :disabled="!selectedCount" @click="startPractice">
-        开始互动练习（{{ selectedCount }} 题）
+      <el-button type="primary" :disabled="!selectedCount" @click="addToPractice">
+        加入练习（{{ selectedCount }} 题）
       </el-button>
     </div>
   </div>
@@ -91,7 +91,7 @@ import { Answer, WrongAnswer } from '@/services'
 import { Profile } from '@/services/abilityProfile'
 import { explainError } from '@/utils/algorithm/explainError'
 
-const emit = defineEmits(['start-practice'])
+const emit = defineEmits(['add-to-practice', 'start-practice'])
 
 const loading = ref(true)
 const rows = ref([])
@@ -238,12 +238,20 @@ function clearSelection() {
   selected.value = new Set()
 }
 
-function startPractice() {
+/**
+ * 加入练习：把选中的题做成一个题组交出去
+ *
+ * 与「手动添加」同构（customFormulaList），这样错题能和自动生成/手输的题组
+ * 混在一起，统一走「打印练习卷 / 开始互动练习」两个出口。
+ */
+function addToPractice() {
   const picked = filteredRows.value.filter(r => selected.value.has(r.key))
   if (!picked.length) return
-  emit('start-practice', {
-    // 练习页只需要 { equation, solution }
-    questions: picked.map(r => ({ equation: r.equation, solution: r.solution })),
+  emit('add-to-practice', {
+    kind: 'wrongbook',
+    // createFormulasGenerator 只认 `a+b=` 形式的字符串
+    customFormulaList: picked.map(r => ({ formula: `${r.equation.replace(/=.*$/, '')}=` })),
+    numberOfFormulas: picked.length,
   })
 }
 

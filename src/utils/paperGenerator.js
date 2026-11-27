@@ -45,6 +45,15 @@ export function createFormulasGenerator(options, paperList) {
     }
   })
 
+  // 自定义题组（手输题目 / 错题库挑的题）：原实现被 `!p.customFormulaList` 过滤掉，
+  // 结果既不打印也不进练习。这里把它们按顺序拼到每张卷子最前面。
+  const customFormulas = paperList
+    .filter(p => Array.isArray(p.customFormulaList) && p.customFormulaList.length)
+    .reduce((pre, cur) => {
+      pre.push(...cur.customFormulaList.map(c => c.formula).filter(Boolean))
+      return pre
+    }, [])
+
   const papers = []
 
   for (let i = 0; i < parseInt(options.numberOfPapers); i++) {
@@ -59,12 +68,15 @@ export function createFormulasGenerator(options, paperList) {
       return Math.random() > 0.5 ? -1 : 1
     })
 
+    // 自定义题保持用户顺序，放在前面
+    const formulas = [...customFormulas, ...f]
+
     papers.push({
       paperTitle: options.paperTitle,
       paperSubTitle: options.paperSubTitle,
       numberOfPagerColumns: parseInt(options.numberOfPagerColumns),
       solution: options.solution,
-      formulas: f
+      formulas
     })
   }
 

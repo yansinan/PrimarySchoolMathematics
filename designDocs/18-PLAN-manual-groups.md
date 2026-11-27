@@ -409,3 +409,26 @@ explainError({ equation: '27+15=', solution: 42, userAnswer: 32 })
 
 实测：5 道错题（含 1 道曾答对 3 次的）→ 排序/筛选正常；点选 + Shift 连选 3 题；
 全选 5/5；自动选择按排序取前 N；开始后进入练习，第一题正是排最前的 27+15。
+
+### 错题库改为「加入练习」+ 顺序调整（2026-11-27 第二轮）
+
+dr 的三点反馈：
+
+1. **选择题没有错因** —— 根因：`handleSelect` 走 `handleSubmit(option)`，而错因那行只读了
+   `session.currentAnswer`（选择题模式不写这个字段）→ 永远 `unknown`、条不显示。
+   改为 `result.userAnswer ?? answer ?? currentAnswer`；并且**答错就显示错因条**
+   （识别不出时给「比正确答案多了 N」），不再因为文案为空整条消失。
+   实测：4×2 选错选项 → 条「口诀串行 · 背到相邻的口诀去了，4×2 再念一遍｜正确答案 8」。
+2. **操作逻辑与自动生成/手动添加一致** —— 错题库不再直接开练，改成产出**一条题组**：
+   `{ kind:'wrongbook', customFormulaList:[{formula}], numberOfFormulas }`
+   → 进 `paperList`，题组标签显示「错题重现·N道」，可删除、可与其它题组混排，
+   统一用底部的「打印练习卷 / 开始互动练习」。
+3. **错题库放到第一个标签**（顺序：错题库 / 自动生成 / 手动添加）。默认仍停在「自动生成」，
+   避免错题库为空时一进来就是空页面。
+
+**顺带修掉一个真 bug**：`utils/paperGenerator.js` 原来 `filter(p => !p.customFormulaList)` 把自定义题组
+**整组丢掉**，导致「手动添加」的题既不打印也不进练习。现在自定义题组按顺序拼在每张卷子最前面，
+错题库的题也因此能正常练习（实测开始练习第一题就是选中的错题）。
+
+**顺手修了一个 flaky 测试**：`adaptiveBatch.muldiv.spec.js` 里对 `generateOneQuestion` 连续 3 次
+`not.toBeNull()` 的断言过严 —— 该函数返回 null 是正常契约（调用方会跳过该 slot），改为每种题给 8 次机会。
