@@ -118,6 +118,13 @@ i {
 </style>
 
 <style scoped lang="scss">
+/* 卡片与下面「添加口算题 / 清空口算题」按钮行统一 12px 间距 */
+.cmf {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 /* 与出题抽屉其它区块同一套卡片规范 */
 .block-card {
   border: 1px solid #e6eef6;

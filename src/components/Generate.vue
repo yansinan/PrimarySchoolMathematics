@@ -55,8 +55,10 @@
             <CustomFormulas v-model:formulas-form-data="formData" v-model:papers="paperList" :ref-form="refForm" />
           </template>
 
-          <template v-if="paperDescriptionList && paperDescriptionList.length">
-            <ElFormItem label="当前口算题包含的内容">
+          <!-- 已添加的题组：与出题配置同级的卡片，内容来自「添加口算题」 -->
+          <section v-if="paperDescriptionList && paperDescriptionList.length" class="block-card paper-tags-card">
+            <header class="block-card__head">已添加的题组（{{ paperDescriptionList.length }}）</header>
+            <div class="block-card__body">
               <div class="paper-tags">
                 <ElTag
                   v-for="(desc, i) in paperDescriptionList"
@@ -67,8 +69,8 @@
                   @close="removePaper(i)"
                 >{{ desc }}</ElTag>
               </div>
-            </ElFormItem>
-          </template>
+            </div>
+          </section>
         </ElForm>
 
         <div class="drawer-actions-wrap">
@@ -498,6 +500,10 @@ const handleClose = (done) => {
 }
 
 // ── Mode selector ──
+/* 「题目来源」这一行到下方卡片的间距，与页内其它间距统一为 12px */
+:deep(.el-form > .el-form-item) {
+  margin-bottom: 12px;
+}
 .mode-radio-group {
   display: flex;
   width: 100%;
@@ -531,8 +537,8 @@ const handleClose = (done) => {
 
 // ── Action buttons（与上方配置区分开：分隔线 + 浅底 + 同一左右边界）──
 .drawer-actions-wrap {
-  margin-top: 14px;
-  padding: 12px 0 2px;
+  margin-top: 0;
+  padding: 12px 0;
   border-top: 1px solid #dbe7f4;
   background: linear-gradient(180deg, #fbfdff 0%, #f5faff 100%);
   border-radius: 0 0 10px 10px;
@@ -559,10 +565,15 @@ const handleClose = (done) => {
 }
 
 // ── Paper tags ──
+.paper-tags-card {
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+
 .paper-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
 }
 
 .paper-tag {

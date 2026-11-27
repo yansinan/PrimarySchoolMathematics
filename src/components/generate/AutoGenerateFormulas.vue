@@ -595,8 +595,10 @@ const addConfiguration = () => {
   border-top: 1px solid #eef3f8;
 }
 
+/* 最后一段不再额外留底边距：卡片自身 padding 12 就是底部间距，
+   这样「保存为配置」上方 12 / 下方 12 对称 */
 .agf-section--flush {
-  padding-bottom: 12px;
+  padding-bottom: 0;
 }
 
 .agf-section__title {
