@@ -75,12 +75,12 @@
           <div class="drawer-actions">
           <el-button :disabled="!paperList.length" size="large" :loading="buttonLoading"
             @click="openPaperDialog" class="action-btn">
-            <el-icon><Document /></el-icon> 打印练习卷
+            <el-icon><Document /></el-icon> 打印练习卷（{{ numberOfPapers }} 份）
           </el-button>
           <!-- 开始练习需要能力评估画像；做题/打印卷子不受此限制 -->
           <el-button v-if="practiceStore.hasRealProfile" :disabled="!paperList.length || !formValid" type="primary" size="large" :loading="buttonLoading"
             @click="generateFormulas" class="action-btn action-btn--primary">
-            <el-icon><CaretRight /></el-icon> 开始互动练习
+            <el-icon><CaretRight /></el-icon> 开始互动练习（{{ numberOfPapers }} 组）
           </el-button>
             <span v-else class="practice-locked-hint">先做完能力评估才能这里开练（出题和打印卷子可以直接用）</span>
           </div>
@@ -328,6 +328,9 @@ function clearAllPapers() {
  * 数据结构与「手动添加」一致（customFormulaList），打印与练习都走同一条链路。
  * @param {{ kind: string, customFormulaList: Array<{formula:string}>, numberOfFormulas: number }} paper
  */
+/** 打印份数 / 练习组数：同一份参数（一份卷子 = 一组练习） */
+const numberOfPapers = computed(() => Number(formData.value?.numberOfPapers) || 1)
+
 function addWrongBookPaper(paper) {
   if (!paper?.customFormulaList?.length) return
   paperList.value = [...paperList.value, { ...paper }]

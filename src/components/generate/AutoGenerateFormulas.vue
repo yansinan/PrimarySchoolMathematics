@@ -1,153 +1,155 @@
 <template>
   <div class="agf">
-    <!-- ① 几步运算（含每步的运算符选择） -->
+    <!-- 出题配置：几步运算 / 取值范围 / 出题规则 / 数量，同一张卡片内分段 -->
     <section class="block-card">
-      <header class="block-card__head">几步运算</header>
+      <header class="block-card__head">出题配置</header>
+
       <div class="block-card__body">
-        <el-radio-group v-model="formData.step" class="step-group" @change="changeStep">
-          <el-radio-button v-for="o in stepOptions" :label="o.key" :disabled="o.disabled">{{ o.label }}</el-radio-button>
-        </el-radio-group>
-
-        <!-- 运算符号：每一步一行（必须至少选一个）
-             注意 v-if 不能和 v-for 写在同一个元素上（Vue 3 里 v-if 优先级更高，item 会是 undefined） -->
-        <template v-for="item, index in formData.formulaList" :key="`ops-${index}`">
-          <ElFormItem v-if="item.operators" :label="`第${index}步运算符号`"
-            :prop="`formulaList.${index}.operators`" :rules="requiredRule" class="ops-item">
-            <el-checkbox-group v-model="item.operators">
-              <el-checkbox v-for="o in operatorOptions" :key="o.key" :label="o.key">{{ o.label }}</el-checkbox>
-            </el-checkbox-group>
-          </ElFormItem>
-        </template>
-      </div>
-    </section>
-
-    <!-- ② 取值范围：算数项 1/2… 与运算结果共用一列表头 -->
-    <section class="block-card">
-      <header class="block-card__head">取值范围</header>
-      <div class="range-table">
-        <div class="range-table__head">
-          <span class="range-table__col-name">算数项</span>
-          <span class="range-table__col">最小值</span>
-          <span class="range-table__col">最大值</span>
-        </div>
-        <div v-for="item, index in formData.formulaList" :key="`range-${index}`" class="range-table__line">
-          <span class="range-table__name">算数项 {{ index + 1 }}</span>
-          <ElFormItem :prop="`formulaList.${index}.min`" :rules="requiredNumberRule" class="range-table__cell">
-            <ElInput v-model.number="item.min" class="range-table__input" />
-          </ElFormItem>
-          <ElFormItem :prop="`formulaList.${index}.max`" :rules="requiredNumberRule" class="range-table__cell">
-            <ElInput v-model.number="item.max" class="range-table__input" />
-          </ElFormItem>
-        </div>
-        <div class="range-table__line">
-          <span class="range-table__name">运算结果</span>
-          <ElFormItem prop="resultMinValue"
-            :rules="[{ required: true, message: '请填写运算结果最小值' }, { type: 'number', message: '请填写数字' }]"
-            class="range-table__cell">
-            <ElInput v-model.number="formData.resultMinValue" class="range-table__input" />
-          </ElFormItem>
-          <ElFormItem prop="resultMaxValue"
-            :rules="[{ required: true, message: '请填写运算结果最大值' }, { type: 'number', message: '请填写数字' }]"
-            class="range-table__cell">
-            <ElInput v-model.number="formData.resultMaxValue" class="range-table__input" />
-          </ElFormItem>
-        </div>
-      </div>
-    </section>
-
-    <!-- ③ 出题规则（折叠；折叠时用 badge 显示当前选择） -->
-    <section class="block-card block-card--rules">
-      <header class="block-card__head block-card__head--clickable" @click="rulesOpen = !rulesOpen">
-        <svg class="rules-card__caret" :class="{ 'rules-card__caret--open': rulesOpen }" viewBox="0 0 24 24"
-          fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="9 18 15 12 9 6" />
-        </svg>
-        <span>出题规则</span>
-        <span v-if="!rulesOpen" class="rules-card__badges">
-          <span v-for="b in ruleBadges" :key="b" class="rules-badge">{{ b }}</span>
-        </span>
-      </header>
-
-      <div v-if="rulesOpen" class="block-card__body">
-        <div class="rules-row">
-          <span class="rules-row__label">题型</span>
-          <el-radio-group v-model="formData.whereIsResult">
-            <el-radio-button v-for="o in whereIsResultOptions" :label="o.key" :disabled="o.disabled">
-              {{ o.label }}
-            </el-radio-button>
+        <!-- ① 几步运算 -->
+        <div class="agf-section">
+          <p class="agf-section__title">几步运算</p>
+          <el-radio-group v-model="formData.step" class="step-group" @change="changeStep">
+            <el-radio-button v-for="o in stepOptions" :label="o.key" :disabled="o.disabled">{{ o.label }}</el-radio-button>
           </el-radio-group>
-        </div>
-        <div class="rules-row">
-          <span class="rules-row__label">括号</span>
-          <el-checkbox v-model="formData.enableBrackets">启用括号 ( )</el-checkbox>
-        </div>
-        <div class="rules-row">
-          <span class="rules-row__label">加法进位</span>
-          <el-radio-group v-model="formData.carry">
-            <el-radio-button label="1">随机进位</el-radio-button>
-            <el-radio-button label="2">必须进位</el-radio-button>
-            <el-radio-button label="3">不进位</el-radio-button>
-          </el-radio-group>
-        </div>
-        <div class="rules-row">
-          <span class="rules-row__label">减法退位</span>
-          <el-radio-group v-model="formData.abdication">
-            <el-radio-button label="1">随机退位</el-radio-button>
-            <el-radio-button label="2">必须退位</el-radio-button>
-            <el-radio-button label="3">不退位</el-radio-button>
-          </el-radio-group>
-        </div>
-        <div class="rules-row">
-          <span class="rules-row__label">除法</span>
-          <el-radio-group v-model="formData.remainder">
-            <el-radio-button v-for="o in remainderOptions" :label="o.key" :disabled="o.disabled">
-              {{ o.label }}
-            </el-radio-button>
-          </el-radio-group>
-        </div>
-        <div class="rules-row">
-          <span class="rules-row__label">解题方式</span>
-          <el-radio-group v-model="formData.solution">
-            <el-radio-button label="0">口算</el-radio-button>
-            <el-radio-button label="1">竖式</el-radio-button>
-          </el-radio-group>
-        </div>
-      </div>
-    </section>
 
-    <!-- ④ 题数与题组：无标题，靠边框区块与上面区分 -->
-    <section class="block-card block-card--plain">
-      <div class="block-card__body">
-        <ElRow :gutter="12" class="counts-row">
-          <ElCol :xs="12" :sm="12">
-            <ElFormItem prop="numberOfFormulas"
-              :rules="[{ required: true, message: '请填写口算题数量' }, { type: 'number', message: '请填写数字' }]"
-              class="counts-cell">
-              <ElInput v-model.number="formData.numberOfFormulas" class="counts-input">
-                <template #prepend>口算题数</template>
-              </ElInput>
+          <!-- 运算符号：每一步一行（必须至少选一个）
+               注意 v-if 不能和 v-for 写在同一个元素上（Vue 3 里 v-if 优先级更高，item 会是 undefined） -->
+          <template v-for="item, index in formData.formulaList" :key="`ops-${index}`">
+            <ElFormItem v-if="item.operators" :label="`第${index}步运算符号`"
+              :prop="`formulaList.${index}.operators`" :rules="requiredRule" class="ops-item">
+              <el-checkbox-group v-model="item.operators">
+                <el-checkbox v-for="o in operatorOptions" :key="o.key" :label="o.key">{{ o.label }}</el-checkbox>
+              </el-checkbox-group>
             </ElFormItem>
-          </ElCol>
-          <ElCol :xs="12" :sm="12">
-            <ElFormItem prop="numberOfPapers"
-              :rules="[{ required: true, message: '请填写卷子份数（= 练习组数）' }, { type: 'number', message: '请填写数字' }]"
-              class="counts-cell">
-              <ElInput v-model.number="formData.numberOfPapers" class="counts-input">
-                <template #prepend>卷子/练习</template>
-                <template #append>份</template>
-              </ElInput>
-            </ElFormItem>
-          </ElCol>
-        </ElRow>
+          </template>
+        </div>
 
-        <div class="actions-row">
-          <ElButton type="primary" class="actions-row__btn" @click="append">
-            添加口算题（{{ pendingCount }} 题）
-          </ElButton>
-          <ElButton class="actions-row__btn" @click="clear">清空口算题</ElButton>
-          <el-button type="success" class="actions-row__btn actions-row__btn--wide" @click="addConfiguration">
-            将当前参数保存为配置
-          </el-button>
+        <!-- ② 取值范围：表头首列即区块标题，不再另写一行标题 -->
+        <div class="agf-section agf-section--flush">
+          <div class="range-table">
+            <div class="range-table__head">
+              <span class="range-table__col-name">取值范围</span>
+              <span class="range-table__col">最小值</span>
+              <span class="range-table__col">最大值</span>
+            </div>
+            <div v-for="item, index in formData.formulaList" :key="`range-${index}`" class="range-table__line">
+              <span class="range-table__name">算数项 {{ index + 1 }}</span>
+              <ElFormItem :prop="`formulaList.${index}.min`" :rules="requiredNumberRule" class="range-table__cell">
+                <ElInput v-model.number="item.min" class="range-table__input" />
+              </ElFormItem>
+              <ElFormItem :prop="`formulaList.${index}.max`" :rules="requiredNumberRule" class="range-table__cell">
+                <ElInput v-model.number="item.max" class="range-table__input" />
+              </ElFormItem>
+            </div>
+            <div class="range-table__line">
+              <span class="range-table__name">运算结果</span>
+              <ElFormItem prop="resultMinValue"
+                :rules="[{ required: true, message: '请填写运算结果最小值' }, { type: 'number', message: '请填写数字' }]"
+                class="range-table__cell">
+                <ElInput v-model.number="formData.resultMinValue" class="range-table__input" />
+              </ElFormItem>
+              <ElFormItem prop="resultMaxValue"
+                :rules="[{ required: true, message: '请填写运算结果最大值' }, { type: 'number', message: '请填写数字' }]"
+                class="range-table__cell">
+                <ElInput v-model.number="formData.resultMaxValue" class="range-table__input" />
+              </ElFormItem>
+            </div>
+          </div>
+        </div>
+
+        <!-- ③ 出题规则（折叠；折叠时用 badge 显示当前选择） -->
+        <div class="agf-section agf-section--flush">
+          <div class="rules-head" @click="rulesOpen = !rulesOpen">
+            <svg class="rules-card__caret" :class="{ 'rules-card__caret--open': rulesOpen }" viewBox="0 0 24 24"
+              fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+            <span class="agf-section__title agf-section__title--clickable">出题规则</span>
+            <span v-if="!rulesOpen" class="rules-card__badges">
+              <span v-for="b in ruleBadges" :key="b" class="rules-badge">{{ b }}</span>
+            </span>
+          </div>
+
+          <div v-if="rulesOpen" class="rules-body">
+            <div class="rules-row">
+              <span class="rules-row__label">题型</span>
+              <el-radio-group v-model="formData.whereIsResult">
+                <el-radio-button v-for="o in whereIsResultOptions" :label="o.key" :disabled="o.disabled">
+                  {{ o.label }}
+                </el-radio-button>
+              </el-radio-group>
+            </div>
+            <div class="rules-row">
+              <span class="rules-row__label">括号</span>
+              <el-checkbox v-model="formData.enableBrackets">启用括号 ( )</el-checkbox>
+            </div>
+            <div class="rules-row">
+              <span class="rules-row__label">加法进位</span>
+              <el-radio-group v-model="formData.carry">
+                <el-radio-button label="1">随机进位</el-radio-button>
+                <el-radio-button label="2">必须进位</el-radio-button>
+                <el-radio-button label="3">不进位</el-radio-button>
+              </el-radio-group>
+            </div>
+            <div class="rules-row">
+              <span class="rules-row__label">减法退位</span>
+              <el-radio-group v-model="formData.abdication">
+                <el-radio-button label="1">随机退位</el-radio-button>
+                <el-radio-button label="2">必须退位</el-radio-button>
+                <el-radio-button label="3">不退位</el-radio-button>
+              </el-radio-group>
+            </div>
+            <div class="rules-row">
+              <span class="rules-row__label">除法</span>
+              <el-radio-group v-model="formData.remainder">
+                <el-radio-button v-for="o in remainderOptions" :label="o.key" :disabled="o.disabled">
+                  {{ o.label }}
+                </el-radio-button>
+              </el-radio-group>
+            </div>
+            <div class="rules-row">
+              <span class="rules-row__label">解题方式</span>
+              <el-radio-group v-model="formData.solution">
+                <el-radio-button label="0">口算</el-radio-button>
+                <el-radio-button label="1">竖式</el-radio-button>
+              </el-radio-group>
+            </div>
+          </div>
+        </div>
+
+        <!-- ④ 数量与操作 -->
+        <div class="agf-section agf-section--flush">
+          <ElRow :gutter="12" class="counts-row">
+            <ElCol :xs="12" :sm="12">
+              <ElFormItem prop="numberOfFormulas"
+                :rules="[{ required: true, message: '请填写口算题数量' }, { type: 'number', message: '请填写数字' }]"
+                class="counts-cell">
+                <ElInput v-model.number="formData.numberOfFormulas" class="counts-input">
+                  <template #prepend>口算题数</template>
+                </ElInput>
+              </ElFormItem>
+            </ElCol>
+            <ElCol :xs="12" :sm="12">
+              <ElFormItem prop="numberOfPapers"
+                :rules="[{ required: true, message: '请填写卷子份数（= 练习组数）' }, { type: 'number', message: '请填写数字' }]"
+                class="counts-cell">
+                <ElInput v-model.number="formData.numberOfPapers" class="counts-input">
+                  <template #prepend>卷子/练习</template>
+                  <template #append>份</template>
+                </ElInput>
+              </ElFormItem>
+            </ElCol>
+          </ElRow>
+
+          <div class="actions-row">
+            <ElButton type="primary" class="actions-row__btn" @click="append">
+              添加口算题（{{ pendingCount }} 题）
+            </ElButton>
+            <ElButton class="actions-row__btn" @click="clear">清空口算题</ElButton>
+            <el-button type="success" class="actions-row__btn actions-row__btn--wide" @click="addConfiguration">
+              将当前参数保存为配置
+            </el-button>
+          </div>
         </div>
       </div>
     </section>
@@ -574,6 +576,48 @@ const addConfiguration = () => {
 
 .block-card__body :deep(.el-form-item:last-child) {
   margin-bottom: 0;
+}
+
+/* ── 卡片内分段：段间用分隔线，不再各自套卡片 ── */
+.agf-section {
+  padding: 12px 0;
+}
+
+.agf-section:first-child {
+  padding-top: 0;
+}
+
+.agf-section + .agf-section {
+  border-top: 1px solid #eef3f8;
+}
+
+.agf-section--flush {
+  padding-bottom: 12px;
+}
+
+.agf-section__title {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1e3c5c;
+}
+
+.agf-section__title--clickable {
+  margin: 0;
+  cursor: pointer;
+}
+
+.rules-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.rules-body {
+  margin-top: 10px;
 }
 
 .ops-item {
