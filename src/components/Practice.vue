@@ -56,7 +56,8 @@
         </div>
 
         <!-- 答错后常驻的错因条：toast 一闪而过，孩子看不到；这里留到下一题 -->
-        <div v-if="session.feedbackType === 'wrong'" class="wrong-reason">
+        <!-- 答错后一直留到「答对」或「换题」，不再跟着 feedback 计时消失 -->
+        <div v-if="wrongReasonText" class="wrong-reason">
           <span class="wrong-reason__label">{{ wrongReasonText || '再算一遍试试' }}</span>
           <span class="wrong-reason__ans">正确答案 <b>{{ currentQuestion.solution }}</b></span>
         </div>
@@ -743,7 +744,11 @@ function toggleSfx() {
 }
 
 // 每换一题把焦点回到第一项
-watch(currentQuestion, () => { optionFocusIdx.value = 0 })
+watch(currentQuestion, () => {
+  optionFocusIdx.value = 0
+  // 换到新题：上一题的错因条不再适用（同一题重试时 currentQuestion 不变，条会留着）
+  wrongReason.value = null
+})
 
 /** 进入下一题；当前是最后一题时按阶段收尾 */
 const handleNext = () => {
