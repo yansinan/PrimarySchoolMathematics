@@ -432,3 +432,19 @@ dr 的三点反馈：
 
 **顺手修了一个 flaky 测试**：`adaptiveBatch.muldiv.spec.js` 里对 `generateOneQuestion` 连续 3 次
 `not.toBeNull()` 的断言过严 —— 该函数返回 null 是正常契约（调用方会跳过该 slot），改为每种题给 8 次机会。
+
+---
+
+## 十三、最后一轮收尾（2026-11-27）
+
+1. **选择题也有错因**：根因是 `handleSelect → handleSubmit(option)`，
+   而错因读的是 `session.currentAnswer`（选择题不写这个字段）→ 永远 unknown。
+   改为 `result.userAnswer ?? answer ?? currentAnswer`；答错一律显示错因条。
+2. **错题库操作逻辑与其它两页一致**：不再直接开练，产出 `{kind:'wrongbook', customFormulaList}`
+   题组进入 `paperList`，标签显示「错题重现·N道」，可与自动生成/手动添加的题组**混排**，
+   统一用底部「打印练习卷 / 开始互动练习」。
+3. **标签顺序**：错题库 / 自动生成 / 手动添加（默认仍停自动生成，见 TODO U5）。
+4. **点已保存的配置**：先切回「自动生成」页再套用参数，避免停在错题库页看不到变化；
+   同时去掉多余的「确定加载吗」确认框（参数本来就会自动落盘）。
+5. **修 `paperGenerator` 老 bug**：`filter(p => !p.customFormulaList)` 把自定义题组整组丢掉，
+   手动添加/错题库的题既不打印也不进练习；现在按顺序拼在每张卷子最前面。

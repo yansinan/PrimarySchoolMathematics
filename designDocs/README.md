@@ -4,7 +4,7 @@
 
 ---
 
-## 当前状态（2026-11-25）
+## 当前状态（2026-11-27）
 
 **多设备快照同步** ✅ — 接入自建 `indexDB-snapshot-sync`（分支 `feat/snapshot-sync`）：
 练习轮次/答案、出题配置（含练习量）、档位配比、起点档位、挑战题、自动升档、音效、保存的配置全部同步；
@@ -34,7 +34,22 @@
 - 选择题干扰项按**真实错因**生成（忘进位 / 忘退位 / 口诀串行 / 把×当+ / 余数当商 …）
 - 生成卷子改为**新窗口**打开打印页（数据经 localStorage 跨标签页传递），配置页留在原处
 - 清理：删除从未被引用的 `PrintPreviewDialog.vue` / `PaperDownloadDialog.vue`
-详见 [17-start-page-redesign.md](./17-start-page-redesign.md)、[18-PLAN-manual-groups.md](./18-PLAN-manual-groups.md)。
+
+**错因体系 + 错题库** ✅（2026-11-27，同一分支）：
+- `utils/algorithm/explainError.js`：按「算式 + 正确答案 + 孩子答案」反推错因
+  （忘进位 / 忘退位 / 看成加减法 / 口诀串行 / 试商偏差 / 余数当商 …），与干扰项模块同源
+- 答题时**答错即时给错因**：题目下方常驻错因条（留到答对或换题）+ toast；
+  文字输入 / 竖式 / **选择题**三种题型都覆盖
+- 错题复习**整题高亮**：当前题命中错题历史 → 橙色渐变底 + 描边 + 「重点复习」徽标
+- **错题库分页**：题目来源分页 = 错题库 / 自动生成 / 手动添加；
+  行显示「算式 + 划掉的错误答案 + 错因 + 掌握度(历史正确率)」，
+  运算符筛选、4 种排序（默认最该练）、点击/Shift 连选/全选/选 N 题自动选择，
+  「加入练习」产出题组，可与其它题组混排后统一打印或开练
+- 修 `paperGenerator` 丢自定义题组的老 bug（手动添加 / 错题库的题此前不进卷子也不进练习）
+- 点「已保存的配置」自动切回「自动生成」页并载入参数（去掉多余确认框）
+
+详见 [17-start-page-redesign.md](./17-start-page-redesign.md)、[18-PLAN-manual-groups.md](./18-PLAN-manual-groups.md)
+与 `mockups/{start-page,ratio-title,drawer-compact,progress,wrong-tab,review}/`。
 
 **下一目标**：
 - **v4.2** P3 L2.5 难度等级
