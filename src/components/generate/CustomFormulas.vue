@@ -21,13 +21,14 @@
             </el-icon>
           </div>
         </ElFormItem>
-
-        <div class="cmf-actions">
-          <el-button type="primary" @click="append">添加口算题（{{ validCount }} 题）</el-button>
-          <el-button @click="clear">清空口算题</el-button>
-        </div>
       </div>
     </section>
+
+    <!-- 配置完成后的下一步：加入卷子 -->
+    <div class="add-row">
+      <el-button type="primary" class="add-row__btn" @click="append">添加口算题（{{ validCount }} 题）</el-button>
+      <el-button class="add-row__btn" @click="clear">清空口算题</el-button>
+    </div>
   </div>
 </template>
 
@@ -160,10 +161,14 @@ i {
   gap: 4px;
 }
 
-.cmf-actions {
+.add-row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 12px;
+}
+
+.add-row__btn {
+  flex: 1 1 0;
+  margin-left: 0;
 }
 </style>

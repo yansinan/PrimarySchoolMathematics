@@ -141,18 +141,21 @@
             </ElCol>
           </ElRow>
 
-          <div class="actions-row">
-            <ElButton type="primary" class="actions-row__btn" @click="append">
-              添加口算题（{{ pendingCount }} 题）
-            </ElButton>
-            <ElButton class="actions-row__btn" @click="clear">清空口算题</ElButton>
-            <el-button type="success" class="actions-row__btn actions-row__btn--wide" @click="addConfiguration">
-              将当前参数保存为配置
-            </el-button>
+          <!-- 「保存」是配置自身的动作，留在出题配置区块内 -->
+          <div class="save-row">
+            <el-button type="success" class="save-row__btn" @click="addConfiguration">保存为配置</el-button>
           </div>
         </div>
       </div>
     </section>
+
+    <!-- 配置完成后的下一步：把题目加入卷子（与「已保存的配置」平级的独立操作条） -->
+    <div class="add-row">
+      <ElButton type="primary" class="add-row__btn" @click="append">
+        添加口算题（{{ pendingCount }} 题）
+      </ElButton>
+      <ElButton class="add-row__btn" @click="clear">清空口算题</ElButton>
+    </div>
 
     <!-- ════════════════════════════════════════════════════════════════
          2026-11-26 隐藏（观察期一个月，2026-12-30 无回滚需求即整块删除）
@@ -570,11 +573,12 @@ const addConfiguration = () => {
 }
 
 /* ── 数字范围表格：算数项 1/2… 与运算结果共用一列表头 ── */
-.block-card__body :deep(.el-form-item) {
+/* 只给「卡片里的直接表单项」加行距，不要波及表格单元格（否则同一行两个输入框会错位） */
+.agf-section > :deep(.el-form-item) {
   margin-bottom: 10px;
 }
 
-.block-card__body :deep(.el-form-item:last-child) {
+.agf-section > :deep(.el-form-item:last-child) {
   margin-bottom: 0;
 }
 
@@ -903,6 +907,34 @@ const addConfiguration = () => {
   gap: 8px;
   width: 100%;
   margin-top: 0;
+}
+
+.save-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.save-row__btn {
+  margin-left: 0;
+}
+
+/* 卡片外的下一步操作：与上方配置区分开 */
+.add-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.add-row__btn {
+  flex: 1 1 0;
+  margin-left: 0;
+}
+
+@media (max-width: 768px) {
+  .add-row__btn {
+    flex: 1 1 0;
+  }
 }
 
 .actions-row__btn {
