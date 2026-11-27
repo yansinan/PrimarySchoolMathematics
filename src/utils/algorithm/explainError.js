@@ -54,7 +54,14 @@ function subBorrowPos(a, b) {
   return from
 }
 
-const UNKNOWN = { code: 'unknown', label: '算错', hint: '' }
+const UNKNOWN = { code: 'unknown', label: '', hint: '' }
+
+/** 兜底：说不出具体错因时，至少告诉孩子「差多少」 */
+function diffHint(correct, answer) {
+  const d = answer - correct
+  if (!Number.isFinite(d) || d === 0) return ''
+  return `比正确答案${d > 0 ? '多' : '少'}了 ${Math.abs(d)}`
+}
 
 /**
  * 推断错因
@@ -94,7 +101,7 @@ export function explainError({ equation = '', solution, userAnswer, operator } =
     }
     if (Math.abs(diff) === 1) return { code: 'unitsSlip', label: '个位算错', hint: '个位差 1，再看看个位相加' }
     if (Math.abs(diff) === 10) return { code: 'tensSlip', label: '十位算错', hint: '十位差 1，再看看十位' }
-    return { code: 'addOther', label: '算错', hint: `正确答案是 ${correct}` }
+    return { code: 'addOther', label: '', hint: diffHint(correct, answer) }
   }
 
   if (op === OP_SUB) {
@@ -114,7 +121,7 @@ export function explainError({ equation = '', solution, userAnswer, operator } =
     if (answer === a + b) return { code: 'opConfused', label: '看成加法', hint: '把「−」看成了「+」' }
     if (Math.abs(diff) === 1) return { code: 'unitsSlip', label: '个位算错', hint: '个位差 1，再看看个位相减' }
     if (Math.abs(diff) === 10) return { code: 'tensSlip', label: '十位算错', hint: '十位差 1，再看看十位' }
-    return { code: 'subOther', label: '算错', hint: `正确答案是 ${correct}` }
+    return { code: 'subOther', label: '', hint: diffHint(correct, answer) }
   }
 
   if (op === OP_MUL) {
@@ -125,7 +132,7 @@ export function explainError({ equation = '', solution, userAnswer, operator } =
       return { code: 'tableDrift', label: '口诀串行', hint: `背到相邻的口诀去了，${a}×${b} 再念一遍` }
     }
     if (Math.abs(diff) === 10) return { code: 'carryLost', label: '进位丢了', hint: '乘积的进位没加上' }
-    return { code: 'mulOther', label: '算错', hint: `正确答案是 ${correct}` }
+    return { code: 'mulOther', label: '', hint: diffHint(correct, answer) }
   }
 
   if (op === OP_DIV) {
@@ -135,7 +142,7 @@ export function explainError({ equation = '', solution, userAnswer, operator } =
         answer === (b + 1) * correct || answer === (b - 1) * correct) {
       return { code: 'tableReverse', label: '口诀反向错', hint: `用 ${b}×${correct} 反查一遍` }
     }
-    return { code: 'divOther', label: '算错', hint: `正确答案是 ${correct}` }
+    return { code: 'divOther', label: '', hint: diffHint(correct, answer) }
   }
 
   return UNKNOWN

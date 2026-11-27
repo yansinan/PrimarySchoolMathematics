@@ -85,11 +85,16 @@ describe('兜底与边界', () => {
     expect(say('x+y=', 42, 30).code).toBe('unknown')
   })
 
-  it('无法归类的答案 → 兜底错因带正确答案提示', () => {
-    const r = say('27+15=', 42, 41)
-    expect(r.code).toBe('unitsSlip')          // 差 1 能归类
-    expect(say('27+15=', 42, 7).code).toBe('addOther')
-    expect(say('27+15=', 42, 7).hint).toContain('42')
+  it('差 1 能归类成个位算错', () => {
+    expect(say('27+15=', 42, 41).code).toBe('unitsSlip')
+  })
+
+  it('无法归类时给「差多少」，不再只说正确答案', () => {
+    const r = say('27+15=', 42, 7)
+    expect(r.code).toBe('addOther')
+    expect(r.label).toBe('')          // 不硬编错因名
+    expect(r.hint).toContain('少')
+    expect(r.hint).toContain('35')
   })
 
   it('非数字输入 → unknown', () => {

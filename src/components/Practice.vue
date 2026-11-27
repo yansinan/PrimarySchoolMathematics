@@ -46,12 +46,19 @@
             :focus-slot="digitFocusIdx"
             :class="{
               'correct-flash': session.feedbackType === 'correct',
-              'wrong-flash': session.feedbackType === 'wrong'
+              'wrong-flash': session.feedbackType === 'wrong',
+              'review-question': isReviewQuestion
             }"
             @update:user-answer="handleInput"
             @submit-answer="handleSubmit"
             @focus="digitFocusIdx = $event"
           />
+        </div>
+
+        <!-- 答错后常驻的错因条：toast 一闪而过，孩子看不到；这里留到下一题 -->
+        <div v-if="session.feedbackType === 'wrong'" class="wrong-reason">
+          <span class="wrong-reason__label">{{ wrongReasonText || '再算一遍试试' }}</span>
+          <span class="wrong-reason__ans">正确答案 <b>{{ currentQuestion.solution }}</b></span>
         </div>
 
         <div class="input-area">
@@ -328,6 +335,7 @@ import { usePracticeSaver } from '@/composables/usePracticeSaver'
 import { useManualSession } from '@/composables/useManualSession'
 import { isLastOfGroup, groupIndexOf, hasMultipleGroups, rangeOfGroup } from '@/utils/groupPlan'
 import { explainError } from '@/utils/algorithm/explainError'
+import { WrongAnswer } from '@/services'
 import { useSnapshotSync } from '@/composables/useSnapshotSync'
 import { decideListPracticesTransition } from '@/utils/listPracticesGuard'
 import { useDisplayStrategy } from '@/composables/useDisplayStrategy'  // 🆕 PR-4.2 抽离 displayStats + applyDisplayModeForCurrentQuestion + generateOptions
@@ -604,6 +612,7 @@ const handleSubmit = (answer) => {
     // 连对越多，音效越高（不给文字也能听出「连击」）
     playSfx('correct', { streak: session.value.streak })
     session.value.feedbackType = 'correct'
+    wrongReason.value = null
     updateStats(true)
     ElMessage.success({
       message: '✓ 正确！',
@@ -625,9 +634,12 @@ const handleSubmit = (answer) => {
     userAnswer: result.userAnswer ?? session.value.currentAnswer,
     operator: currentQuestion.value.operator,
   })
-  const reasonText = reason.code !== 'unknown' && reason.label !== '算错'
+  // toast 一闪而过 → 同时记进常驻条（wrongReasonText 会渲染在题目下方）
+  wrongReason.value = (reason.code !== 'unknown' || reason.hint) ? reason : null
+  void loadWrongHistory()      // 刚错过的题立刻进入「复习」高亮
+  const reasonText = reason.label
     ? `${reason.label}${reason.hint ? '（' + reason.hint + '）' : ''} · `
-    : ''
+    : (reason.hint ? `${reason.hint} · ` : '')
   ElMessage.error({
     message: `✗ ${reasonText}正确答案是 ${currentQuestion.value.solution}`,
     duration: FEEDBACK_DELAYS.wrong,
@@ -681,6 +693,45 @@ const handleSubmit = (answer) => {
 
 /** 选择题的键盘焦点项下标（← → 移动） */
 const optionFocusIdx = ref(0)
+
+/**
+ * 答错原因（答错时算一次，常驻显示到下一题）
+ * @type {import('vue').Ref<{code:string,label:string,hint:string}|null>}
+ */
+const wrongReason = ref(null)
+const wrongReasonText = computed(() => {
+  const r = wrongReason.value
+  if (!r) return ''
+  return [r.label, r.hint].filter(Boolean).join(' · ')
+})
+
+/**
+ * 当前题是否属于「错题复习」（历史上错过）
+ * 用一张按算式缓存的错题表判断，避免每题都查库。
+ */
+const wrongHistory = ref({})          // { equation: { wrongCount } }
+const isReviewQuestion = computed(() => {
+  const eq = currentQuestion.value?.equation
+  return !!(eq && wrongHistory.value[eq])
+})
+const reviewWrongCount = computed(() => {
+  const eq = currentQuestion.value?.equation
+  return eq ? (wrongHistory.value[eq]?.wrongCount || 0) : 0
+})
+
+/** 载入错题历史（进入练习时刷一次；错一题后再刷） */
+async function loadWrongHistory() {
+  try {
+    const rows = await WrongAnswer.getWrongAnswers({ days: 365, limit: 400 })
+    const map = {}
+    for (const row of WrongAnswer.dedup(rows)) {
+      const eq = row.equation
+      if (!eq) continue
+      map[eq] = { wrongCount: row.wrongCount || 1 }
+    }
+    wrongHistory.value = map
+  } catch { /* 读不到就当没有错题历史 */ }
+}
 
 /** 音效开关（存在 localStorage，默认开） */
 const sfxOn = ref(isSfxEnabled())
@@ -1436,6 +1487,7 @@ onMounted(() => window.addEventListener('psm:settings-applied', handleSettingsAp
 onUnmounted(() => window.removeEventListener('psm:settings-applied', handleSettingsApplied))
 
 onMounted(async () => {
+  void loadWrongHistory()
   // 恢复同步身份；已绑定则自动开始定时同步（不阻塞、失败只影响状态点）
   void snapshotSync.init()
   if (listPractices.value.length > 0) return  // 已有题目，不干预
@@ -2252,5 +2304,60 @@ onMounted(async () => {
   font-weight: bold !important;
   text-align: center !important;
   z-index: 9999 !important;
+}
+
+/* ── 答错常驻错因条（toast 一闪而过，这条留到下一题）── */
+.wrong-reason {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 8px auto 0;
+  max-width: var(--interaction-width, 100%);
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #fff4f4;
+  border: 1px solid #ffd6d6;
+}
+
+.wrong-reason__label {
+  font-size: 13px;
+  color: #d94848;
+  font-weight: 600;
+}
+
+.wrong-reason__ans {
+  margin-left: auto;
+  font-size: 12.5px;
+  color: #7f8c9b;
+  white-space: nowrap;
+}
+
+.wrong-reason__ans b {
+  color: #1e3c5c;
+  font-size: 15px;
+}
+
+/* ── 错题复习：整块题目显著区分（背景 + 描边 + 左侧色条）── */
+.review-question {
+  position: relative;
+  background: linear-gradient(135deg, #fff8ef 0%, #fff2e2 100%) !important;
+  border: 2px solid #ffb13c !important;
+  border-radius: 16px;
+  box-shadow: 0 6px 18px rgba(255, 177, 60, 0.22);
+}
+
+.review-question::before {
+  content: "重点复习";
+  position: absolute;
+  top: -10px;
+  left: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #ffb13c;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 </style>
