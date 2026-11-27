@@ -175,17 +175,14 @@ export function buildErrorDistractors({ solution, equation = '', operator, count
     // ① 忘退位：该退没退，结果偏大
     const borrowPos = subBorrowPosition(a, b)
     if (borrowPos) push(correct + pow10(borrowPos))
-    // ② 「大减小」错位：把 a-b 当成 b-a（等价 c + 2b）
-    if (b > a) push(a + b)
-    else push(correct + 2 * b)
+    // ② 把「−」看成「+」：c + 2b 与 a + b 恒等，取其一即可
+    push(a + b)
     // ③ 个位 ±1 / 十位 ±10
     push(correct - 1)
     push(correct + 1)
     push(correct - 10)
     // ④ 多借一位
     if (borrowPos) push(correct - pow10(borrowPos))
-    // ⑤ 把 - 看成 +
-    push(a + b)
   } else if (op === OP_MUL) {
     // ① 口诀串行
     push((a + 1) * b)

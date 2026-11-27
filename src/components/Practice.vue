@@ -327,6 +327,7 @@ import { usePracticeDialogs } from '@/composables/usePracticeDialogs'
 import { usePracticeSaver } from '@/composables/usePracticeSaver'
 import { useManualSession } from '@/composables/useManualSession'
 import { isLastOfGroup, groupIndexOf, hasMultipleGroups, rangeOfGroup } from '@/utils/groupPlan'
+import { explainError } from '@/utils/algorithm/explainError'
 import { useSnapshotSync } from '@/composables/useSnapshotSync'
 import { decideListPracticesTransition } from '@/utils/listPracticesGuard'
 import { useDisplayStrategy } from '@/composables/useDisplayStrategy'  // 🆕 PR-4.2 抽离 displayStats + applyDisplayModeForCurrentQuestion + generateOptions
@@ -617,8 +618,18 @@ const handleSubmit = (answer) => {
   // ── 答错 ──
   playSfx('wrong', { attempt: result.attemptCount })
   session.value.feedbackType = 'wrong'
+  // 错因：用错误模型推出「这一步是怎么错的」，比只报正确答案更有教学价值
+  const reason = explainError({
+    equation: currentQuestion.value.equation,
+    solution: currentQuestion.value.solution,
+    userAnswer: result.userAnswer ?? session.value.currentAnswer,
+    operator: currentQuestion.value.operator,
+  })
+  const reasonText = reason.code !== 'unknown' && reason.label !== '算错'
+    ? `${reason.label}${reason.hint ? '（' + reason.hint + '）' : ''} · `
+    : ''
   ElMessage.error({
-    message: `✗ 正确答案是 ${currentQuestion.value.solution}`,
+    message: `✗ ${reasonText}正确答案是 ${currentQuestion.value.solution}`,
     duration: FEEDBACK_DELAYS.wrong,
     offset: 100,
     customClass: 'feedback-message',

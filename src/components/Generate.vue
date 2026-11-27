@@ -120,6 +120,7 @@ import { createFormulasGenerator } from '@/utils/paperGenerator';
 // 表单默认值（17 字段统一来源）
 import { DEFAULT_FORM_DATA, applyConfigToFormData, buildPaperDescriptionList } from '@/utils/form/formDefaults';
 import { loadFormState, saveFormState } from '@/utils/store/formPersistence';
+import { useSnapshotSync } from '@/composables/useSnapshotSync';
 // 解算式
 import { EquationSolver } from '@/utils/algorithm/EquationSolver';
 const { proxy } = getCurrentInstance()
@@ -188,6 +189,9 @@ watch(
  * （下次打开抽屉会读到新值）。
  */
 function handleSettingsApplied() {
+  // 「已保存的配置」也在同步白名单里：远端应用后要刷新列表，
+  // 否则界面上还是旧的几条（配置本身已写进 localStorage）
+  refreshConfiguration()
   if (practiceStore.generateDrawerVisible) return
   const state = loadFormState()
   if (!state) return
@@ -220,6 +224,9 @@ const refreshConfiguration = () => {
 const addConfiguration = (newId) => {
   activeConfigurationId.value = newId
   refreshConfiguration()
+  // 配置已写进 localStorage（customer-config），这里立刻标记待同步，
+  // 不必等 2 分钟的定时快照
+  useSnapshotSync().markDirty(0)
 }
 const selectedConfiguration = (configuration) => {
   if (import.meta.env.DEV) console.log(configuration);
